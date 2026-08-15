@@ -1,0 +1,182 @@
+"use client";
+
+import { useState } from "react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatEuro } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
+
+type PaymentPhase = "idle" | "form" | "processing" | "paid";
+
+type PaymentFlowProps = {
+  amount: number;
+  alreadyPaid?: boolean;
+  paidAtLabel?: string;
+};
+
+export function PaymentFlow({
+  amount,
+  alreadyPaid = false,
+  paidAtLabel,
+}: PaymentFlowProps) {
+  const [phase, setPhase] = useState<PaymentPhase>(
+    alreadyPaid ? "paid" : "idle",
+  );
+  const [method, setMethod] = useState("card");
+
+  async function confirmPayment() {
+    setPhase("processing");
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    setPhase("paid");
+  }
+
+  if (phase === "paid") {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-start gap-3 rounded-sm border border-ledger/35 bg-ledger/10 px-4 py-3">
+          <CheckCircle2
+            className="mt-0.5 size-5 shrink-0 text-ledger animate-in zoom-in-50 fade-in duration-200"
+            aria-hidden
+          />
+          <div>
+            <p className="text-sm font-medium text-ledger">Paiement confirmé</p>
+            {paidAtLabel ? (
+              <p className="mt-0.5 text-xs text-ledger/80">{paidAtLabel}</p>
+            ) : (
+              <p className="mt-0.5 text-xs text-ledger/80">
+                {formatEuro(amount)} réglés avec succès
+              </p>
+            )}
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full"
+          onClick={() => {
+            /* mock download */
+          }}
+        >
+          Télécharger le reçu
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <Button
+        type="button"
+        className="h-11 w-full bg-ledger text-base text-paper hover:bg-ledger/90"
+        onClick={() => setPhase("form")}
+        disabled={phase === "processing"}
+      >
+        Payer maintenant
+      </Button>
+
+      <Dialog
+        open={phase === "form" || phase === "processing"}
+        onOpenChange={(open) => {
+          if (!open && phase !== "processing") setPhase("idle");
+        }}
+      >
+        <DialogContent className="sm:max-w-md" showCloseButton={phase !== "processing"}>
+          <DialogHeader>
+            <DialogTitle className="font-serif">Payer maintenant</DialogTitle>
+            <DialogDescription>
+              Montant à régler :{" "}
+              <span className="num font-medium text-ink">
+                {formatEuro(amount)}
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={method} onValueChange={setMethod}>
+            <TabsList className="w-full">
+              <TabsTrigger value="card" className="flex-1">
+                Carte bancaire
+              </TabsTrigger>
+              <TabsTrigger value="mobile_money" className="flex-1">
+                Mobile Money
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="card" className="mt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="card-number">Numéro de carte</Label>
+                <Input
+                  id="card-number"
+                  className="num"
+                  placeholder="4242 4242 4242 4242"
+                  disabled={phase === "processing"}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="card-exp">Expiration</Label>
+                  <Input
+                    id="card-exp"
+                    className="num"
+                    placeholder="08/28"
+                    disabled={phase === "processing"}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="card-cvc">CVC</Label>
+                  <Input
+                    id="card-cvc"
+                    className="num"
+                    placeholder="123"
+                    disabled={phase === "processing"}
+                  />
+                </div>
+              </div>
+            </TabsContent>
+            <TabsContent value="mobile_money" className="mt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="mm-phone">Numéro Mobile Money</Label>
+                <Input
+                  id="mm-phone"
+                  className="num"
+                  placeholder="+33 6 12 34 56 78"
+                  disabled={phase === "processing"}
+                />
+              </div>
+            </TabsContent>
+          </Tabs>
+
+          <DialogFooter>
+            <Button
+              type="button"
+              className={cn(
+                "w-full bg-ledger text-paper hover:bg-ledger/90",
+                phase === "processing" && "opacity-90",
+              )}
+              disabled={phase === "processing"}
+              onClick={confirmPayment}
+            >
+              {phase === "processing" ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" aria-hidden />
+                  Traitement en cours…
+                </>
+              ) : (
+                `Payer ${formatEuro(amount)}`
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}

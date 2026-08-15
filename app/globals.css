@@ -1,26 +1,150 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@custom-variant dark (&:is(.dark *));
+
+/* TODO: dark mode — not implemented yet */
 
 @theme inline {
+  /* Brand tokens — "le registre comptable précis" */
+  --color-paper: #f3f4f1;
+  --color-ink: #16213e;
+  --color-ledger: #2f6e5b;
+  --color-brass: #b08d57;
+  --color-brick: #b23a48;
+  --color-line: #c9ccc3;
+
+  /* Semantic shadcn mappings → brand tokens */
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --font-sans: var(--font-ibm-plex-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-serif: var(--font-ibm-plex-serif), ui-serif, Georgia, serif;
+  --font-mono: var(--font-ibm-plex-mono), ui-monospace, monospace;
+  --font-heading: var(--font-ibm-plex-serif), ui-serif, Georgia, serif;
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+:root {
+  --background: #f3f4f1;
+  --foreground: #16213e;
+  --card: #f3f4f1;
+  --card-foreground: #16213e;
+  --popover: #f3f4f1;
+  --popover-foreground: #16213e;
+  --primary: #2f6e5b;
+  --primary-foreground: #f3f4f1;
+  --secondary: #e8eae4;
+  --secondary-foreground: #16213e;
+  --muted: #e8eae4;
+  --muted-foreground: #5a5f55;
+  --accent: #e8eae4;
+  --accent-foreground: #16213e;
+  --destructive: #b23a48;
+  --border: #c9ccc3;
+  --input: #c9ccc3;
+  --ring: #2f6e5b;
+  --chart-1: #2f6e5b;
+  --chart-2: #b08d57;
+  --chart-3: #c9ccc3;
+  --chart-4: #b23a48;
+  --chart-5: #16213e;
+  --radius: 0.375rem;
+  --sidebar: #f3f4f1;
+  --sidebar-foreground: #16213e;
+  --sidebar-primary: #2f6e5b;
+  --sidebar-primary-foreground: #f3f4f1;
+  --sidebar-accent: #e8eae4;
+  --sidebar-accent-foreground: #16213e;
+  --sidebar-border: #c9ccc3;
+  --sidebar-ring: #2f6e5b;
+}
+
+/* Perforated ledger stub edge (top) */
+@utility ledger-perf {
+  mask-image: radial-gradient(circle 5px at 8px 0, transparent 4.5px, #000 5px);
+  mask-size: 16px 100%;
+  mask-repeat: repeat-x;
+  mask-position: 0 0;
+}
+
+/* Tabular figures for all monetary / numeric data */
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-paper text-ink font-sans;
+  }
+
+  html {
+    @apply font-sans;
+  }
+
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-ring;
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+@layer utilities {
+  .transition-ledger {
+    transition-property: color, background-color, border-color, box-shadow,
+      opacity, transform;
+    transition-duration: 150ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  ::before,
+  ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
