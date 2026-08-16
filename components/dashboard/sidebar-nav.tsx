@@ -45,6 +45,8 @@ type SidebarNavProps = {
     displayName: string;
     logoUrl: string | null;
   };
+  /** Active tenant name from session (URL is shared; org comes from cookie) */
+  organizationName?: string;
 };
 
 export function SidebarNav({
@@ -55,8 +57,11 @@ export function SidebarNav({
   prospectCount = 0,
   unreadCount = 0,
   branding,
+  organizationName,
 }: SidebarNavProps) {
   const pathname = usePathname();
+  const orgLabel =
+    organizationName || branding?.displayName || user.company || "Organisation";
 
   const navGroups: NavGroup[] = [
     {
@@ -135,18 +140,27 @@ export function SidebarNav({
         <Link
           href="/dashboard"
           onClick={onNavigate}
-          className="flex items-center gap-2.5 font-serif text-lg font-semibold tracking-tight text-paper transition-ledger hover:text-paper/80"
+          className="flex items-center gap-2.5 transition-ledger hover:opacity-90"
         >
           {branding?.logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={branding.logoUrl}
               alt=""
-              className="size-8 rounded object-contain bg-paper/10"
+              className="size-8 shrink-0 rounded object-contain bg-paper/10"
             />
-          ) : null}
-          <span className="truncate">
-            {branding?.displayName || "InvoMind"}
+          ) : (
+            <span className="flex size-8 shrink-0 items-center justify-center rounded bg-paper/12 font-serif text-sm font-semibold text-paper">
+              {orgLabel.slice(0, 1).toUpperCase()}
+            </span>
+          )}
+          <span className="min-w-0">
+            <span className="block truncate font-serif text-base font-semibold tracking-tight text-paper">
+              {orgLabel}
+            </span>
+            <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-wider text-paper/45">
+              Espace actif · InvoMind
+            </span>
           </span>
         </Link>
       </div>

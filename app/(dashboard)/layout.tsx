@@ -41,6 +41,7 @@ export default async function DashboardLayout({
     enabledModules,
     prospectCount: prospectStats.count,
     unreadCount: unread,
+    organizationName: session.organization.name,
     branding: {
       displayName,
       logoUrl: branding?.logoUrl ?? null,
@@ -59,16 +60,23 @@ export default async function DashboardLayout({
       <div className="flex min-w-0 flex-1 flex-col lg:pl-[248px]">
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-paper/90 px-4 backdrop-blur-sm lg:hidden">
           <MobileNav {...navProps} />
-          <span className="flex items-center gap-2 font-serif text-base font-semibold text-ink">
+          <span className="flex min-w-0 items-center gap-2">
             {branding?.logoUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={branding.logoUrl}
                 alt=""
-                className="size-7 rounded object-contain"
+                className="size-7 shrink-0 rounded object-contain"
               />
             ) : null}
-            {displayName}
+            <span className="flex min-w-0 flex-col">
+              <span className="truncate font-serif text-base font-semibold text-ink">
+                {displayName}
+              </span>
+              <span className="truncate text-[10px] uppercase tracking-wider text-ink/45">
+                Espace actif · InvoMind
+              </span>
+            </span>
           </span>
         </header>
         <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</div>

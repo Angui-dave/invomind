@@ -21,6 +21,7 @@ type MobileNavProps = {
     displayName: string;
     logoUrl: string | null;
   };
+  organizationName?: string;
 };
 
 export function MobileNav(props: MobileNavProps) {

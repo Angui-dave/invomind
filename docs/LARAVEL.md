@@ -1,5 +1,27 @@
 # Laravel backend (multi-tenant, URL unique)
 
+## Principe : une URL, des tenants via la session
+
+**Tous les clients utilisent la même URL** (ex. `https://app.invomind.com`).  
+Il n’y a **pas** de sous-domaine (`atelier.invomind.com`) ni de préfixe de path (`/t/atelier/...`) pour choisir le tenant.
+
+La différenciation se fait uniquement par le **cookie de session** signé :
+
+```ts
+// Cookie httpOnly: invomind_session (JWT)
+{ userId, organizationId, sessionId, expiresAt }
+```
+
+Flux à chaque requête dashboard :
+
+1. `proxy.ts` vérifie que le cookie contient `userId` + `organizationId`
+2. `verifySession()` charge l’utilisateur, le tenant et le membership depuis le store **central**
+3. `tenantStoreById(organizationId)` charge **uniquement** les données de ce tenant (clients, factures, branding…)
+
+Côté Laravel, le même principe s’applique avec un middleware **`InitializeTenancyByUser`** (pas `InitializeTenancyByDomain`) : après Sanctum, on initialise la connexion DB du tenant à partir de `organization_id` / `last_tenant_id` en session.
+
+---
+
 Le front Next.js tourne en **mocks multi-tenant** :
 
 - **Central** : [`lib/mock/central.ts`](../lib/mock/central.ts) — tenants, users, memberships, plans, subscriptions, channelConnections
