@@ -1,13 +1,17 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useActionState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import {
+  login,
+  register,
+  type AuthFormState,
+} from "@/lib/actions/auth";
 
 type AuthMode = "login" | "register";
 
@@ -15,49 +19,11 @@ type AuthFormProps = {
   mode: AuthMode;
 };
 
-type FieldErrors = {
-  name?: string;
-  email?: string;
-  password?: string;
-};
-
-function isValidEmail(value: string): boolean {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
-}
+const initialState: AuthFormState = {};
 
 export function AuthForm({ mode }: AuthFormProps) {
-  const router = useRouter();
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [errors, setErrors] = useState<FieldErrors>({});
-  const [loading, setLoading] = useState(false);
-
-  function validate(): FieldErrors {
-    const next: FieldErrors = {};
-    if (mode === "register" && name.trim().length < 2) {
-      next.name = "Le nom doit contenir au moins 2 caractères";
-    }
-    if (!isValidEmail(email.trim())) {
-      next.email = "Saisissez une adresse e-mail valide";
-    }
-    if (password.length < 8) {
-      next.password = "Le mot de passe doit contenir au moins 8 caractères";
-    }
-    return next;
-  }
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const next = validate();
-    setErrors(next);
-    if (Object.keys(next).length > 0) return;
-
-    setLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 1200));
-    setLoading(false);
-    router.push("/dashboard");
-  }
+  const action = mode === "login" ? login : register;
+  const [state, formAction, pending] = useActionState(action, initialState);
 
   return (
     <div>
@@ -70,26 +36,41 @@ export function AuthForm({ mode }: AuthFormProps) {
           : "Commencez à facturer en quelques minutes."}
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-6 space-y-4" noValidate>
+      <form action={formAction} className="mt-6 space-y-4" noValidate>
         {mode === "register" && (
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Nom complet</Label>
-            <Input
-              id="name"
-              name="name"
-              autoComplete="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              aria-invalid={Boolean(errors.name)}
-              aria-describedby={errors.name ? "name-error" : undefined}
-              className={cn(errors.name && "border-brick focus-visible:ring-brick/40")}
-            />
-            {errors.name && (
-              <p id="name-error" className="text-xs text-brick">
-                {errors.name}
-              </p>
-            )}
-          </div>
+          <>
+            <div className="space-y-1.5">
+              <Label htmlFor="name">Nom complet</Label>
+              <Input
+                id="name"
+                name="name"
+                autoComplete="name"
+                aria-invalid={Boolean(state.errors?.name)}
+                className={cn(
+                  state.errors?.name && "border-brick focus-visible:ring-brick/40",
+                )}
+              />
+              {state.errors?.name && (
+                <p className="text-xs text-brick">{state.errors.name[0]}</p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="company">Entreprise</Label>
+              <Input
+                id="company"
+                name="company"
+                autoComplete="organization"
+                aria-invalid={Boolean(state.errors?.company)}
+                className={cn(
+                  state.errors?.company &&
+                    "border-brick focus-visible:ring-brick/40",
+                )}
+              />
+              {state.errors?.company && (
+                <p className="text-xs text-brick">{state.errors.company[0]}</p>
+              )}
+            </div>
+          </>
         )}
 
         <div className="space-y-1.5">
@@ -99,16 +80,13 @@ export function AuthForm({ mode }: AuthFormProps) {
             name="email"
             type="email"
             autoComplete="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            aria-invalid={Boolean(errors.email)}
-            aria-describedby={errors.email ? "email-error" : undefined}
-            className={cn(errors.email && "border-brick focus-visible:ring-brick/40")}
+            aria-invalid={Boolean(state.errors?.email)}
+            className={cn(
+              state.errors?.email && "border-brick focus-visible:ring-brick/40",
+            )}
           />
-          {errors.email && (
-            <p id="email-error" className="text-xs text-brick">
-              {errors.email}
-            </p>
+          {state.errors?.email && (
+            <p className="text-xs text-brick">{state.errors.email[0]}</p>
           )}
         </div>
 
@@ -119,27 +97,29 @@ export function AuthForm({ mode }: AuthFormProps) {
             name="password"
             type="password"
             autoComplete={mode === "login" ? "current-password" : "new-password"}
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            aria-invalid={Boolean(errors.password)}
-            aria-describedby={errors.password ? "password-error" : undefined}
+            aria-invalid={Boolean(state.errors?.password)}
             className={cn(
-              errors.password && "border-brick focus-visible:ring-brick/40",
+              state.errors?.password &&
+                "border-brick focus-visible:ring-brick/40",
             )}
           />
-          {errors.password && (
-            <p id="password-error" className="text-xs text-brick">
-              {errors.password}
-            </p>
+          {state.errors?.password && (
+            <p className="text-xs text-brick">{state.errors.password[0]}</p>
           )}
         </div>
 
+        {state.errors?.form && (
+          <p className="rounded-sm border border-brick/30 bg-brick/10 px-3 py-2 text-xs text-brick">
+            {state.errors.form[0]}
+          </p>
+        )}
+
         <Button
           type="submit"
-          disabled={loading}
+          disabled={pending}
           className="h-10 w-full bg-ledger text-paper hover:bg-ledger/90"
         >
-          {loading ? (
+          {pending ? (
             <>
               <Loader2 className="size-4 animate-spin" aria-hidden />
               {mode === "login" ? "Connexion…" : "Création…"}

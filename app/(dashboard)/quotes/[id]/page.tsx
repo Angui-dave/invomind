@@ -1,45 +1,39 @@
-"use client";
+import { notFound } from "next/navigation";
+import { listCatalogItems } from "@/lib/dal/catalog";
+import {
+  getDocumentById,
+  getQuotes,
+  listClients,
+} from "@/lib/dal/documents";
+import { getOrgSettings } from "@/lib/dal/settings";
+import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
+import { QuoteDetailClient } from "./quote-detail-client";
 
-import { use } from "react";
-import { notFound, useRouter } from "next/navigation";
-import { ArrowRightLeft } from "lucide-react";
-import { toast } from "sonner";
-import { InvoiceForm } from "@/components/invoices/invoice-form";
-import { Button } from "@/components/ui/button";
-import { getDocumentById } from "@/lib/mock-data";
-
-export default function QuoteDetailPage({
+export default async function QuoteDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const { id } = use(params);
-  const router = useRouter();
-  const document = getDocumentById(id);
+  const { id } = await params;
+  const [document, clients, catalogItems, settings, quotes] = await Promise.all(
+    [
+      getDocumentById(id),
+      listClients(),
+      listCatalogItems(),
+      getOrgSettings(),
+      getQuotes(),
+    ],
+  );
 
   if (!document || document.kind !== "quote") notFound();
 
-  function handleConvert() {
-    if (!document) return;
-    toast.success(`Conversion de ${document.number}…`);
-    router.push(`/invoices/new?fromQuote=${document.id}`);
-  }
-
   return (
-    <div className="space-y-4">
-      {(document.status === "accepted" || document.status === "sent") && (
-        <div className="flex justify-end">
-          <Button
-            type="button"
-            className="bg-ledger text-paper hover:bg-ledger/90"
-            onClick={handleConvert}
-          >
-            <ArrowRightLeft className="size-4" aria-hidden />
-            Convertir en facture
-          </Button>
-        </div>
-      )}
-      <InvoiceForm mode="edit" document={document} />
-    </div>
+    <QuoteDetailClient
+      document={document}
+      clients={clients}
+      catalogItems={catalogItems}
+      orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
+      existingNumbers={quotes}
+    />
   );
 }

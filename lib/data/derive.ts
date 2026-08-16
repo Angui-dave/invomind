@@ -251,11 +251,20 @@ export function vatByRate(): { rate: number; amount: number }[] {
     }));
 }
 
-export function latestOpenInvoiceToken(clientId: string): string | null {
-  const open = DOCUMENTS.filter((d) => {
-    if (d.kind !== "invoice" || d.clientId !== clientId) return false;
-    const status = applyDerivedStatus(d).status;
-    return status === "sent" || status === "partially_paid" || status === "overdue";
-  }).sort((a, b) => b.issueDate.localeCompare(a.issueDate));
+export function latestOpenInvoiceToken(
+  clientId: string,
+  documents: BusinessDocument[] = DOCUMENTS,
+): string | null {
+  const open = documents
+    .filter((d) => {
+      if (d.kind !== "invoice" || d.clientId !== clientId) return false;
+      const status = applyDerivedStatus(d, documents).status;
+      return (
+        status === "sent" ||
+        status === "partially_paid" ||
+        status === "overdue"
+      );
+    })
+    .sort((a, b) => b.issueDate.localeCompare(a.issueDate));
   return open[0]?.portalToken ?? null;
 }

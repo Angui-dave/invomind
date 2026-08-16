@@ -1,14 +1,32 @@
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { LedgerCard } from "@/components/ledger-card";
-import {
-  CURRENT_USER,
-  formatDateFr,
-  formatMoney,
-  HERO_INVOICE,
-} from "@/lib/mock-data";
+import { formatDateFr, formatMoney } from "@/lib/mock-data";
+
+const DEMO_INVOICE = {
+  number: "FAC-2026-014",
+  clientName: "Aminata Diallo",
+  status: "sent" as const,
+  currency: "XOF" as const,
+  dueDate: "2026-08-31",
+  total: 1_846_800,
+  lines: [
+    {
+      id: "l1",
+      description: "Refonte site vitrine — phase design",
+      quantity: 1,
+      unitPrice: 1_200_000,
+    },
+    {
+      id: "l2",
+      description: "Intégration pages clés",
+      quantity: 8,
+      unitPrice: 45_000,
+    },
+  ],
+};
 
 export function HeroInvoiceMock() {
-  const invoice = HERO_INVOICE;
+  const invoice = DEMO_INVOICE;
 
   return (
     <LedgerCard
@@ -20,9 +38,11 @@ export function HeroInvoiceMock() {
         <div className="flex items-start justify-between gap-3">
           <div>
             <p className="font-serif text-base font-semibold text-ink">
-              {CURRENT_USER.company}
+              Atelier Diallo
             </p>
-            <p className="mt-0.5 text-xs text-ink/55">{CURRENT_USER.email}</p>
+            <p className="mt-0.5 text-xs text-ink/55">
+              contact@atelier-diallo.sn
+            </p>
           </div>
           <InvoiceStatusBadge status={invoice.status} />
         </div>

@@ -1,5 +1,8 @@
 import { verifyTikTokSignature } from "@/lib/webhooks/signature";
-import { appendInbound } from "@/lib/webhooks/store";
+import {
+  appendInbound,
+  resolveOrgByExternalId,
+} from "@/lib/webhooks/store";
 import { normalizeTikTokPayload } from "@/lib/webhooks/tiktok-payload";
 
 export const runtime = "nodejs";
@@ -26,23 +29,25 @@ export async function POST(request: Request) {
     return new Response("JSON invalide", { status: 400 });
   }
 
+  const clientKey =
+    typeof payload === "object" &&
+    payload !== null &&
+    "client_key" in payload &&
+    typeof (payload as { client_key: unknown }).client_key === "string"
+      ? (payload as { client_key: string }).client_key
+      : process.env.TIKTOK_CLIENT_KEY ?? null;
+
   const expectedKey = process.env.TIKTOK_CLIENT_KEY;
-  if (expectedKey) {
-    const clientKey =
-      typeof payload === "object" &&
-      payload !== null &&
-      "client_key" in payload &&
-      typeof (payload as { client_key: unknown }).client_key === "string"
-        ? (payload as { client_key: string }).client_key
-        : null;
-    if (clientKey !== expectedKey) {
-      return new Response("client_key invalide", { status: 401 });
-    }
+  if (expectedKey && clientKey && clientKey !== expectedKey) {
+    return new Response("client_key invalide", { status: 401 });
   }
 
   const messages = normalizeTikTokPayload(payload);
-  if (messages.length > 0) {
-    appendInbound(messages);
+  if (messages.length > 0 && clientKey) {
+    const organizationId = await resolveOrgByExternalId("tiktok", clientKey);
+    if (organizationId) {
+      await appendInbound(organizationId, messages);
+    }
   }
 
   // Always 200 after a valid signature so TikTok does not retry for up to 72h.

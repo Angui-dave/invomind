@@ -1,3 +1,4 @@
+import { verifySession } from "@/lib/dal/session";
 import {
   getMaskedConfig,
   recentDeliveries,
@@ -26,13 +27,18 @@ function isValidWebhookUrl(url: string): boolean {
 }
 
 export async function GET() {
+  const session = await verifySession();
+  const organizationId = session.organizationId;
   return Response.json({
-    config: getMaskedConfig(),
-    deliveries: recentDeliveries(),
+    config: await getMaskedConfig(organizationId),
+    deliveries: await recentDeliveries(organizationId),
   });
 }
 
 export async function PUT(request: Request) {
+  const session = await verifySession();
+  const organizationId = session.organizationId;
+
   let json: unknown;
   try {
     json = await request.json();
@@ -61,19 +67,14 @@ export async function PUT(request: Request) {
     );
   }
 
-  const next = setConfig({
+  await setConfig(organizationId, {
     ...(url !== undefined ? { url } : {}),
     ...(secret !== undefined ? { secret } : {}),
     ...(enabled !== undefined ? { enabled } : {}),
   });
 
-  // If URL cleared, force disabled
-  if (next.url === "" && next.enabled) {
-    setConfig({ enabled: false });
-  }
-
   return Response.json({
-    config: getMaskedConfig(),
-    deliveries: recentDeliveries(),
+    config: await getMaskedConfig(organizationId),
+    deliveries: await recentDeliveries(organizationId),
   });
 }

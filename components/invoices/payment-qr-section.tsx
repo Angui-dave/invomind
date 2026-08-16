@@ -3,25 +3,29 @@
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
 import { LedgerCard } from "@/components/ledger-card";
-import {
-  ORG_SETTINGS,
-  type BusinessDocument,
-} from "@/lib/mock-data";
+import type { BusinessDocument } from "@/lib/documents";
+import type { Client } from "@/lib/data/clients";
+import type { OrgSettings } from "@/lib/data/settings";
 import {
   buildEmvQrPayload,
   providerLabel,
   type MobileMoneyProvider,
 } from "@/lib/qr/emv-qr";
 import { buildSwissQrData } from "@/lib/qr/swiss-qr";
-import { CLIENTS } from "@/lib/data/clients";
 
 type PaymentQrSectionProps = {
   document: BusinessDocument;
+  orgSettings: OrgSettings;
+  client?: Client | null;
   className?: string;
 };
 
-export function PaymentQrSection({ document }: PaymentQrSectionProps) {
-  const isSwiss = ORG_SETTINGS.country === "CH";
+export function PaymentQrSection({
+  document,
+  orgSettings,
+  client,
+}: PaymentQrSectionProps) {
+  const isSwiss = orgSettings.country === "CH";
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [swissSvgHtml, setSwissSvgHtml] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -33,11 +37,13 @@ export function PaymentQrSection({ document }: PaymentQrSectionProps) {
       setError(null);
       try {
         if (isSwiss) {
-          const client = CLIENTS.find((c) => c.id === document.clientId);
-          const data = buildSwissQrData(document, ORG_SETTINGS, client);
+          const data = buildSwissQrData(
+            document,
+            orgSettings,
+            client ?? undefined,
+          );
           try {
             const { SwissQRBill } = await import("swissqrbill/svg");
-            // swissqrbill expects a specific data shape
             const svg = new SwissQRBill({
               currency: data.currency,
               amount: data.amount,
@@ -50,7 +56,6 @@ export function PaymentQrSection({ document }: PaymentQrSectionProps) {
               setQrDataUrl(null);
             }
           } catch {
-            // Fallback: encode a simple payload as QR if swissqrbill fails
             const payload = `SPC\n0200\n1\n${data.creditor.account}\n${data.creditor.name}\n${data.amount}\n${data.currency}\n${data.message}`;
             const url = await QRCode.toDataURL(payload, {
               width: 220,
@@ -62,13 +67,13 @@ export function PaymentQrSection({ document }: PaymentQrSectionProps) {
             }
           }
         } else {
-          const provider = (ORG_SETTINGS.mobileMoneyProvider ??
+          const provider = (orgSettings.mobileMoneyProvider ??
             "wave") as MobileMoneyProvider;
           const payload = buildEmvQrPayload({
-            merchantName: ORG_SETTINGS.companyName,
-            merchantCity: ORG_SETTINGS.city,
+            merchantName: orgSettings.companyName,
+            merchantCity: orgSettings.city,
             merchantPhone:
-              ORG_SETTINGS.mobileMoneyNumber ?? ORG_SETTINGS.phone,
+              orgSettings.mobileMoneyNumber ?? orgSettings.phone,
             amount: document.total,
             currency: document.currency,
             reference: document.number,
@@ -96,11 +101,11 @@ export function PaymentQrSection({ document }: PaymentQrSectionProps) {
     return () => {
       cancelled = true;
     };
-  }, [document, isSwiss]);
+  }, [document, isSwiss, orgSettings, client]);
 
   const title = isSwiss
     ? "QR-facture suisse"
-    : `QR ${providerLabel((ORG_SETTINGS.mobileMoneyProvider ?? "wave") as MobileMoneyProvider)}`;
+    : `QR ${providerLabel((orgSettings.mobileMoneyProvider ?? "wave") as MobileMoneyProvider)}`;
 
   return (
     <LedgerCard>
@@ -130,14 +135,14 @@ export function PaymentQrSection({ document }: PaymentQrSectionProps) {
               alt={`QR code paiement ${document.number}`}
               className="size-[220px] rounded-sm border border-line bg-white p-2"
             />
-            {ORG_SETTINGS.country === "CH" && ORG_SETTINGS.twintNumber && (
+            {orgSettings.country === "CH" && orgSettings.twintNumber && (
               <p className="text-xs text-ink/60">
-                TWINT : {ORG_SETTINGS.twintNumber}
+                TWINT : {orgSettings.twintNumber}
               </p>
             )}
-            {!isSwiss && ORG_SETTINGS.mobileMoneyNumber && (
+            {!isSwiss && orgSettings.mobileMoneyNumber && (
               <p className="num text-xs text-ink/60">
-                {ORG_SETTINGS.mobileMoneyNumber}
+                {orgSettings.mobileMoneyNumber}
               </p>
             )}
           </div>

@@ -5,33 +5,55 @@ import { LedgerCard } from "@/components/ledger-card";
 import { PaymentFlow } from "@/components/portal/payment-flow";
 import { PaymentQrSection } from "@/components/invoices/payment-qr-section";
 import { PortalHeader } from "@/components/portal/portal-header";
+import { getInvoiceByToken } from "@/lib/dal/documents";
 import {
-  balanceDue,
-  CURRENT_USER,
-  formatDateFr,
-  formatMoney,
-  getInvoiceByToken,
-  PAYMENT_METHOD_LABELS,
-} from "@/lib/mock-data";
+  findTenantIdByPortalToken,
+  tenantStoreById,
+} from "@/lib/mock/store";
+import { PAYMENT_METHOD_LABELS } from "@/lib/documents";
+import { formatDateFr, formatMoney } from "@/lib/mock-data";
 
 export const metadata: Metadata = {
   title: "Facture",
 };
 
-export default async function PortalInvoicePage(
-  props: PageProps<"/f/[token]">,
-) {
-  const { token } = await props.params;
-  const invoice = getInvoiceByToken(token);
+export default async function PortalInvoicePage({
+  params,
+}: {
+  params: Promise<{ token: string }>;
+}) {
+  const { token } = await params;
+  const invoice = await getInvoiceByToken(token);
   if (!invoice) notFound();
+
+  const tenantId = findTenantIdByPortalToken(token);
+  if (!tenantId) notFound();
+  const store = tenantStoreById(tenantId);
+  const branding = store.branding;
+  const orgSettings = store.orgSettings;
+  const client = store.clients.find((c) => c.id === invoice.clientId) ?? null;
+
+  const paid = store.payments
+    .filter((p) => p.documentId === invoice.id)
+    .reduce((s, p) => s + p.amount, 0);
+  const amountDue = Math.max(
+    0,
+    Math.round((invoice.total - paid) * 100) / 100,
+  );
+
+  const companyName =
+    branding.displayName || orgSettings.companyName || "InvoMind";
 
   const isPaid = invoice.status === "paid" || Boolean(invoice.paidOnlineAt);
   const isOverdue = invoice.status === "overdue";
-  const amountDue = isPaid ? 0 : balanceDue(invoice);
+  const due = isPaid ? 0 : amountDue;
 
   return (
     <div className="flex flex-1 flex-col gap-6">
-      <PortalHeader companyName={CURRENT_USER.company} />
+      <PortalHeader
+        companyName={companyName}
+        logoUrl={branding.logoUrl}
+      />
 
       {isOverdue && !isPaid && (
         <p className="rounded-sm border border-line bg-muted/60 px-3 py-2 text-sm text-ink/75">
@@ -69,11 +91,15 @@ export default async function PortalInvoicePage(
                 <span className="min-w-0">
                   <span className="block text-ink/85">{line.description}</span>
                   <span className="num text-xs text-ink/45">
-                    {line.quantity} × {formatMoney(line.unitPrice, invoice.currency)}
+                    {line.quantity} ×{" "}
+                    {formatMoney(line.unitPrice, invoice.currency)}
                   </span>
                 </span>
                 <span className="num shrink-0 font-medium text-ink">
-                  {formatMoney(line.quantity * line.unitPrice, invoice.currency)}
+                  {formatMoney(
+                    line.quantity * line.unitPrice,
+                    invoice.currency,
+                  )}
                 </span>
               </li>
             ))}
@@ -89,7 +115,8 @@ export default async function PortalInvoicePage(
       </LedgerCard>
 
       <PaymentFlow
-        amount={amountDue > 0 ? amountDue : invoice.total}
+        token={token}
+        amount={due > 0 ? due : invoice.total}
         currency={invoice.currency}
         alreadyPaid={isPaid}
         paidAtLabel={
@@ -106,7 +133,11 @@ export default async function PortalInvoicePage(
       />
 
       {!isPaid && invoice.kind === "invoice" && (
-        <PaymentQrSection document={invoice} />
+        <PaymentQrSection
+          document={invoice}
+          orgSettings={orgSettings}
+          client={client}
+        />
       )}
 
       <footer className="mt-auto pt-8 text-center text-xs text-line">

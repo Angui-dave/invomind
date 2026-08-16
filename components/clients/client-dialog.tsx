@@ -48,7 +48,7 @@ type ClientDialogProps = {
   onOpenChange: (open: boolean) => void;
   client?: Client | null;
   initialValues?: Partial<ClientFormValues>;
-  onSave?: (values: ClientFormValues) => void;
+  onSave?: (values: ClientFormValues) => void | Promise<void>;
 };
 
 export function ClientDialog({
@@ -78,10 +78,16 @@ export function ClientDialog({
             key={formKey}
             client={client}
             initialValues={initialValues}
-            onSave={(values) => {
-              onSave?.(values);
-              toast.success(client ? "Client modifié" : "Client créé");
-              onOpenChange(false);
+            onSave={async (values) => {
+              try {
+                await onSave?.(values);
+                toast.success(client ? "Client modifié" : "Client créé");
+                onOpenChange(false);
+              } catch (e) {
+                toast.error(
+                  e instanceof Error ? e.message : "Erreur d’enregistrement",
+                );
+              }
             }}
             onCancel={() => onOpenChange(false)}
           />
@@ -99,7 +105,7 @@ function ClientFormFields({
 }: {
   client?: Client | null;
   initialValues?: Partial<ClientFormValues>;
-  onSave: (values: ClientFormValues) => void;
+  onSave: (values: ClientFormValues) => void | Promise<void>;
   onCancel: () => void;
 }) {
   const [name, setName] = useState(client?.name ?? initialValues?.name ?? "");
@@ -135,7 +141,7 @@ function ClientFormFields({
     client?.remindersEnabled ?? initialValues?.remindersEnabled ?? true,
   );
 
-  function handleSubmit(event: React.FormEvent) {
+  async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     if (name.trim().length < 2) {
       toast.error("Le nom doit contenir au moins 2 caractères");
@@ -145,7 +151,7 @@ function ClientFormFields({
       toast.error("Saisissez une adresse e-mail valide");
       return;
     }
-    onSave({
+    await onSave({
       name: name.trim(),
       company: company.trim(),
       email: email.trim(),

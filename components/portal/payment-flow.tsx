@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { CheckCircle2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,12 +15,14 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { recordPortalPayment } from "@/lib/actions/portal";
 import { formatMoney, type CurrencyCode } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 type PaymentPhase = "idle" | "form" | "processing" | "paid";
 
 type PaymentFlowProps = {
+  token: string;
   amount: number;
   currency?: CurrencyCode;
   alreadyPaid?: boolean;
@@ -27,6 +30,7 @@ type PaymentFlowProps = {
 };
 
 export function PaymentFlow({
+  token,
   amount,
   currency = "XOF",
   alreadyPaid = false,
@@ -39,8 +43,22 @@ export function PaymentFlow({
 
   async function confirmPayment() {
     setPhase("processing");
-    await new Promise((resolve) => setTimeout(resolve, 1800));
-    setPhase("paid");
+    try {
+      const result = await recordPortalPayment({
+        token,
+        method,
+        amount,
+      });
+      if (!result.ok) {
+        toast.error(result.error);
+        setPhase("form");
+        return;
+      }
+      setPhase("paid");
+    } catch {
+      toast.error("Échec du paiement");
+      setPhase("form");
+    }
   }
 
   if (phase === "paid") {
@@ -67,7 +85,7 @@ export function PaymentFlow({
           variant="outline"
           className="w-full"
           onClick={() => {
-            /* mock download */
+            /* receipt download stub */
           }}
         >
           Télécharger le reçu
@@ -165,7 +183,7 @@ export function PaymentFlow({
                 phase === "processing" && "opacity-90",
               )}
               disabled={phase === "processing"}
-              onClick={confirmPayment}
+              onClick={() => void confirmPayment()}
             >
               {phase === "processing" ? (
                 <>

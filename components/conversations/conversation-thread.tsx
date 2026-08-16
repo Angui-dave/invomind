@@ -11,15 +11,17 @@ import {
   formatDateFr,
   latestOpenInvoiceToken,
   portalUrl,
-  TODAY,
+  type BusinessDocument,
   type Conversation,
   type ConversationMessage,
 } from "@/lib/mock-data";
+import { todayIso } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
 type ConversationThreadProps = {
   conversation: Conversation | null;
   messages: ConversationMessage[];
+  invoices?: BusinessDocument[];
   onSend: (body: string) => void | Promise<void>;
   onBack?: () => void;
   onOpenContact?: () => void;
@@ -31,8 +33,9 @@ function dayKey(iso: string): string {
 }
 
 function dayLabel(isoDate: string): string {
-  if (isoDate === TODAY) return "Aujourd’hui";
-  const yesterday = new Date(TODAY);
+  const today = todayIso();
+  if (isoDate === today) return "Aujourd’hui";
+  const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
   if (isoDate === yesterday.toISOString().slice(0, 10)) return "Hier";
   return formatDateFr(isoDate);
@@ -41,6 +44,7 @@ function dayLabel(isoDate: string): string {
 export function ConversationThread({
   conversation,
   messages,
+  invoices = [],
   onSend,
   onBack,
   onOpenContact,
@@ -48,6 +52,7 @@ export function ConversationThread({
 }: ConversationThreadProps) {
   const [draft, setDraft] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
+  const conversationId = conversation?.id;
 
   const groups = useMemo(() => {
     const map = new Map<string, ConversationMessage[]>();
@@ -61,14 +66,10 @@ export function ConversationThread({
   }, [messages]);
 
   useEffect(() => {
-    setDraft("");
-  }, [conversation?.id]);
-
-  useEffect(() => {
     const el = logRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages, conversation?.id]);
+  }, [messages, conversationId]);
 
   function handleSend() {
     const body = draft.trim();
@@ -85,7 +86,7 @@ export function ConversationThread({
       toast.error("Aucun client associé pour un lien de paiement");
       return;
     }
-    const token = latestOpenInvoiceToken(conversation.clientId);
+    const token = latestOpenInvoiceToken(conversation.clientId, invoices);
     if (!token) {
       toast.error("Aucune facture ouverte pour ce client");
       return;

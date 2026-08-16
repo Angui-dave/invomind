@@ -1,4 +1,5 @@
 import { isConversationChannel } from "@/lib/data/conversations";
+import { verifySession } from "@/lib/dal/session";
 import { signPayload } from "@/lib/webhooks/signature";
 import { getConfig, logDelivery } from "@/lib/webhooks/store";
 import type { DeliveryAttempt, SendMessagePayload } from "@/lib/webhooks/types";
@@ -30,6 +31,9 @@ function parseBody(data: unknown): SendMessagePayload | null {
 }
 
 export async function POST(request: Request) {
+  const session = await verifySession();
+  const organizationId = session.organizationId;
+
   let json: unknown;
   try {
     json = await request.json();
@@ -48,12 +52,12 @@ export async function POST(request: Request) {
     );
   }
 
-  const config = getConfig();
-  const deliveryId = `dlv_${Math.random().toString(36).slice(2, 10)}`;
+  const config = await getConfig(organizationId);
+  const deliveryId = crypto.randomUUID();
   const attemptedAt = new Date().toISOString();
 
   if (!config.enabled || !config.url) {
-    const attempt: DeliveryAttempt = {
+    const attempt: Omit<DeliveryAttempt, "id"> & { id?: string } = {
       id: deliveryId,
       conversationId: payload.conversationId,
       channel: payload.channel,
@@ -61,7 +65,7 @@ export async function POST(request: Request) {
       attemptedAt,
       durationMs: 0,
     };
-    logDelivery(attempt);
+    await logDelivery(organizationId, attempt);
     return Response.json({
       status: "skipped",
       deliveredAt: attemptedAt,
@@ -100,7 +104,7 @@ export async function POST(request: Request) {
 
     const durationMs = Date.now() - started;
     const ok = response.ok;
-    const attempt: DeliveryAttempt = {
+    await logDelivery(organizationId, {
       id: deliveryId,
       conversationId: payload.conversationId,
       channel: payload.channel,
@@ -109,8 +113,7 @@ export async function POST(request: Request) {
       error: ok ? undefined : `HTTP ${response.status}`,
       attemptedAt,
       durationMs,
-    };
-    logDelivery(attempt);
+    });
 
     if (!ok) {
       return Response.json(
@@ -133,7 +136,7 @@ export async function POST(request: Request) {
     const durationMs = Date.now() - started;
     const message =
       error instanceof Error ? error.message : "Erreur réseau inconnue";
-    const attempt: DeliveryAttempt = {
+    await logDelivery(organizationId, {
       id: deliveryId,
       conversationId: payload.conversationId,
       channel: payload.channel,
@@ -141,8 +144,7 @@ export async function POST(request: Request) {
       error: message,
       attemptedAt,
       durationMs,
-    };
-    logDelivery(attempt);
+    });
     return Response.json(
       {
         status: "failed",

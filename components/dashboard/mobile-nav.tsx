@@ -10,8 +10,20 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import type { CurrentUser, EnabledModules } from "@/lib/mock-data";
 
-export function MobileNav() {
+type MobileNavProps = {
+  user: CurrentUser;
+  enabledModules: EnabledModules;
+  prospectCount?: number;
+  unreadCount?: number;
+  branding?: {
+    displayName: string;
+    logoUrl: string | null;
+  };
+};
+
+export function MobileNav(props: MobileNavProps) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -35,7 +47,7 @@ export function MobileNav() {
           <SheetHeader className="sr-only">
             <SheetTitle>Navigation</SheetTitle>
           </SheetHeader>
-          <SidebarNav onNavigate={() => setOpen(false)} />
+          <SidebarNav {...props} onNavigate={() => setOpen(false)} />
         </SheetContent>
       </Sheet>
     </>

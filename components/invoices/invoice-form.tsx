@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { PackagePlus, Plus, Trash2 } from "lucide-react";
+import { toast } from "sonner";
 import { LedgerCard } from "@/components/ledger-card";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { PaymentLinkButton } from "@/components/invoices/payment-link-button";
@@ -20,33 +21,27 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { saveDocument } from "@/lib/actions/documents";
+import type { Client } from "@/lib/data/clients";
+import type { CatalogItem } from "@/lib/data/catalog";
+import type { OrgSettings } from "@/lib/data/settings";
+import { portalUrl } from "@/lib/data/clients";
+import { addDays, todayIso } from "@/lib/date";
 import {
-  addDays,
-  CATALOG_ITEMS,
-  CLIENTS,
-  CURRENCIES,
-  DOCUMENTS,
   DOCUMENT_KIND_LABELS,
   emptyLine,
-  formatDateFr,
-  formatMoney,
-  getTaxPreset,
   nextDocumentNumber,
-  ORG_SETTINGS,
   PAYMENT_METHOD_LABELS,
-  portalUrl,
   REMINDER_DEFAULTS,
-  computeTotals,
-  TODAY,
   type BusinessDocument,
-  type CurrencyCode,
   type DocumentKind,
   type DocumentLine,
   type ReminderMilestone,
   type ReminderMilestoneStatus,
-  type TaxMode,
-} from "@/lib/mock-data";
-import { toast } from "sonner";
+} from "@/lib/documents";
+import { CURRENCIES, type CurrencyCode } from "@/lib/money";
+import { computeTotals, getTaxPreset, type TaxMode } from "@/lib/tax";
+import { formatDateFr, formatMoney } from "@/lib/mock-data";
 
 type DocumentFormProps = {
   mode: "new" | "edit";
@@ -54,6 +49,11 @@ type DocumentFormProps = {
   document?: BusinessDocument;
   /** When true, document was built from quote/credit conversion */
   prefilledFromConversion?: boolean;
+  clients: Client[];
+  catalogItems: CatalogItem[];
+  orgSettings: OrgSettings;
+  /** Existing docs of same kind — used only for preview numbering */
+  existingNumbers?: BusinessDocument[];
 };
 
 function createDefaultReminders(dueDate: string): ReminderMilestoneStatus[] {
@@ -75,15 +75,20 @@ export function InvoiceForm({
   kind: kindProp,
   document,
   prefilledFromConversion = false,
+  clients,
+  catalogItems,
+  orgSettings,
+  existingNumbers = [],
 }: DocumentFormProps) {
   const router = useRouter();
   const kind = document?.kind ?? kindProp ?? "invoice";
-  const taxPreset = getTaxPreset(ORG_SETTINGS.country);
-  const orgCurrency = ORG_SETTINGS.defaultCurrency;
+  const taxPreset = getTaxPreset(orgSettings.country);
+  const orgCurrency = orgSettings.defaultCurrency;
+  const [saving, setSaving] = useState(false);
 
-  const initialClientId = document?.clientId ?? CLIENTS[0]?.id ?? "";
-  const initialClient = CLIENTS.find((c) => c.id === initialClientId);
-  const initialIssue = document?.issueDate ?? TODAY;
+  const initialClientId = document?.clientId ?? clients[0]?.id ?? "";
+  const initialClient = clients.find((c) => c.id === initialClientId);
+  const initialIssue = document?.issueDate ?? todayIso();
   const initialDue =
     document?.dueDate ??
     addDays(initialIssue, initialClient?.paymentTermDays ?? 30);
@@ -93,7 +98,7 @@ export function InvoiceForm({
     document?.currency ?? initialClient?.currency ?? orgCurrency,
   );
   const [taxMode, setTaxMode] = useState<TaxMode>(
-    document?.taxMode ?? ORG_SETTINGS.defaultTaxMode,
+    document?.taxMode ?? orgSettings.defaultTaxMode,
   );
   const [issueDate, setIssueDate] = useState(initialIssue);
   const [dueDate, setDueDate] = useState(initialDue);
@@ -104,7 +109,7 @@ export function InvoiceForm({
         description: "Prestation",
         quantity: 1,
         unitPrice: 0,
-        taxRate: ORG_SETTINGS.defaultTaxRate,
+        taxRate: orgSettings.defaultTaxRate,
       },
     ],
   );
@@ -121,17 +126,19 @@ export function InvoiceForm({
   const [paymentTab, setPaymentTab] = useState("card");
   const [showCatalog, setShowCatalog] = useState(false);
 
-  const client = CLIENTS.find((c) => c.id === clientId);
+  const client = clients.find((c) => c.id === clientId);
   const totals = useMemo(
     () => computeTotals(lines, taxMode),
     [lines, taxMode],
   );
   const previewNumber =
-    document?.number ?? nextDocumentNumber(kind, DOCUMENTS);
+    mode === "edit" && document?.number
+      ? document.number
+      : nextDocumentNumber(kind, existingNumbers);
 
   function selectClient(id: string) {
     setClientId(id);
-    const next = CLIENTS.find((c) => c.id === id);
+    const next = clients.find((c) => c.id === id);
     if (next?.currency) setCurrency(next.currency);
     if (mode === "new" && !prefilledFromConversion && next?.paymentTermDays) {
       const nextDue = addDays(issueDate, next.paymentTermDays);
@@ -179,7 +186,7 @@ export function InvoiceForm({
   }
 
   function insertCatalogItem(itemId: string) {
-    const item = CATALOG_ITEMS.find((i) => i.id === itemId);
+    const item = catalogItems.find((i) => i.id === itemId);
     if (!item) return;
     setLines((prev) => [
       ...prev,
@@ -213,12 +220,58 @@ export function InvoiceForm({
     );
   }
 
-  function handleSave() {
+  async function handleSave() {
+    if (!clientId) {
+      toast.error("Choisissez un client");
+      return;
+    }
+    if (lines.every((l) => !l.description.trim())) {
+      toast.error("Ajoutez au moins une ligne");
+      return;
+    }
+
     const label = DOCUMENT_KIND_LABELS[kind];
-    toast.success(
-      mode === "new" ? `${label} créé(e)` : `${label} enregistré(e)`,
-    );
-    router.push(kind === "quote" ? "/quotes" : "/invoices");
+    setSaving(true);
+    try {
+      const result = await saveDocument(mode === "edit" ? document?.id ?? null : null, {
+        kind,
+        clientId,
+        status: document?.status ?? "draft",
+        currency,
+        taxMode,
+        issueDate,
+        dueDate,
+        lines: lines.map((l) => ({
+          id: l.id.startsWith("line_") || l.id.startsWith("tmp_") ? undefined : l.id,
+          description: l.description.trim() || "Ligne",
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          taxRate: l.taxRate,
+          discountPercent: l.discountPercent,
+          catalogItemId: l.catalogItemId,
+        })),
+        onlinePaymentEnabled: onlinePayment,
+        remindersEnabled:
+          kind === "invoice" &&
+          reminders.some((r) => r.state === "scheduled" || r.state === "sent"),
+        notes: document?.notes,
+        sourceDocumentId: document?.sourceDocumentId,
+        paymentMethod: document?.paymentMethod ?? null,
+      });
+
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+
+      toast.success(
+        mode === "new" ? `${label} créé(e)` : `${label} enregistré(e)`,
+      );
+      router.push(kind === "quote" ? "/quotes" : "/invoices");
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
   }
 
   const kindLabel = DOCUMENT_KIND_LABELS[kind];
@@ -257,7 +310,7 @@ export function InvoiceForm({
                   <SelectValue placeholder="Choisir un client" />
                 </SelectTrigger>
                 <SelectContent>
-                  {CLIENTS.map((c) => (
+                  {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
                       {c.name} — {c.company}
                     </SelectItem>
@@ -344,7 +397,7 @@ export function InvoiceForm({
                   onClick={() =>
                     setLines((prev) => [
                       ...prev,
-                      emptyLine(ORG_SETTINGS.defaultTaxRate),
+                      emptyLine(orgSettings.defaultTaxRate),
                     ])
                   }
                 >
@@ -356,7 +409,7 @@ export function InvoiceForm({
 
             {showCatalog && (
               <ul className="space-y-1 rounded-sm border border-line bg-muted/40 p-2">
-                {CATALOG_ITEMS.map((item) => (
+                {catalogItems.map((item) => (
                   <li key={item.id}>
                     <button
                       type="button"
@@ -504,9 +557,9 @@ export function InvoiceForm({
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="font-serif text-base font-semibold text-ink">
-                    {ORG_SETTINGS.companyName}
+                    {orgSettings.companyName}
                   </p>
-                  <p className="text-xs text-ink/55">{ORG_SETTINGS.email}</p>
+                  <p className="text-xs text-ink/55">{orgSettings.email}</p>
                 </div>
                 {document && <InvoiceStatusBadge status={document.status} />}
               </div>
@@ -621,6 +674,8 @@ export function InvoiceForm({
                       lines,
                       taxMode,
                     }}
+                    orgSettings={orgSettings}
+                    client={client}
                   />
                   <section className="space-y-3 rounded-sm border border-line bg-paper p-4">
                     {document.paidOnlineAt ? (
@@ -656,9 +711,14 @@ export function InvoiceForm({
             <Button
               type="button"
               className="bg-ledger text-paper hover:bg-ledger/90"
-              onClick={handleSave}
+              disabled={saving}
+              onClick={() => void handleSave()}
             >
-              {mode === "new" ? `Créer le ${kindLabel.toLowerCase()}` : "Enregistrer"}
+              {saving
+                ? "Enregistrement…"
+                : mode === "new"
+                  ? `Créer le ${kindLabel.toLowerCase()}`
+                  : "Enregistrer"}
             </Button>
             <Button
               type="button"

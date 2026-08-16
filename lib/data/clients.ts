@@ -106,5 +106,5 @@ export function clientInitials(name: string): string {
 }
 
 export function portalUrl(token: string): string {
-  return `https://invomind.app/f/${token}`;
+  return `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/f/${token}`;
 }

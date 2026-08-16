@@ -9,7 +9,11 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { DEFAULT_CURRENCY, formatMoney, topClients } from "@/lib/mock-data";
+import {
+  DEFAULT_CURRENCY,
+  formatMoney,
+  type TopClientRevenue,
+} from "@/lib/mock-data";
 
 const chartConfig = {
   amount: {
@@ -18,7 +22,11 @@ const chartConfig = {
   },
 } satisfies ChartConfig;
 
-export function TopClientsChart() {
+type TopClientsChartProps = {
+  clients: TopClientRevenue[];
+};
+
+export function TopClientsChart({ clients }: TopClientsChartProps) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -26,7 +34,7 @@ export function TopClientsChart() {
     return () => clearTimeout(timer);
   }, []);
 
-  const data = topClients(5).map((client) => ({
+  const data = clients.map((client) => ({
     name: client.clientName.split(" ")[0],
     fullName: client.clientName,
     amount: client.amount,

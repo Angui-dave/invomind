@@ -23,17 +23,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { createClient } from "@/lib/actions/clients";
+import { createProspect } from "@/lib/actions/prospects";
 import {
   PIPELINE_STAGES,
-  PROSPECTS,
   TODAY,
   type PipelineStage,
   type Prospect,
 } from "@/lib/mock-data";
 import { toast } from "sonner";
 
-export function PipelineBoard() {
-  const [prospects, setProspects] = useState<Prospect[]>(PROSPECTS);
+type PipelineBoardProps = {
+  initialProspects?: Prospect[];
+};
+
+export function PipelineBoard({
+  initialProspects = [],
+}: PipelineBoardProps) {
+  const [prospects, setProspects] = useState<Prospect[]>(initialProspects);
   const [showLost, setShowLost] = useState(false);
   const [mobileStage, setMobileStage] = useState<PipelineStage>("nouveau");
   const [addOpen, setAddOpen] = useState(false);
@@ -54,7 +61,7 @@ export function PipelineBoard() {
   const byStage = (stage: PipelineStage) =>
     activeProspects.filter((p) => p.stage === stage);
 
-  function handleAddProspect() {
+  async function handleAddProspect() {
     if (newName.trim().length < 2) {
       toast.error("Le nom doit contenir au moins 2 caractères");
       return;
@@ -64,8 +71,19 @@ export function PipelineBoard() {
       toast.error("Le montant doit être supérieur à 0");
       return;
     }
+    const result = await createProspect({
+      name: newName.trim(),
+      company: newCompany.trim() || "—",
+      estimatedValue: value,
+      stage: newStage,
+      lastInteractionAt: TODAY,
+    });
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
     const prospect: Prospect = {
-      id: `prs_${Math.random().toString(36).slice(2, 8)}`,
+      id: result.id!,
       name: newName.trim(),
       company: newCompany.trim() || "—",
       estimatedValue: value,
@@ -139,13 +157,9 @@ export function PipelineBoard() {
         </Button>
       </div>
 
-      {/* Desktop kanban */}
       <div className="hidden gap-3 overflow-x-auto pb-2 md:flex">
         {showLost ? (
-          <PipelineColumn
-            title="Perdu"
-            prospects={byStage("perdu")}
-          />
+          <PipelineColumn title="Perdu" prospects={byStage("perdu")} />
         ) : (
           PIPELINE_STAGES.map((stage) => (
             <PipelineColumn
@@ -160,7 +174,6 @@ export function PipelineBoard() {
         )}
       </div>
 
-      {/* Mobile: select + list */}
       <div className="space-y-3 md:hidden">
         {!showLost && (
           <Select
@@ -191,12 +204,11 @@ export function PipelineBoard() {
               />
             ),
           )}
-          {!showLost &&
-            byStage(mobileStage).length === 0 && (
-              <p className="py-8 text-center text-sm text-ink/55">
-                Aucun prospect dans cette étape.
-              </p>
-            )}
+          {!showLost && byStage(mobileStage).length === 0 && (
+            <p className="py-8 text-center text-sm text-ink/55">
+              Aucun prospect dans cette étape.
+            </p>
+          )}
         </div>
       </div>
 
@@ -229,7 +241,11 @@ export function PipelineBoard() {
               }
             : undefined
         }
-        onSave={() => setConvertProspect(null)}
+        onSave={async (values) => {
+          const result = await createClient(values);
+          if (!result.ok) throw new Error(result.error);
+          setConvertProspect(null);
+        }}
       />
     </div>
   );

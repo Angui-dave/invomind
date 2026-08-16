@@ -1,36 +1,42 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InvoMind
 
-## Getting Started
+SaaS multi-tenant de facturation (Next.js 16). Backend Laravel prévu ; **données mock en mémoire** pour le moment, avec **isolation réelle par organisation** (une « base » mock par client).
 
-First, run the development server:
+Chaque client partage la même URL (`NEXT_PUBLIC_APP_URL`). Le tenant est résolu depuis le cookie de session (`organizationId`), jamais depuis un sous-domaine.
+
+## Prérequis
+
+- Node.js 20+
+- Aucune base de données requise en mode mock
+
+## Démarrage rapide
 
 ```bash
+cp .env.example .env
+# NEXT_PUBLIC_USE_MOCK_DATA=true (défaut)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Ouvrir [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Comptes
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Accès | Identifiants | Données |
+|-------|--------------|---------|
+| Démo seed | `lea@atelier-diallo.sn` / `password123` | Atelier Diallo (catalogue, factures…) |
+| Nouvelle org | `/register` | Store **vide** isolé + plan Gratuit |
 
-## Learn More
+## Multi-tenant (mock)
 
-To learn more about Next.js, take a look at the following resources:
+- **Central** : tenants, users, memberships, plans, subscriptions — `lib/mock/central.ts`
+- **Par org** : clients, factures, branding, modules — `lib/mock/store.ts` (`tenantStore()`)
+- **Personnalisation** : Paramètres → Apparence (couleurs, logo, police, modules)
+- **Abonnements** : free / pro / business — quotas dans `lib/billing/entitlements.ts`
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Voir [docs/LARAVEL.md](docs/LARAVEL.md) pour le mapping vers stancl/tenancy (DB par tenant + résolution par utilisateur).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Stack actuelle
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- Next.js 16 (App Router), React 19, Tailwind v4
+- Auth mock (jose JWT + Server Actions)
+- Zod pour la validation

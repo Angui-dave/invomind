@@ -2,7 +2,7 @@ import type { CurrencyCode } from "@/lib/money";
 import type { PaymentMethod } from "@/lib/documents";
 import type { TaxMode } from "@/lib/tax";
 
-export type PlanId = "free" | "pro";
+export type PlanId = "free" | "pro" | "business";
 
 export type PipelineStage =
   | "nouveau"
@@ -87,6 +87,53 @@ export interface PaymentProviderState {
   feeNote: string;
 }
 
+export type DocumentTemplateId = "classic" | "modern" | "minimal";
+
+export type OrgBranding = {
+  displayName: string | null;
+  logoUrl: string | null;
+  primaryColor: string;
+  accentColor: string;
+  fontFamily: string;
+  documentTemplate: DocumentTemplateId;
+  locale: string;
+  currency: CurrencyCode;
+};
+
+export type OrgSettingsExtras = {
+  remindersEnabled: boolean;
+  reminderCadence: import("@/lib/documents").ReminderMilestone[];
+  payment: PaymentProviderState;
+};
+
+export type EnabledModules = {
+  pipeline: boolean;
+  conversations: boolean;
+  expenses: boolean;
+  catalog: boolean;
+  reports: boolean;
+  importTool: boolean;
+};
+
+/** Empty defaults when org settings are missing */
+export const DEFAULT_ORG_SETTINGS: OrgSettings = {
+  companyName: "",
+  email: "",
+  phone: "",
+  address: "",
+  city: "",
+  postalCode: "",
+  country: "SN",
+  taxId: "",
+  defaultCurrency: "XOF",
+  defaultTaxMode: "exclusive",
+  defaultTaxRate: 18,
+  bankName: "",
+  iban: "",
+  bic: "",
+  legalMentions: "",
+};
+
 export const ORG_SETTINGS: OrgSettings = {
   companyName: "Atelier Diallo",
   email: "contact@atelier-diallo.sn",
@@ -146,6 +193,19 @@ export const PRICING_PLANS: PricingPlan[] = [
       "Rapports TVA",
     ],
     highlighted: true,
+  },
+  {
+    id: "business",
+    name: "Business",
+    price: 29_000,
+    priceLabel: "29 000 F CFA",
+    description: "Pour les équipes : tout Pro + import CSV et priorités support.",
+    features: [
+      "Tout le plan Pro",
+      "Import CSV clients / catalogue",
+      "Modules personnalisables",
+      "Support prioritaire",
+    ],
   },
 ];
 
@@ -292,11 +352,12 @@ export const TEMPLATE_VARIABLES = [
   "{{lien_paiement}}",
 ] as const;
 
-export function activeProspectsValue(): {
+export function activeProspectsValue(prospects?: Prospect[]): {
   total: number;
   count: number;
 } {
-  const active = PROSPECTS.filter((p) => p.stage !== "perdu");
+  const list = prospects ?? PROSPECTS;
+  const active = list.filter((p) => p.stage !== "perdu");
   return {
     total: active.reduce((sum, p) => sum + p.estimatedValue, 0),
     count: active.length,

@@ -8,25 +8,36 @@ import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import type { Client } from "@/lib/data/clients";
+import type { Prospect } from "@/lib/data/settings";
 import {
   DEFAULT_CURRENCY,
   formatMoney,
-  getInvoices,
   PIPELINE_STAGE_COLORS,
   PIPELINE_STAGES,
   resolveContact,
+  type BusinessDocument,
   type Conversation,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 type ContactPanelProps = {
   conversation: Conversation | null;
+  clients?: Client[];
+  prospects?: Prospect[];
+  invoices?: BusinessDocument[];
   className?: string;
 };
 
 const OPEN_STATUSES = new Set(["sent", "partially_paid", "overdue"]);
 
-export function ContactPanel({ conversation, className }: ContactPanelProps) {
+export function ContactPanel({
+  conversation,
+  clients = [],
+  prospects = [],
+  invoices = [],
+  className,
+}: ContactPanelProps) {
   if (!conversation) {
     return (
       <aside
@@ -42,10 +53,10 @@ export function ContactPanel({ conversation, className }: ContactPanelProps) {
     );
   }
 
-  const contact = resolveContact(conversation);
+  const contact = resolveContact(conversation, clients, prospects);
   const openInvoices =
     contact.kind === "client"
-      ? getInvoices().filter(
+      ? invoices.filter(
           (inv) =>
             inv.clientId === contact.client.id &&
             OPEN_STATUSES.has(inv.status),
@@ -127,7 +138,7 @@ export function ContactPanel({ conversation, className }: ContactPanelProps) {
               type="button"
               variant="outline"
               size="sm"
-              className="mt-3 w-full"
+              className="w-full mt-3"
               onClick={() =>
                 toast.success("Association simulée — à brancher au CRM")
               }

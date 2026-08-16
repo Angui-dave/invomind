@@ -10,7 +10,11 @@ import {
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEFAULT_CURRENCY, formatMoney, revenueSeries } from "@/lib/mock-data";
+import {
+  DEFAULT_CURRENCY,
+  formatMoney,
+  type RevenuePoint,
+} from "@/lib/mock-data";
 
 const chartConfig = {
   revenue: {
@@ -21,7 +25,11 @@ const chartConfig = {
 
 type Period = "3" | "6" | "12";
 
-export function RevenueChart() {
+type RevenueChartProps = {
+  seriesByPeriod: Record<Period, RevenuePoint[]>;
+};
+
+export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
   const [period, setPeriod] = useState<Period>("6");
   const [loaded, setLoaded] = useState(false);
 
@@ -32,11 +40,11 @@ export function RevenueChart() {
 
   const data = useMemo(
     () =>
-      revenueSeries(Number(period) as 3 | 6 | 12).map((point) => ({
+      (seriesByPeriod[period] ?? []).map((point) => ({
         label: point.label,
         revenue: point.amount,
       })),
-    [period],
+    [period, seriesByPeriod],
   );
 
   return (

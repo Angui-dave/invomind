@@ -455,13 +455,17 @@ export function unreadTotal(conversations: Conversation[] = CONVERSATIONS): numb
   return conversations.reduce((sum, c) => sum + c.unreadCount, 0);
 }
 
-export function resolveContact(conversation: Conversation): ResolvedContact {
+export function resolveContact(
+  conversation: Conversation,
+  clients: Client[] = CLIENTS,
+  prospects: Prospect[] = PROSPECTS,
+): ResolvedContact {
   if (conversation.clientId) {
-    const client = CLIENTS.find((c) => c.id === conversation.clientId);
+    const client = clients.find((c) => c.id === conversation.clientId);
     if (client) return { kind: "client", client };
   }
   if (conversation.prospectId) {
-    const prospect = PROSPECTS.find((p) => p.id === conversation.prospectId);
+    const prospect = prospects.find((p) => p.id === conversation.prospectId);
     if (prospect) return { kind: "prospect", prospect };
   }
   return { kind: "unknown" };

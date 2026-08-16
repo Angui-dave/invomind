@@ -16,41 +16,77 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { verifySession } from "@/lib/dal/session";
 import {
-  activeProspectsValue,
-  CURRENT_USER,
+  getInvoices,
+  overdueInvoiceCount,
+  pendingInvoiceCount,
+} from "@/lib/dal/documents";
+import { activeProspectsValue } from "@/lib/dal/prospects";
+import {
+  monthRevenue,
+  revenueByMonth,
+  topClients,
+} from "@/lib/dal/reports";
+import {
   formatDateFr,
   formatMoney,
   DEFAULT_CURRENCY,
-  getInvoices,
-  monthRevenue,
-  overdueInvoiceCount,
-  pendingInvoiceCount,
   TODAY,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
-/** Toggle to preview the empty state visually */
 const SHOW_EMPTY_STATE = false;
 
-export default function DashboardPage() {
-  const pipeline = activeProspectsValue();
-  const overdue = overdueInvoiceCount();
-  const invoices = getInvoices();
+export default async function DashboardPage() {
+  const session = await verifySession();
+  const [
+    pipeline,
+    overdue,
+    pending,
+    invoices,
+    revenue,
+    series3,
+    series6,
+    series12,
+    top,
+  ] = await Promise.all([
+    activeProspectsValue(),
+    overdueInvoiceCount(),
+    pendingInvoiceCount(),
+    getInvoices(),
+    monthRevenue(),
+    revenueByMonth(3),
+    revenueByMonth(6),
+    revenueByMonth(12),
+    topClients(5),
+  ]);
+
   const recent = [...invoices]
     .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
     .slice(0, 5);
+
+  const statusCounts = invoices.reduce(
+    (acc, inv) => {
+      acc[inv.status] = (acc[inv.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+
   const monthLabel = new Intl.DateTimeFormat("fr-FR", {
     month: "long",
     year: "numeric",
   }).format(new Date(TODAY));
+
+  const firstName = session.user.name.split(" ")[0];
 
   return (
     <div className="space-y-10 pb-8">
       <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-ink">
-            Bonjour {CURRENT_USER.name.split(" ")[0]}
+            Bonjour {firstName}
           </h1>
           <p className="mt-2 capitalize text-sm font-medium text-ink/60">{monthLabel}</p>
         </div>
@@ -80,13 +116,13 @@ export default function DashboardPage() {
           label="Revenu du mois"
           icon={<TrendingUp size={20} />}
           value={
-            <span className="num text-brass">{formatMoney(monthRevenue(), DEFAULT_CURRENCY)}</span>
+            <span className="num text-brass">{formatMoney(revenue, DEFAULT_CURRENCY)}</span>
           }
         />
         <StatCard
           label="Factures en attente"
           icon={<Clock size={20} />}
-          value={<span className="num">{pendingInvoiceCount()}</span>}
+          value={<span className="num">{pending}</span>}
         />
         <StatCard
           label="Factures en retard"
@@ -115,12 +151,18 @@ export default function DashboardPage() {
         <>
           <section className="grid gap-6 lg:grid-cols-3">
             <div className="lg:col-span-2">
-              <RevenueChart />
+              <RevenueChart
+                seriesByPeriod={{
+                  "3": series3,
+                  "6": series6,
+                  "12": series12,
+                }}
+              />
             </div>
-            <StatusDonutChart />
+            <StatusDonutChart counts={statusCounts} />
           </section>
 
-          <TopClientsChart />
+          <TopClientsChart clients={top} />
 
           <section>
             <div className="mb-4 flex items-center justify-between gap-3">

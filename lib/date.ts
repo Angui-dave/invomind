@@ -1,14 +1,15 @@
-/** Demo clock — single source of “today” for the static seed */
-
-export const TODAY = "2026-08-15";
+/** Date helpers — production uses the real clock */
 
 export function today(): Date {
-  return new Date(TODAY);
+  return new Date();
 }
 
 export function todayIso(): string {
-  return TODAY;
+  return today().toISOString().slice(0, 10);
 }
+
+/** @deprecated Prefer todayIso() — kept for any leftover seed demos */
+export const TODAY = todayIso();
 
 export function addDays(iso: string, days: number): string {
   const date = new Date(iso);
@@ -16,10 +17,14 @@ export function addDays(iso: string, days: number): string {
   return date.toISOString().slice(0, 10);
 }
 
-export function monthKey(iso: string): string {
+export function monthKey(isoOrDate: string | Date = today()): string {
+  const iso =
+    typeof isoOrDate === "string"
+      ? isoOrDate
+      : isoOrDate.toISOString().slice(0, 10);
   return iso.slice(0, 7);
 }
 
 export function currentMonthKey(): string {
-  return monthKey(TODAY);
+  return monthKey(today());
 }

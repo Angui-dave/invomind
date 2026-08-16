@@ -9,10 +9,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  invoiceStatusCounts,
-  STATUS_LABELS,
-} from "@/lib/mock-data";
+import { STATUS_LABELS } from "@/lib/mock-data";
 
 const chartConfig = {
   paid: { label: STATUS_LABELS.paid, color: "var(--chart-1)" },
@@ -27,7 +24,11 @@ const chartConfig = {
 
 const ORDER = ["paid", "partially_paid", "sent", "draft", "overdue"] as const;
 
-export function StatusDonutChart() {
+type StatusDonutChartProps = {
+  counts: Record<string, number>;
+};
+
+export function StatusDonutChart({ counts }: StatusDonutChartProps) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -35,12 +36,15 @@ export function StatusDonutChart() {
     return () => clearTimeout(timer);
   }, []);
 
-  const counts = useMemo(() => invoiceStatusCounts(), []);
-  const data = ORDER.map((status) => ({
-    status,
-    value: counts[status] ?? 0,
-    fill: `var(--color-${status})`,
-  })).filter((item) => item.value > 0);
+  const data = useMemo(
+    () =>
+      ORDER.map((status) => ({
+        status,
+        value: counts[status] ?? 0,
+        fill: `var(--color-${status})`,
+      })).filter((item) => item.value > 0),
+    [counts],
+  );
 
   return (
     <div className="rounded-xl border border-line bg-paper p-5 sm:p-6 shadow-sm">

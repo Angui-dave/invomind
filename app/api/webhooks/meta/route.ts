@@ -1,9 +1,37 @@
 import { normalizeMetaPayload } from "@/lib/webhooks/meta-payload";
 import { verifyMetaSignature } from "@/lib/webhooks/signature";
-import { appendInbound } from "@/lib/webhooks/store";
+import {
+  appendInbound,
+  resolveOrgByExternalId,
+} from "@/lib/webhooks/store";
+import type { ConversationChannel } from "@/lib/data/conversations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function extractEntryIds(payload: unknown): string[] {
+  if (typeof payload !== "object" || payload === null) return [];
+  const entry = (payload as { entry?: unknown }).entry;
+  if (!Array.isArray(entry)) return [];
+  const ids: string[] = [];
+  for (const item of entry) {
+    if (typeof item !== "object" || item === null) continue;
+    const id = (item as { id?: unknown }).id;
+    if (typeof id === "string" && id.length > 0) ids.push(id);
+  }
+  return ids;
+}
+
+function channelsForObject(payload: unknown): ConversationChannel[] {
+  if (typeof payload !== "object" || payload === null) {
+    return ["whatsapp", "messenger", "instagram"];
+  }
+  const object = (payload as { object?: unknown }).object;
+  if (object === "whatsapp_business_account") return ["whatsapp"];
+  if (object === "page") return ["messenger"];
+  if (object === "instagram") return ["instagram"];
+  return ["whatsapp", "messenger", "instagram"];
+}
 
 /** Meta webhook verification challenge. */
 export async function GET(request: Request) {
@@ -46,7 +74,17 @@ export async function POST(request: Request) {
 
   const messages = normalizeMetaPayload(payload);
   if (messages.length > 0) {
-    appendInbound(messages);
+    const channels = channelsForObject(payload);
+    const entryIds = extractEntryIds(payload);
+    let organizationId: string | null = null;
+    for (const externalId of entryIds) {
+      organizationId = await resolveOrgByExternalId(channels, externalId);
+      if (organizationId) break;
+    }
+
+    if (organizationId) {
+      await appendInbound(organizationId, messages);
+    }
   }
 
   // Always 200 after a valid signature so Meta does not retry.
