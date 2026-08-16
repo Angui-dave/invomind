@@ -54,6 +54,7 @@ export function getMaskedConfig(): MaskedWebhookConfig {
     enabled: config.enabled,
     metaVerifyConfigured: Boolean(process.env.META_VERIFY_TOKEN),
     metaAppSecretConfigured: Boolean(process.env.META_APP_SECRET),
+    tiktokSecretConfigured: Boolean(process.env.TIKTOK_CLIENT_SECRET),
   };
 }
 

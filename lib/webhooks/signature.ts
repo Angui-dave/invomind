@@ -30,3 +30,40 @@ export function verifyMetaSignature(
   if (a.length !== b.length) return false;
   return timingSafeEqual(a, b);
 }
+
+/**
+ * Verify TikTok's `TikTok-Signature: t=<unix>,s=<hex>` header.
+ * HMAC-SHA256 over `${t}.${rawBody}` keyed with the client secret.
+ * Rejects timestamps older/newer than `toleranceSeconds` (replay protection).
+ */
+export function verifyTikTokSignature(
+  clientSecret: string,
+  rawBody: string,
+  header: string | null,
+  toleranceSeconds = 300,
+): boolean {
+  if (!header || !clientSecret) return false;
+
+  let timestamp = "";
+  let signature = "";
+  for (const part of header.split(",")) {
+    const [key, ...rest] = part.trim().split("=");
+    const value = rest.join("=");
+    if (key === "t") timestamp = value;
+    if (key === "s") signature = value;
+  }
+  if (!timestamp || !signature) return false;
+
+  const ts = Number(timestamp);
+  if (!Number.isFinite(ts)) return false;
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - ts) > toleranceSeconds) return false;
+
+  const expected = createHmac("sha256", clientSecret)
+    .update(`${timestamp}.${rawBody}`)
+    .digest("hex");
+  const a = Buffer.from(expected);
+  const b = Buffer.from(signature);
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
+}

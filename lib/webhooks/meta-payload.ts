@@ -27,6 +27,7 @@ function detectChannel(payload: UnknownRecord): ConversationChannel | null {
   const object = asString(payload.object);
   if (object === "whatsapp_business_account") return "whatsapp";
   if (object === "page") return "messenger";
+  if (object === "instagram") return "instagram";
 
   const entry = Array.isArray(payload.entry) ? payload.entry[0] : null;
   if (isRecord(entry)) {
@@ -82,7 +83,11 @@ function parseWhatsApp(payload: UnknownRecord): InboundMessage[] {
   return messages;
 }
 
-function parseMessenger(payload: UnknownRecord): InboundMessage[] {
+/** Shared Messenger / Instagram messaging[] parser (text only, skip echoes). */
+function parseMessagingEvents(
+  payload: UnknownRecord,
+  channel: "messenger" | "instagram",
+): InboundMessage[] {
   const messages: InboundMessage[] = [];
   const entries = Array.isArray(payload.entry) ? payload.entry : [];
 
@@ -93,6 +98,7 @@ function parseMessenger(payload: UnknownRecord): InboundMessage[] {
       if (!isRecord(event)) continue;
       const message = event.message;
       if (!isRecord(message)) continue;
+      if (message.is_echo === true) continue;
       const body = asString(message.text);
       const id = asString(message.mid);
       const sender = event.sender;
@@ -101,7 +107,7 @@ function parseMessenger(payload: UnknownRecord): InboundMessage[] {
       if (!body || !id || !handle) continue;
       messages.push({
         id,
-        channel: "messenger",
+        channel,
         handle,
         body,
         sentAt: millisToIso(event.timestamp as string | number),
@@ -117,6 +123,7 @@ export function normalizeMetaPayload(payload: unknown): InboundMessage[] {
   if (!isRecord(payload)) return [];
   const channel = detectChannel(payload);
   if (channel === "whatsapp") return parseWhatsApp(payload);
-  if (channel === "messenger") return parseMessenger(payload);
+  if (channel === "messenger") return parseMessagingEvents(payload, "messenger");
+  if (channel === "instagram") return parseMessagingEvents(payload, "instagram");
   return [];
 }

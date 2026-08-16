@@ -1,14 +1,10 @@
-import type { ConversationChannel } from "@/lib/data/conversations";
+import { isConversationChannel } from "@/lib/data/conversations";
 import { signPayload } from "@/lib/webhooks/signature";
 import { getConfig, logDelivery } from "@/lib/webhooks/store";
 import type { DeliveryAttempt, SendMessagePayload } from "@/lib/webhooks/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function isChannel(value: unknown): value is ConversationChannel {
-  return value === "whatsapp" || value === "messenger";
-}
 
 function parseBody(data: unknown): SendMessagePayload | null {
   if (typeof data !== "object" || data === null) return null;
@@ -17,12 +13,19 @@ function parseBody(data: unknown): SendMessagePayload | null {
     typeof obj.conversationId === "string" ? obj.conversationId.trim() : "";
   const to = typeof obj.to === "string" ? obj.to.trim() : "";
   const body = typeof obj.body === "string" ? obj.body.trim() : "";
-  if (!conversationId || !to || !body || !isChannel(obj.channel)) return null;
+  const threadRef =
+    typeof obj.threadRef === "string" && obj.threadRef.trim().length > 0
+      ? obj.threadRef.trim()
+      : undefined;
+  if (!conversationId || !to || !body || !isConversationChannel(obj.channel)) {
+    return null;
+  }
   return {
     conversationId,
     channel: obj.channel,
     to,
     body,
+    ...(threadRef ? { threadRef } : {}),
   };
 }
 
@@ -39,7 +42,7 @@ export async function POST(request: Request) {
     return Response.json(
       {
         error:
-          "Corps attendu : { conversationId, channel, to, body }",
+          "Corps attendu : { conversationId, channel, to, body, threadRef? }",
       },
       { status: 400 },
     );
@@ -72,6 +75,7 @@ export async function POST(request: Request) {
     channel: payload.channel,
     to: payload.to,
     body: payload.body,
+    ...(payload.threadRef ? { threadRef: payload.threadRef } : {}),
     sentAt: attemptedAt,
   });
   const timestamp = String(Math.floor(Date.now() / 1000));

@@ -26,6 +26,8 @@ export interface InboundMessage {
   contactName?: string;
   body: string;
   sentAt: string;
+  /** Platform thread id (e.g. TikTok conversation_id) required to reply. */
+  threadRef?: string;
 }
 
 export interface MaskedWebhookConfig {
@@ -35,6 +37,7 @@ export interface MaskedWebhookConfig {
   enabled: boolean;
   metaVerifyConfigured: boolean;
   metaAppSecretConfigured: boolean;
+  tiktokSecretConfigured: boolean;
 }
 
 export interface SendMessagePayload {
@@ -42,4 +45,5 @@ export interface SendMessagePayload {
   channel: ConversationChannel;
   to: string;
   body: string;
+  threadRef?: string;
 }

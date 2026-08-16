@@ -11,11 +11,15 @@ import { cn } from "@/lib/utils";
 const channelStyles: Record<ConversationChannel, string> = {
   whatsapp: "bg-whatsapp/12 text-whatsapp border-whatsapp/35",
   messenger: "bg-messenger/12 text-messenger border-messenger/35",
+  instagram: "bg-instagram/12 text-instagram border-instagram/35",
+  tiktok: "bg-tiktok/12 text-tiktok border-tiktok/35",
 };
 
 const channelDotStyles: Record<ConversationChannel, string> = {
   whatsapp: "bg-whatsapp",
   messenger: "bg-messenger",
+  instagram: "bg-instagram",
+  tiktok: "bg-tiktok",
 };
 
 type ChannelBadgeProps = {

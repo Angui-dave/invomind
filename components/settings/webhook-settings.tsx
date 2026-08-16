@@ -50,6 +50,7 @@ export function WebhookSettings() {
   const [config, setConfig] = useState<MaskedWebhookConfig | null>(null);
   const [deliveries, setDeliveries] = useState<DeliveryAttempt[]>([]);
   const [metaUrl, setMetaUrl] = useState("");
+  const [tiktokUrl, setTiktokUrl] = useState("");
 
   const applyResponse = useCallback((data: WebhookResponse) => {
     setConfig(data.config);
@@ -75,6 +76,7 @@ export function WebhookSettings() {
   useEffect(() => {
     void load();
     setMetaUrl(`${window.location.origin}/api/webhooks/meta`);
+    setTiktokUrl(`${window.location.origin}/api/webhooks/tiktok`);
   }, [load]);
 
   async function handleSave() {
@@ -140,9 +142,9 @@ export function WebhookSettings() {
     }
   }
 
-  async function copyMetaUrl() {
+  async function copyUrl(value: string) {
     try {
-      await navigator.clipboard.writeText(metaUrl);
+      await navigator.clipboard.writeText(value);
       toast.success("Lien copié");
     } catch {
       toast.error("Impossible de copier le lien");
@@ -256,8 +258,8 @@ export function WebhookSettings() {
             Réception Meta
           </h3>
           <p className="text-xs text-ink/55">
-            URL à déclarer dans votre App Meta (WhatsApp / Messenger) pour
-            recevoir les messages entrants.
+            URL à déclarer dans votre App Meta (WhatsApp / Messenger /
+            Instagram) pour recevoir les messages entrants.
           </p>
         </div>
 
@@ -269,7 +271,7 @@ export function WebhookSettings() {
             type="button"
             variant="outline"
             size="sm"
-            onClick={() => void copyMetaUrl()}
+            onClick={() => void copyUrl(metaUrl || "/api/webhooks/meta")}
           >
             <Copy className="size-3.5" aria-hidden />
             Copier
@@ -300,6 +302,49 @@ export function WebhookSettings() {
           >
             META_APP_SECRET{" "}
             {config?.metaAppSecretConfigured ? "configuré" : "manquant"}
+          </Badge>
+        </div>
+      </section>
+
+      <section className="space-y-4 rounded-sm border border-line bg-paper p-4">
+        <div>
+          <h3 className="font-serif text-base font-semibold text-ink">
+            Réception TikTok
+          </h3>
+          <p className="text-xs text-ink/55">
+            URL à déclarer dans TikTok Business Messaging (signature{" "}
+            <code className="num">TikTok-Signature</code>). Accès API soumis à
+            approbation TikTok.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <code className="num flex-1 truncate rounded-sm border border-line bg-muted/40 px-3 py-2 text-xs text-ink">
+            {tiktokUrl || "/api/webhooks/tiktok"}
+          </code>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void copyUrl(tiktokUrl || "/api/webhooks/tiktok")}
+          >
+            <Copy className="size-3.5" aria-hidden />
+            Copier
+          </Button>
+        </div>
+
+        <div className="flex flex-wrap gap-2">
+          <Badge
+            variant="outline"
+            className={cn(
+              "rounded-sm",
+              config?.tiktokSecretConfigured
+                ? "border-brass/40 bg-brass/12 text-brass"
+                : "border-line bg-line/40 text-ink/55",
+            )}
+          >
+            TIKTOK_CLIENT_SECRET{" "}
+            {config?.tiktokSecretConfigured ? "configuré" : "manquant"}
           </Badge>
         </div>
       </section>

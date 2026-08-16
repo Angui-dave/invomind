@@ -30,6 +30,8 @@ const FILTERS: { value: ChannelFilter; label: string }[] = [
   { value: "all", label: "Tous" },
   { value: "whatsapp", label: "WA" },
   { value: "messenger", label: "FB" },
+  { value: "instagram", label: "IG" },
+  { value: "tiktok", label: "TT" },
 ];
 
 function previewFor(

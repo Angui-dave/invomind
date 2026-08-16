@@ -1,7 +1,20 @@
 import { CLIENTS, type Client } from "@/lib/data/clients";
 import { PROSPECTS, type Prospect } from "@/lib/data/settings";
 
-export type ConversationChannel = "whatsapp" | "messenger";
+export const CONVERSATION_CHANNELS = [
+  "whatsapp",
+  "messenger",
+  "instagram",
+  "tiktok",
+] as const;
+
+export type ConversationChannel = (typeof CONVERSATION_CHANNELS)[number];
+
+export function isConversationChannel(
+  value: unknown,
+): value is ConversationChannel {
+  return CONVERSATION_CHANNELS.includes(value as ConversationChannel);
+}
 
 export type MessageDirection = "inbound" | "outbound";
 
@@ -26,6 +39,8 @@ export interface Conversation {
   channel: ConversationChannel;
   contactName: string;
   contactHandle: string;
+  /** Platform thread id (e.g. TikTok conversation_id) required to reply. */
+  threadRef?: string;
   avatarInitials?: string;
   clientId?: string;
   prospectId?: string;
@@ -42,11 +57,15 @@ export type ResolvedContact =
 export const CHANNEL_LABELS: Record<ConversationChannel, string> = {
   whatsapp: "WhatsApp",
   messenger: "Messenger",
+  instagram: "Instagram",
+  tiktok: "TikTok",
 };
 
 export const CHANNEL_COLORS: Record<ConversationChannel, string> = {
   whatsapp: "#128c7e",
   messenger: "#0866ff",
+  instagram: "#d62976",
+  tiktok: "#fe2c55",
 };
 
 export const CONVERSATIONS: Conversation[] = [
@@ -138,6 +157,35 @@ export const CONVERSATIONS: Conversation[] = [
     clientId: "cli_5",
     unreadCount: 1,
     lastMessageAt: "2026-08-15T07:55:00",
+  },
+  {
+    id: "conv_10",
+    channel: "instagram",
+    contactName: "Karim Benali",
+    contactHandle: "@benali.tech",
+    avatarInitials: "KB",
+    prospectId: "prs_2",
+    unreadCount: 2,
+    lastMessageAt: "2026-08-15T12:05:00",
+  },
+  {
+    id: "conv_11",
+    channel: "instagram",
+    contactName: "Sara Koné",
+    contactHandle: "@sara.kone",
+    avatarInitials: "SK",
+    unreadCount: 0,
+    lastMessageAt: "2026-08-14T18:40:00",
+  },
+  {
+    id: "conv_12",
+    channel: "tiktok",
+    contactName: "Lina Ortega",
+    contactHandle: "@lina.creates",
+    threadRef: "tt_conv_lina_01",
+    avatarInitials: "LO",
+    unreadCount: 1,
+    lastMessageAt: "2026-08-15T13:20:00",
   },
 ];
 
@@ -329,6 +377,64 @@ export const CONVERSATION_MESSAGES: ConversationMessage[] = [
     body: "Ravi que ça vous plaise. Je vous envoie la facture.",
     sentAt: "2026-08-14T20:10:00",
     status: "read",
+  },
+
+  // conv_10 — Karim Benali (Instagram / prospect)
+  {
+    id: "msg_10a",
+    conversationId: "conv_10",
+    direction: "inbound",
+    body: "Salut ! J’ai vu votre reel sur la facturation.",
+    sentAt: "2026-08-15T12:04:00",
+  },
+  {
+    id: "msg_10b",
+    conversationId: "conv_10",
+    direction: "inbound",
+    body: "Vous proposez aussi un suivi WhatsApp pour les clients ?",
+    sentAt: "2026-08-15T12:05:00",
+  },
+  {
+    id: "msg_10c",
+    conversationId: "conv_10",
+    direction: "outbound",
+    body: "Oui Karim, on peut brancher WhatsApp et Instagram dans la même boîte.",
+    sentAt: "2026-08-14T21:10:00",
+    status: "read",
+  },
+
+  // conv_11 — Sara Koné (Instagram / unknown)
+  {
+    id: "msg_11a",
+    conversationId: "conv_11",
+    direction: "inbound",
+    body: "Bonjour, je cherche un devis pour une identité visuelle.",
+    sentAt: "2026-08-14T18:30:00",
+  },
+  {
+    id: "msg_11b",
+    conversationId: "conv_11",
+    direction: "outbound",
+    body: "Avec plaisir Sara. Je vous envoie un questionnaire rapide.",
+    sentAt: "2026-08-14T18:40:00",
+    status: "delivered",
+  },
+
+  // conv_12 — Lina Ortega (TikTok / unknown)
+  {
+    id: "msg_12a",
+    conversationId: "conv_12",
+    direction: "inbound",
+    body: "Coucou ! Votre vidéo sur les factures QR m’intéresse.",
+    sentAt: "2026-08-15T13:20:00",
+  },
+  {
+    id: "msg_12b",
+    conversationId: "conv_12",
+    direction: "outbound",
+    body: "Merci Lina ! Je peux vous montrer une démo en 10 minutes.",
+    sentAt: "2026-08-15T12:50:00",
+    status: "sent",
   },
 ];
 

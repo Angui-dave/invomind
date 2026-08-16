@@ -16,6 +16,8 @@
   --color-line: #e2e8f0;
   --color-whatsapp: #128c7e;
   --color-messenger: #0866ff;
+  --color-instagram: #d62976;
+  --color-tiktok: #fe2c55;
 
   /* Semantic shadcn mappings → brand tokens */
   --color-background: var(--background);

@@ -125,6 +125,7 @@ export default function ConversationsPage() {
           channel: selected.channel,
           to: selected.contactHandle,
           body,
+          ...(selected.threadRef ? { threadRef: selected.threadRef } : {}),
         }),
       });
       const data = (await res.json()) as {
@@ -206,6 +207,7 @@ export default function ConversationsPage() {
             item.channel === "whatsapp" && !item.handle.startsWith("+")
               ? `+${item.handle}`
               : item.handle,
+          ...(item.threadRef ? { threadRef: item.threadRef } : {}),
           avatarInitials: initialsFrom(name),
           unreadCount: 1,
           lastMessageAt: item.sentAt,
@@ -220,6 +222,9 @@ export default function ConversationsPage() {
                 lastMessageAt: item.sentAt,
                 unreadCount:
                   c.id === selected ? c.unreadCount : c.unreadCount + 1,
+                ...(item.threadRef && !c.threadRef
+                  ? { threadRef: item.threadRef }
+                  : {}),
               }
             : c,
         );
@@ -282,7 +287,8 @@ export default function ConversationsPage() {
           Conversations
         </h1>
         <p className="mt-1 text-sm text-ink/60">
-          Échanges WhatsApp et Messenger synchronisés avec le CRM
+          Échanges WhatsApp, Messenger, Instagram et TikTok synchronisés avec le
+          CRM
         </p>
       </div>
 

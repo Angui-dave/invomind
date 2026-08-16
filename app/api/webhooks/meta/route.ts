@@ -23,7 +23,7 @@ export async function GET(request: Request) {
   return new Response("Forbidden", { status: 403 });
 }
 
-/** Receive inbound WhatsApp / Messenger events from Meta. */
+/** Receive inbound WhatsApp / Messenger / Instagram events from Meta. */
 export async function POST(request: Request) {
   const appSecret = process.env.META_APP_SECRET;
   if (!appSecret) {
