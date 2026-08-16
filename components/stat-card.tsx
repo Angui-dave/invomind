@@ -7,6 +7,7 @@ type StatCardProps = {
   hint?: string;
   valueClassName?: string;
   className?: string;
+  icon?: ReactNode;
 };
 
 export function StatCard({
@@ -15,21 +16,31 @@ export function StatCard({
   hint,
   valueClassName,
   className,
+  icon,
 }: StatCardProps) {
   return (
     <div
       className={cn(
-        "rounded-sm border border-line bg-paper p-4 shadow-[0_1px_3px_rgba(22,33,62,0.04)]",
+        "relative flex flex-col gap-1 overflow-hidden rounded-xl border border-line bg-paper p-5 shadow-sm transition-shadow duration-200 hover:shadow-md",
         className,
       )}
     >
-      <p className="text-xs font-medium uppercase tracking-wide text-ink/55">
-        {label}
-      </p>
-      <p className={cn("mt-2 text-2xl font-semibold text-ink", valueClassName)}>
-        {value}
-      </p>
-      {hint && <p className="mt-1 text-xs text-ink/55">{hint}</p>}
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium tracking-wide text-ink/60">
+          {label}
+        </p>
+        {icon && (
+          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-ink/60">
+            {icon}
+          </div>
+        )}
+      </div>
+      <div className="mt-2 flex flex-col gap-1">
+        <p className={cn("text-3xl font-semibold text-ink", valueClassName)}>
+          {value}
+        </p>
+        {hint && <p className="text-sm text-ink/50 mt-1">{hint}</p>}
+      </div>
     </div>
   );
 }

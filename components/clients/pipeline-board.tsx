@@ -26,6 +26,7 @@ import {
 import {
   PIPELINE_STAGES,
   PROSPECTS,
+  TODAY,
   type PipelineStage,
   type Prospect,
 } from "@/lib/mock-data";
@@ -69,7 +70,7 @@ export function PipelineBoard() {
       company: newCompany.trim() || "—",
       estimatedValue: value,
       stage: newStage,
-      lastInteractionAt: "2026-08-15",
+      lastInteractionAt: TODAY,
     };
     setProspects((prev) => [prospect, ...prev]);
     setAddOpen(false);

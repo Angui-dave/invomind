@@ -12,17 +12,20 @@ import { Skeleton } from "@/components/ui/skeleton";
 import {
   invoiceStatusCounts,
   STATUS_LABELS,
-  type InvoiceStatus,
 } from "@/lib/mock-data";
 
 const chartConfig = {
   paid: { label: STATUS_LABELS.paid, color: "var(--chart-1)" },
+  partially_paid: {
+    label: STATUS_LABELS.partially_paid,
+    color: "var(--chart-5, #B08D57)",
+  },
   sent: { label: STATUS_LABELS.sent, color: "var(--chart-2)" },
   draft: { label: STATUS_LABELS.draft, color: "var(--chart-3)" },
   overdue: { label: STATUS_LABELS.overdue, color: "var(--chart-4)" },
 } satisfies ChartConfig;
 
-const ORDER: InvoiceStatus[] = ["paid", "sent", "draft", "overdue"];
+const ORDER = ["paid", "partially_paid", "sent", "draft", "overdue"] as const;
 
 export function StatusDonutChart() {
   const [loaded, setLoaded] = useState(false);
@@ -35,13 +38,13 @@ export function StatusDonutChart() {
   const counts = useMemo(() => invoiceStatusCounts(), []);
   const data = ORDER.map((status) => ({
     status,
-    value: counts[status],
+    value: counts[status] ?? 0,
     fill: `var(--color-${status})`,
   })).filter((item) => item.value > 0);
 
   return (
-    <div className="rounded-sm border border-line bg-paper p-4 sm:p-5">
-      <h2 className="mb-4 font-serif text-base font-semibold text-ink">
+    <div className="rounded-xl border border-line bg-paper p-5 sm:p-6 shadow-sm">
+      <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
         Factures par statut
       </h2>
 
@@ -91,13 +94,15 @@ export function StatusDonutChart() {
                 <span className="flex items-center gap-2 text-ink/75">
                   <span
                     className="size-2.5 shrink-0 rounded-[2px]"
-                    style={{ backgroundColor: `var(--chart-${ORDER.indexOf(status) + 1})` }}
+                    style={{
+                      backgroundColor: chartConfig[status].color,
+                    }}
                     aria-hidden
                   />
                   {STATUS_LABELS[status]}
                 </span>
                 <span className="num font-medium text-ink">
-                  {counts[status]}
+                  {counts[status] ?? 0}
                 </span>
               </li>
             ))}

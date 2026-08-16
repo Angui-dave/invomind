@@ -3,7 +3,7 @@ import { LedgerCard } from "@/components/ledger-card";
 import {
   CURRENT_USER,
   formatDateFr,
-  formatEuro,
+  formatMoney,
   HERO_INVOICE,
 } from "@/lib/mock-data";
 
@@ -50,7 +50,7 @@ export function HeroInvoiceMock() {
                 {line.description}
               </span>
               <span className="num shrink-0 text-ink">
-                {formatEuro(line.quantity * line.unitPrice)}
+                {formatMoney(line.quantity * line.unitPrice, invoice.currency)}
               </span>
             </li>
           ))}
@@ -59,7 +59,7 @@ export function HeroInvoiceMock() {
         <div className="flex items-end justify-between border-t border-line pt-4">
           <span className="text-sm font-medium text-ink/70">Total TTC</span>
           <span className="num text-2xl font-semibold text-brass">
-            {formatEuro(invoice.total)}
+            {formatMoney(invoice.total, invoice.currency)}
           </span>
         </div>
 

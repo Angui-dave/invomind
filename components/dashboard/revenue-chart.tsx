@@ -10,7 +10,7 @@ import {
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatEuro, revenueSeries } from "@/lib/mock-data";
+import { DEFAULT_CURRENCY, formatMoney, revenueSeries } from "@/lib/mock-data";
 
 const chartConfig = {
   revenue: {
@@ -40,9 +40,9 @@ export function RevenueChart() {
   );
 
   return (
-    <div className="rounded-sm border border-line bg-paper p-4 sm:p-5">
+    <div className="rounded-xl border border-line bg-paper p-5 sm:p-6 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-serif text-base font-semibold text-ink">
+        <h2 className="font-serif text-lg font-semibold text-ink">
           Évolution du revenu
         </h2>
         <Tabs
@@ -96,7 +96,7 @@ export function RevenueChart() {
                   className="border-line bg-paper"
                   formatter={(value) => (
                     <span className="num font-medium text-ink">
-                      {formatEuro(Number(value))}
+                      {formatMoney(Number(value), DEFAULT_CURRENCY)}
                     </span>
                   )}
                 />

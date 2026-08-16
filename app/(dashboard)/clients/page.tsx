@@ -20,6 +20,8 @@ import {
 import {
   CLIENTS,
   clientInitials,
+  invoiceCountFor,
+  latestOpenInvoiceToken,
   portalUrl,
   type Client,
 } from "@/lib/mock-data";
@@ -30,8 +32,13 @@ export default function ClientsPage() {
   const [editing, setEditing] = useState<Client | null>(null);
 
   async function copyClientPortal(client: Client) {
+    const token = latestOpenInvoiceToken(client.id);
+    if (!token) {
+      toast.error("Aucune facture ouverte pour ce client");
+      return;
+    }
     try {
-      await navigator.clipboard.writeText(portalUrl(client.portalToken));
+      await navigator.clipboard.writeText(portalUrl(token));
       toast.success("Lien copié");
     } catch {
       toast.error("Impossible de copier le lien");
@@ -112,7 +119,7 @@ export default function ClientsPage() {
                     </TableCell>
                     <TableCell className="text-ink/70">{client.email}</TableCell>
                     <TableCell className="num text-right">
-                      {client.invoiceCount}
+                      {invoiceCountFor(client.id)}
                     </TableCell>
                     <TableCell>
                       <Badge
@@ -161,10 +168,7 @@ export default function ClientsPage() {
                 c.id === editing.id
                   ? {
                       ...c,
-                      name: values.name,
-                      company: values.company,
-                      email: values.email,
-                      remindersEnabled: values.remindersEnabled,
+                      ...values,
                     }
                   : c,
               ),
@@ -173,11 +177,7 @@ export default function ClientsPage() {
             setClients((prev) => [
               {
                 id: `cli_${Math.random().toString(36).slice(2, 8)}`,
-                name: values.name,
-                company: values.company,
-                email: values.email,
-                invoiceCount: 0,
-                remindersEnabled: values.remindersEnabled,
+                ...values,
                 portalToken: `cli-${values.name.toLowerCase().replace(/\s+/g, "-")}`,
               },
               ...prev,

@@ -2,10 +2,13 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowUpDown, Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { ArrowUpDown, FileMinus2, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceTrackingCell } from "@/components/invoice-tracking-cell";
 import { buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -18,15 +21,16 @@ import {
 } from "@/components/ui/table";
 import {
   formatDateFr,
-  formatEuro,
-  INVOICES,
-  STATUS_LABELS,
-  type Invoice,
+  formatMoney,
+  getCreditNotes,
+  getInvoices,
+  INVOICE_STATUS_LABELS,
+  type BusinessDocument,
   type InvoiceStatus,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 
+type KindTab = "invoices" | "credit_notes";
 type StatusFilter = "all" | InvoiceStatus;
 type SortKey = "client" | "amount" | "dueDate";
 type SortDirection = "asc" | "desc";
@@ -35,13 +39,16 @@ const PAGE_SIZE = 8;
 
 const FILTERS: { value: StatusFilter; label: string }[] = [
   { value: "all", label: "Toutes" },
-  { value: "draft", label: STATUS_LABELS.draft },
-  { value: "sent", label: STATUS_LABELS.sent },
-  { value: "paid", label: STATUS_LABELS.paid },
-  { value: "overdue", label: STATUS_LABELS.overdue },
+  { value: "draft", label: INVOICE_STATUS_LABELS.draft },
+  { value: "sent", label: INVOICE_STATUS_LABELS.sent },
+  { value: "partially_paid", label: INVOICE_STATUS_LABELS.partially_paid },
+  { value: "paid", label: INVOICE_STATUS_LABELS.paid },
+  { value: "overdue", label: INVOICE_STATUS_LABELS.overdue },
 ];
 
 export default function InvoicesPage() {
+  const router = useRouter();
+  const [kindTab, setKindTab] = useState<KindTab>("invoices");
   const [status, setStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
@@ -50,9 +57,12 @@ export default function InvoicesPage() {
   });
   const [page, setPage] = useState(1);
 
+  const source =
+    kindTab === "invoices" ? getInvoices() : getCreditNotes();
+
   const filtered = useMemo(() => {
-    let list: Invoice[] = [...INVOICES];
-    if (status !== "all") {
+    let list: BusinessDocument[] = [...source];
+    if (kindTab === "invoices" && status !== "all") {
       list = list.filter((inv) => inv.status === status);
     }
     const q = query.trim().toLowerCase();
@@ -71,7 +81,7 @@ export default function InvoicesPage() {
       return sort.direction === "asc" ? cmp : -cmp;
     });
     return list;
-  }, [status, query, sort]);
+  }, [source, kindTab, status, query, sort]);
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
@@ -89,6 +99,11 @@ export default function InvoicesPage() {
     setPage(1);
   }
 
+  function handleCreditNote(invoice: BusinessDocument) {
+    toast.success("Préparation de l’avoir…");
+    router.push(`/invoices/new?creditOf=${invoice.id}`);
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -97,7 +112,7 @@ export default function InvoicesPage() {
             Factures
           </h1>
           <p className="mt-1 text-sm text-ink/60">
-            {filtered.length} facture{filtered.length > 1 ? "s" : ""}
+            {filtered.length} document{filtered.length > 1 ? "s" : ""}
           </p>
         </div>
         <Link
@@ -112,26 +127,44 @@ export default function InvoicesPage() {
         </Link>
       </div>
 
+      <Tabs
+        value={kindTab}
+        onValueChange={(value) => {
+          setKindTab(value as KindTab);
+          setPage(1);
+        }}
+      >
+        <TabsList variant="line">
+          <TabsTrigger value="invoices">Factures</TabsTrigger>
+          <TabsTrigger value="credit_notes">Avoirs</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs
-          value={status}
-          onValueChange={(value) => {
-            setStatus(value as StatusFilter);
-            setPage(1);
-          }}
-        >
-          <TabsList variant="line" className="h-auto w-full flex-wrap justify-start">
-            {FILTERS.map((filter) => (
-              <TabsTrigger
-                key={filter.value}
-                value={filter.value}
-                className="text-xs sm:text-sm"
-              >
-                {filter.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+        {kindTab === "invoices" && (
+          <Tabs
+            value={status}
+            onValueChange={(value) => {
+              setStatus(value as StatusFilter);
+              setPage(1);
+            }}
+          >
+            <TabsList
+              variant="line"
+              className="h-auto w-full flex-wrap justify-start"
+            >
+              {FILTERS.map((filter) => (
+                <TabsTrigger
+                  key={filter.value}
+                  value={filter.value}
+                  className="text-xs sm:text-sm"
+                >
+                  {filter.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        )}
         <Input
           value={query}
           onChange={(e) => {
@@ -172,7 +205,9 @@ export default function InvoicesPage() {
                   onClick={() => toggleSort("dueDate")}
                 />
               </TableHead>
-              <TableHead>Suivi</TableHead>
+              <TableHead>
+                {kindTab === "invoices" ? "Suivi" : "Actions"}
+              </TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -182,8 +217,7 @@ export default function InvoicesPage() {
                   colSpan={6}
                   className="py-10 text-center text-sm text-ink/55"
                 >
-                  Aucune facture ne correspond à ces critères. Modifiez le
-                  filtre ou créez une nouvelle facture.
+                  Aucun document ne correspond à ces critères.
                 </TableCell>
               </TableRow>
             ) : (
@@ -201,7 +235,7 @@ export default function InvoicesPage() {
                     {invoice.number}
                   </TableCell>
                   <TableCell className="num text-right font-medium">
-                    {formatEuro(invoice.total)}
+                    {formatMoney(invoice.total, invoice.currency)}
                   </TableCell>
                   <TableCell>
                     <InvoiceStatusBadge status={invoice.status} />
@@ -210,7 +244,31 @@ export default function InvoicesPage() {
                     {formatDateFr(invoice.dueDate)}
                   </TableCell>
                   <TableCell>
-                    <InvoiceTrackingCell invoice={invoice} />
+                    {kindTab === "invoices" ? (
+                      <div className="flex items-center gap-2">
+                        <InvoiceTrackingCell invoice={invoice} />
+                        {(invoice.status === "paid" ||
+                          invoice.status === "sent" ||
+                          invoice.status === "partially_paid") && (
+                          <Button
+                            type="button"
+                            size="icon"
+                            variant="ghost"
+                            className="size-7 text-ink/45 hover:text-ink"
+                            title="Créer un avoir"
+                            onClick={() => handleCreditNote(invoice)}
+                          >
+                            <FileMinus2 className="size-3.5" />
+                          </Button>
+                        )}
+                      </div>
+                    ) : (
+                      <span className="text-xs text-ink/50">
+                        {invoice.sourceDocumentId
+                          ? `Lié à facture`
+                          : "—"}
+                      </span>
+                    )}
                   </TableCell>
                 </TableRow>
               ))

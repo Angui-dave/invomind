@@ -5,10 +5,18 @@ import { LedgerCard } from "@/components/ledger-card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -20,19 +28,27 @@ import {
 import {
   BILLING_HISTORY,
   CURRENT_USER,
+  CURRENCY_OPTIONS,
   EMAIL_TEMPLATES,
   formatDateFr,
-  formatEuro,
+  formatMoney,
+  getTaxPreset,
+  ORG_SETTINGS,
   PAYMENT_METHOD_LABELS,
   PAYMENT_PROVIDER,
   PRICING_PLANS,
   REMINDER_DEFAULTS,
   REMINDER_MILESTONE_LABELS,
+  TAX_PRESETS,
   TEMPLATE_VARIABLES,
+  type CurrencyCode,
+  type OrgSettings,
   type PaymentMethod,
   type ReminderMilestone,
+  type TaxMode,
 } from "@/lib/mock-data";
 import { toast } from "sonner";
+import { WebhookSettings } from "@/components/settings/webhook-settings";
 
 export default function SettingsPage() {
   const plan = PRICING_PLANS.find((p) => p.id === CURRENT_USER.plan)!;
@@ -46,8 +62,10 @@ export default function SettingsPage() {
   const [methods, setMethods] = useState<PaymentMethod[]>([
     ...PAYMENT_PROVIDER.acceptedMethods,
   ]);
+  const [org, setOrg] = useState<OrgSettings>({ ...ORG_SETTINGS });
 
   const currentTemplate = templates.find((t) => t.id === activeTemplate);
+  const taxPreset = getTaxPreset(org.country);
 
   function toggleCadence(milestone: ReminderMilestone, checked: boolean) {
     setCadence((prev) =>
@@ -63,6 +81,10 @@ export default function SettingsPage() {
     );
   }
 
+  function patchOrg(patch: Partial<OrgSettings>) {
+    setOrg((prev) => ({ ...prev, ...patch }));
+  }
+
   return (
     <div className="space-y-6">
       <header>
@@ -70,16 +92,278 @@ export default function SettingsPage() {
           Paramètres
         </h1>
         <p className="mt-1 text-sm text-ink/60">
-          Abonnement, relances et paiement en ligne
+          Entreprise, fiscalité, abonnement, relances, paiements et canaux
         </p>
       </header>
 
-      <Tabs defaultValue="billing">
+      <Tabs defaultValue="company">
         <TabsList variant="line" className="h-auto flex-wrap">
+          <TabsTrigger value="company">Entreprise</TabsTrigger>
+          <TabsTrigger value="tax">Fiscalité</TabsTrigger>
+          <TabsTrigger value="banking">Banque & QR</TabsTrigger>
           <TabsTrigger value="billing">Abonnement</TabsTrigger>
-          <TabsTrigger value="reminders">Relances automatiques</TabsTrigger>
+          <TabsTrigger value="reminders">Relances</TabsTrigger>
           <TabsTrigger value="payments">Paiement en ligne</TabsTrigger>
+          <TabsTrigger value="channels">Canaux & webhooks</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="company" className="mt-6 space-y-4">
+          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Raison sociale</Label>
+              <Input
+                value={org.companyName}
+                onChange={(e) => patchOrg({ companyName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>E-mail</Label>
+              <Input
+                value={org.email}
+                onChange={(e) => patchOrg({ email: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Téléphone</Label>
+              <Input
+                value={org.phone}
+                onChange={(e) => patchOrg({ phone: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Adresse</Label>
+              <Input
+                value={org.address}
+                onChange={(e) => patchOrg({ address: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Ville</Label>
+              <Input
+                value={org.city}
+                onChange={(e) => patchOrg({ city: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Code postal</Label>
+              <Input
+                value={org.postalCode}
+                onChange={(e) => patchOrg({ postalCode: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pays</Label>
+              <Select
+                value={org.country}
+                onValueChange={(v) => {
+                  if (!v) return;
+                  const preset = getTaxPreset(v);
+                  patchOrg({
+                    country: v,
+                    defaultTaxRate: preset.defaultRate,
+                  });
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {TAX_PRESETS.map((p) => (
+                    <SelectItem key={p.countryCode} value={p.countryCode}>
+                      {p.countryLabel}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>N° fiscal / NINEA</Label>
+              <Input
+                value={org.taxId}
+                onChange={(e) => patchOrg({ taxId: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Mentions légales</Label>
+              <Textarea
+                rows={3}
+                value={org.legalMentions}
+                onChange={(e) => patchOrg({ legalMentions: e.target.value })}
+              />
+            </div>
+          </div>
+          <Button
+            type="button"
+            className="bg-ledger text-paper hover:bg-ledger/90"
+            onClick={() => toast.success("Profil entreprise enregistré")}
+          >
+            Enregistrer
+          </Button>
+        </TabsContent>
+
+        <TabsContent value="tax" className="mt-6 space-y-4">
+          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Devise par défaut</Label>
+              <Select
+                value={org.defaultCurrency}
+                onValueChange={(v) =>
+                  v && patchOrg({ defaultCurrency: v as CurrencyCode })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {CURRENCY_OPTIONS.map((c) => (
+                    <SelectItem key={c.value} value={c.value}>
+                      {c.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Mode TVA par défaut</Label>
+              <Select
+                value={org.defaultTaxMode}
+                onValueChange={(v) =>
+                  v && patchOrg({ defaultTaxMode: v as TaxMode })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="exclusive">Hors taxes (HT)</SelectItem>
+                  <SelectItem value="inclusive">TVA incluse (TTC)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Taux TVA par défaut</Label>
+              <Select
+                value={String(org.defaultTaxRate)}
+                onValueChange={(v) =>
+                  v && patchOrg({ defaultTaxRate: Number(v) })
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {taxPreset.rates.map((r) => (
+                    <SelectItem key={r.rate} value={String(r.rate)}>
+                      {r.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="sm:col-span-2 text-sm text-ink/60">
+              Régime actuel : {taxPreset.countryLabel}. Le module QR-facture
+              suisse et TWINT s’active automatiquement si le pays est Suisse
+              (CH).
+            </p>
+          </div>
+          <Button
+            type="button"
+            className="bg-ledger text-paper hover:bg-ledger/90"
+            onClick={() => toast.success("Paramètres fiscaux enregistrés")}
+          >
+            Enregistrer
+          </Button>
+        </TabsContent>
+
+        <TabsContent value="banking" className="mt-6 space-y-4">
+          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label>Banque</Label>
+              <Input
+                value={org.bankName}
+                onChange={(e) => patchOrg({ bankName: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>IBAN</Label>
+              <Input
+                className="num"
+                value={org.iban}
+                onChange={(e) => patchOrg({ iban: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>BIC / SWIFT</Label>
+              <Input
+                className="num"
+                value={org.bic}
+                onChange={(e) => patchOrg({ bic: e.target.value })}
+              />
+            </div>
+            {org.country === "CH" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>QR-IBAN</Label>
+                  <Input
+                    className="num"
+                    value={org.qrIban ?? ""}
+                    onChange={(e) => patchOrg({ qrIban: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Numéro TWINT</Label>
+                  <Input
+                    value={org.twintNumber ?? ""}
+                    onChange={(e) => patchOrg({ twintNumber: e.target.value })}
+                  />
+                </div>
+              </>
+            )}
+            {org.country !== "CH" && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Mobile Money</Label>
+                  <Select
+                    value={org.mobileMoneyProvider ?? "wave"}
+                    onValueChange={(v) =>
+                      v &&
+                      patchOrg({
+                        mobileMoneyProvider: v as OrgSettings["mobileMoneyProvider"],
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="wave">Wave</SelectItem>
+                      <SelectItem value="orange_money">Orange Money</SelectItem>
+                      <SelectItem value="mtn">MTN MoMo</SelectItem>
+                      <SelectItem value="moov">Moov Money</SelectItem>
+                      <SelectItem value="mpesa">M-Pesa</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>N° Mobile Money</Label>
+                  <Input
+                    value={org.mobileMoneyNumber ?? ""}
+                    onChange={(e) =>
+                      patchOrg({ mobileMoneyNumber: e.target.value })
+                    }
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <Button
+            type="button"
+            className="bg-ledger text-paper hover:bg-ledger/90"
+            onClick={() => toast.success("Coordonnées bancaires enregistrées")}
+          >
+            Enregistrer
+          </Button>
+        </TabsContent>
 
         <TabsContent value="billing" className="mt-6 space-y-6">
           <LedgerCard className="max-w-md">
@@ -105,12 +389,12 @@ export default function SettingsPage() {
                 variant="outline"
                 className="w-full"
                 onClick={() =>
-                  toast.message("Portail Stripe (mock)", {
+                  toast.message("Portail de facturation (mock)", {
                     description: "Aucune intégration réelle à ce stade.",
                   })
                 }
               >
-                Gérer dans le portail Stripe
+                Gérer l’abonnement
               </Button>
             </div>
           </LedgerCard>
@@ -137,7 +421,7 @@ export default function SettingsPage() {
                       </TableCell>
                       <TableCell>{item.description}</TableCell>
                       <TableCell className="num text-right">
-                        {formatEuro(item.amount)}
+                        {formatMoney(item.amount, item.currency)}
                       </TableCell>
                       <TableCell>
                         <Badge
@@ -211,10 +495,7 @@ export default function SettingsPage() {
                 </span>
               ))}
             </div>
-            <Tabs
-              value={activeTemplate}
-              onValueChange={setActiveTemplate}
-            >
+            <Tabs value={activeTemplate} onValueChange={setActiveTemplate}>
               <TabsList className="h-auto flex-wrap">
                 {templates.map((tpl) => (
                   <TabsTrigger key={tpl.id} value={tpl.id} className="text-xs">
@@ -271,7 +552,7 @@ export default function SettingsPage() {
                 <h3 className="font-serif text-base font-semibold text-ink">
                   Prestataire de paiement
                 </h3>
-                <p className="text-xs text-ink/55">Stripe</p>
+                <p className="text-xs text-ink/55">Stripe / Mobile Money</p>
               </div>
               {connected ? (
                 <div className="flex items-center gap-2">
@@ -284,7 +565,7 @@ export default function SettingsPage() {
                     size="sm"
                     onClick={() => {
                       setConnected(false);
-                      toast.message("Stripe déconnecté (mock)");
+                      toast.message("Prestataire déconnecté (mock)");
                     }}
                   >
                     Déconnecter
@@ -296,10 +577,10 @@ export default function SettingsPage() {
                   className="bg-ledger text-paper hover:bg-ledger/90"
                   onClick={() => {
                     setConnected(true);
-                    toast.success("Stripe connecté (mock)");
+                    toast.success("Prestataire connecté (mock)");
                   }}
                 >
-                  Connecter Stripe
+                  Connecter
                 </Button>
               )}
             </div>
@@ -331,6 +612,10 @@ export default function SettingsPage() {
           <p className="rounded-sm border border-line bg-muted/50 px-4 py-3 text-sm text-ink/70">
             {PAYMENT_PROVIDER.feeNote}
           </p>
+        </TabsContent>
+
+        <TabsContent value="channels" className="mt-6">
+          <WebhookSettings />
         </TabsContent>
       </Tabs>
     </div>

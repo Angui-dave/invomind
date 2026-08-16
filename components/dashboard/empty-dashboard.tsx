@@ -5,9 +5,9 @@ import { cn } from "@/lib/utils";
 
 export function EmptyDashboard() {
   return (
-    <div className="flex flex-col items-center justify-center rounded-sm border border-dashed border-line bg-paper px-6 py-16 text-center">
-      <div className="flex size-12 items-center justify-center rounded-sm border border-line bg-muted">
-        <FilePlus2 className="size-5 text-ledger" aria-hidden />
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-line bg-paper px-6 py-16 text-center">
+      <div className="flex size-14 items-center justify-center rounded-full border border-line bg-muted/50">
+        <FilePlus2 className="size-6 text-ledger" aria-hidden />
       </div>
       <h2 className="mt-4 font-serif text-xl font-semibold text-ink">
         Créez votre première facture

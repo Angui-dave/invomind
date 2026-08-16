@@ -9,7 +9,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { formatEuro, TOP_CLIENTS } from "@/lib/mock-data";
+import { DEFAULT_CURRENCY, formatMoney, topClients } from "@/lib/mock-data";
 
 const chartConfig = {
   amount: {
@@ -26,15 +26,15 @@ export function TopClientsChart() {
     return () => clearTimeout(timer);
   }, []);
 
-  const data = TOP_CLIENTS.map((client) => ({
+  const data = topClients(5).map((client) => ({
     name: client.clientName.split(" ")[0],
     fullName: client.clientName,
     amount: client.amount,
   }));
 
   return (
-    <div className="rounded-sm border border-line bg-paper p-4 sm:p-5">
-      <h2 className="mb-4 font-serif text-base font-semibold text-ink">
+    <div className="rounded-xl border border-line bg-paper p-5 sm:p-6 shadow-sm">
+      <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
         Top 5 clients par revenu
       </h2>
 
@@ -71,7 +71,7 @@ export function TopClientsChart() {
                   labelKey="fullName"
                   formatter={(value) => (
                     <span className="num font-medium text-ink">
-                      {formatEuro(Number(value))}
+                      {formatMoney(Number(value), DEFAULT_CURRENCY)}
                     </span>
                   )}
                 />

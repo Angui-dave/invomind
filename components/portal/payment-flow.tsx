@@ -14,19 +14,21 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { formatEuro } from "@/lib/mock-data";
+import { formatMoney, type CurrencyCode } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
 type PaymentPhase = "idle" | "form" | "processing" | "paid";
 
 type PaymentFlowProps = {
   amount: number;
+  currency?: CurrencyCode;
   alreadyPaid?: boolean;
   paidAtLabel?: string;
 };
 
 export function PaymentFlow({
   amount,
+  currency = "XOF",
   alreadyPaid = false,
   paidAtLabel,
 }: PaymentFlowProps) {
@@ -55,7 +57,7 @@ export function PaymentFlow({
               <p className="mt-0.5 text-xs text-ledger/80">{paidAtLabel}</p>
             ) : (
               <p className="mt-0.5 text-xs text-ledger/80">
-                {formatEuro(amount)} réglés avec succès
+                {formatMoney(amount, currency)} réglés avec succès
               </p>
             )}
           </div>
@@ -97,7 +99,7 @@ export function PaymentFlow({
             <DialogDescription>
               Montant à régler :{" "}
               <span className="num font-medium text-ink">
-                {formatEuro(amount)}
+                {formatMoney(amount, currency)}
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -148,7 +150,7 @@ export function PaymentFlow({
                 <Input
                   id="mm-phone"
                   className="num"
-                  placeholder="+33 6 12 34 56 78"
+                  placeholder="+221 77 123 45 67"
                   disabled={phase === "processing"}
                 />
               </div>
@@ -171,7 +173,7 @@ export function PaymentFlow({
                   Traitement en cours…
                 </>
               ) : (
-                `Payer ${formatEuro(amount)}`
+                `Payer ${formatMoney(amount, currency)}`
               )}
             </Button>
           </DialogFooter>

@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { LedgerCard } from "@/components/ledger-card";
 import { PaymentFlow } from "@/components/portal/payment-flow";
+import { PaymentQrSection } from "@/components/invoices/payment-qr-section";
 import { PortalHeader } from "@/components/portal/portal-header";
 import {
+  balanceDue,
   CURRENT_USER,
   formatDateFr,
-  formatEuro,
+  formatMoney,
   getInvoiceByToken,
   PAYMENT_METHOD_LABELS,
 } from "@/lib/mock-data";
@@ -25,6 +27,7 @@ export default async function PortalInvoicePage(
 
   const isPaid = invoice.status === "paid" || Boolean(invoice.paidOnlineAt);
   const isOverdue = invoice.status === "overdue";
+  const amountDue = isPaid ? 0 : balanceDue(invoice);
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -66,11 +69,11 @@ export default async function PortalInvoicePage(
                 <span className="min-w-0">
                   <span className="block text-ink/85">{line.description}</span>
                   <span className="num text-xs text-ink/45">
-                    {line.quantity} × {formatEuro(line.unitPrice)}
+                    {line.quantity} × {formatMoney(line.unitPrice, invoice.currency)}
                   </span>
                 </span>
                 <span className="num shrink-0 font-medium text-ink">
-                  {formatEuro(line.quantity * line.unitPrice)}
+                  {formatMoney(line.quantity * line.unitPrice, invoice.currency)}
                 </span>
               </li>
             ))}
@@ -79,14 +82,15 @@ export default async function PortalInvoicePage(
           <div className="flex items-end justify-between border-t border-line pt-4">
             <span className="text-sm font-medium text-ink/65">Total TTC</span>
             <span className="num text-3xl font-semibold text-brass">
-              {formatEuro(invoice.total)}
+              {formatMoney(invoice.total, invoice.currency)}
             </span>
           </div>
         </div>
       </LedgerCard>
 
       <PaymentFlow
-        amount={invoice.total}
+        amount={amountDue > 0 ? amountDue : invoice.total}
+        currency={invoice.currency}
         alreadyPaid={isPaid}
         paidAtLabel={
           invoice.paidOnlineAt
@@ -100,6 +104,10 @@ export default async function PortalInvoicePage(
               : undefined
         }
       />
+
+      {!isPaid && invoice.kind === "invoice" && (
+        <PaymentQrSection document={invoice} />
+      )}
 
       <footer className="mt-auto pt-8 text-center text-xs text-line">
         Propulsé par InvoMind

@@ -39,8 +39,22 @@ export function MarketingFooter() {
     <footer className="border-t border-line bg-paper">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-8 sm:flex-row sm:items-center sm:justify-between sm:px-6">
         <p className="font-serif text-sm font-medium text-ink">InvoMind</p>
+        <nav className="flex flex-wrap gap-4 text-sm text-ink/60">
+          <Link
+            href="/outils/calculateur-tva"
+            className="hover:text-ledger transition-ledger"
+          >
+            Calculateur TVA
+          </Link>
+          <Link
+            href="/outils/generateur-qr-facture"
+            className="hover:text-ledger transition-ledger"
+          >
+            Générateur QR
+          </Link>
+        </nav>
         <p className="text-sm text-ink/60">
-          Facturation précise pour freelances. © {new Date().getFullYear()}
+          Facturation pour l’Afrique et le monde. © {new Date().getFullYear()}
         </p>
       </div>
     </footer>

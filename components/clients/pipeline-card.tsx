@@ -2,7 +2,8 @@
 
 import { UserPlus } from "lucide-react";
 import {
-  formatEuro,
+  DEFAULT_CURRENCY,
+  formatMoney,
   PIPELINE_STAGE_COLORS,
   relativeDateFr,
   type Prospect,
@@ -26,7 +27,7 @@ export function PipelineCard({ prospect, onConvert }: PipelineCardProps) {
       <h3 className="text-sm font-medium text-ink">{prospect.name}</h3>
       <p className="text-xs text-ink/55">{prospect.company}</p>
       <p className="num mt-2 text-sm font-semibold text-brass">
-        {formatEuro(prospect.estimatedValue)}
+        {formatMoney(prospect.estimatedValue, DEFAULT_CURRENCY)}
       </p>
       <p className="mt-1 text-xs text-ink/50">
         {relativeDateFr(prospect.lastInteractionAt)}
