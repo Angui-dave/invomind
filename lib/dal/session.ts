@@ -47,14 +47,14 @@ function intersectModules(
 export const verifySession = cache(async (): Promise<VerifiedSession> => {
   const payload = await readSessionCookie();
   if (!payload?.userId || !payload?.organizationId) {
-    redirect("/login");
+    redirect("/login?clear_session=1");
   }
 
   const user = findUserById(payload.userId);
   const tenant = findTenant(payload.organizationId);
   const membership = membershipFor(payload.userId, payload.organizationId);
   if (!user || !tenant || !membership) {
-    redirect("/login");
+    redirect("/login?clear_session=1");
   }
 
   const subscription = subscriptionForTenant(tenant.id);

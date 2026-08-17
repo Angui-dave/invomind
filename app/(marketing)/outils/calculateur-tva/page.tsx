@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { MarketingFooter, MarketingHeader } from "@/components/marketing/site-chrome";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import {
@@ -35,9 +34,7 @@ export default function VatCalculatorPage() {
   );
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <MarketingHeader />
-      <main className="mx-auto w-full max-w-xl flex-1 px-4 py-10 sm:px-6">
+    <div className="mx-auto w-full max-w-xl flex-1 px-4 py-10 sm:px-6">
         <h1 className="font-serif text-3xl font-semibold text-ink">
           Calculateur de TVA
         </h1>
@@ -155,8 +152,6 @@ export default function VatCalculatorPage() {
             </p>
           </div>
         </div>
-      </main>
-      <MarketingFooter />
     </div>
   );
 }

@@ -31,14 +31,14 @@ export const metadata: Metadata = {
     template: "%s · InvoMind",
   },
   description:
-    "SaaS de facturation pour freelances : clients, factures, relances automatiques, paiement en ligne et portail client.",
+    "Facturez en 1 minute et encaissez par Mobile Money ou carte. Devis, relances automatiques, portail client et TVA pour freelances et PME en Afrique, France et Suisse.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="fr"
-      className={`${ibmPlexSans.variable} ${ibmPlexSerif.variable} ${ibmPlexMono.variable} h-full antialiased`}
+      className={`${ibmPlexSans.variable} ${ibmPlexSerif.variable} ${ibmPlexMono.variable} h-full scroll-smooth antialiased`}
     >
       <body className="min-h-full flex flex-col bg-paper text-ink font-sans">
         <TooltipProvider delay={200}>

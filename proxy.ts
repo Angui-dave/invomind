@@ -20,6 +20,15 @@ const authRoutes = ["/login", "/register"];
 
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
+  
+  // Intercept logout/clear_session first
+  const clearSession = req.nextUrl.searchParams.get("clear_session");
+  if (clearSession === "1") {
+    const res = NextResponse.redirect(new URL("/login", req.nextUrl));
+    res.cookies.delete(SESSION_COOKIE);
+    return res;
+  }
+
   const isProtected = protectedPrefixes.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );

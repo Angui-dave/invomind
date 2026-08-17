@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { MarketingFooter, MarketingHeader } from "@/components/marketing/site-chrome";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,9 +53,7 @@ export default function QrGeneratorPage() {
   }, [merchantName, merchantCity, phone, amount, currency, reference, provider]);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
-      <MarketingHeader />
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
+    <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10 sm:px-6">
         <h1 className="font-serif text-3xl font-semibold text-ink">
           Générateur de QR Facture
         </h1>
@@ -175,8 +172,6 @@ export default function QrGeneratorPage() {
             </Button>
           </div>
         </div>
-      </main>
-      <MarketingFooter />
     </div>
   );
 }
