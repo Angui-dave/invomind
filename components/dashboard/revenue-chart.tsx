@@ -48,7 +48,7 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
   );
 
   return (
-    <div className="rounded-xl border border-line bg-paper p-5 sm:p-6 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-5 sm:p-6 shadow-sm">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-serif text-lg font-semibold text-ink">
           Évolution du revenu

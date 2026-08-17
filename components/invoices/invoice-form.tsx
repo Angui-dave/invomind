@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { PackagePlus, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { LedgerCard } from "@/components/ledger-card";
+import { DocumentLifecycle } from "@/components/documents/document-lifecycle";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { PaymentLinkButton } from "@/components/invoices/payment-link-button";
 import { ReminderTimeline } from "@/components/invoices/reminder-timeline";
@@ -293,13 +294,20 @@ export function InvoiceForm({
           </p>
         </div>
         {mode === "edit" && document && (
-          <InvoiceStatusBadge status={document.status} />
+          <div className="flex flex-col items-end gap-3">
+            <InvoiceStatusBadge status={document.status} />
+            <DocumentLifecycle
+              className="w-56"
+              status={document.status}
+              reminded={document.reminders.some((item) => item.state === "sent")}
+            />
+          </div>
         )}
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="space-y-6">
-          <section className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+          <section className="grid gap-3 rounded-2xl border border-line bg-card p-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label htmlFor="client">Client</Label>
               <Select
@@ -375,7 +383,7 @@ export function InvoiceForm({
             </div>
           </section>
 
-          <section className="space-y-3 rounded-sm border border-line bg-paper p-4">
+          <section className="space-y-3 rounded-2xl border border-line bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-serif text-base font-semibold text-ink">
                 Lignes
@@ -538,7 +546,7 @@ export function InvoiceForm({
           </section>
 
           {kind === "invoice" && (
-            <section className="space-y-4 rounded-sm border border-line bg-paper p-4">
+            <section className="space-y-4 rounded-2xl border border-line bg-card p-4">
               <h2 className="font-serif text-base font-semibold text-ink">
                 Relances automatiques
               </h2>
@@ -619,7 +627,7 @@ export function InvoiceForm({
 
           {kind === "invoice" && (
             <>
-              <section className="space-y-3 rounded-sm border border-line bg-paper p-4">
+              <section className="space-y-3 rounded-2xl border border-line bg-card p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="font-serif text-base font-semibold text-ink">
@@ -677,7 +685,7 @@ export function InvoiceForm({
                     orgSettings={orgSettings}
                     client={client}
                   />
-                  <section className="space-y-3 rounded-sm border border-line bg-paper p-4">
+                  <section className="space-y-3 rounded-2xl border border-line bg-card p-4">
                     {document.paidOnlineAt ? (
                       <p className="rounded-sm border border-ledger/30 bg-ledger/10 px-3 py-2 text-sm text-ledger">
                         Payée en ligne le {formatDateFr(document.paidOnlineAt)}

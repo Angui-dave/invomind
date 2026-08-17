@@ -85,7 +85,7 @@ export function ExpensesPageClient({
         </div>
         <Button
           type="button"
-          className="bg-ledger text-paper hover:bg-ledger/90"
+          className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
           onClick={() => setOpen(true)}
         >
           <Plus className="size-4" aria-hidden />
@@ -125,7 +125,7 @@ export function ExpensesPageClient({
         ))}
       </div>
 
-      <div className="rounded-sm border border-line bg-paper">
+      <div className="rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -346,6 +346,12 @@ function ExpenseDialog({
                 TVA déductible
               </label>
             </div>
+          </div>
+          <div className="rounded-2xl border border-dashed border-line bg-muted/40 px-4 py-6 text-center">
+            <p className="text-sm font-medium text-ink">Justificatif</p>
+            <p className="mt-1 text-xs text-ink/55">
+              Glissez un reçu PDF ou image ici — bientôt disponible.
+            </p>
           </div>
           <DialogFooter>
             <Button

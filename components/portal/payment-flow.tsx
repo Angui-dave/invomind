@@ -46,7 +46,7 @@ export function PaymentFlow({
     try {
       const result = await recordPortalPayment({
         token,
-        method,
+        method: method === "card" ? "card" : "mobile_money",
         amount,
       });
       if (!result.ok) {
@@ -64,17 +64,17 @@ export function PaymentFlow({
   if (phase === "paid") {
     return (
       <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-sm border border-ledger/35 bg-ledger/10 px-4 py-3">
+        <div className="flex items-start gap-3 rounded-2xl border border-brass/35 bg-brass/10 px-4 py-3">
           <CheckCircle2
-            className="mt-0.5 size-5 shrink-0 text-ledger animate-in zoom-in-50 fade-in duration-200"
+            className="mt-0.5 size-5 shrink-0 text-brass animate-in zoom-in-50 fade-in duration-200"
             aria-hidden
           />
           <div>
-            <p className="text-sm font-medium text-ledger">Paiement confirmé</p>
+            <p className="text-sm font-medium text-brass">Paiement confirmé</p>
             {paidAtLabel ? (
-              <p className="mt-0.5 text-xs text-ledger/80">{paidAtLabel}</p>
+              <p className="mt-0.5 text-xs text-brass/80">{paidAtLabel}</p>
             ) : (
-              <p className="mt-0.5 text-xs text-ledger/80">
+              <p className="mt-0.5 text-xs text-brass/80">
                 {formatMoney(amount, currency)} réglés avec succès
               </p>
             )}
@@ -98,7 +98,7 @@ export function PaymentFlow({
     <>
       <Button
         type="button"
-        className="h-11 w-full bg-ledger text-base text-paper hover:bg-ledger/90"
+        className="h-12 w-full rounded-full bg-ledger text-base text-paper hover:bg-ledger/90"
         onClick={() => setPhase("form")}
         disabled={phase === "processing"}
       >
@@ -123,12 +123,18 @@ export function PaymentFlow({
           </DialogHeader>
 
           <Tabs value={method} onValueChange={setMethod}>
-            <TabsList className="w-full">
-              <TabsTrigger value="card" className="flex-1">
-                Carte bancaire
+            <TabsList className="h-auto w-full flex-wrap rounded-full p-1">
+              <TabsTrigger value="card" className="flex-1 rounded-full">
+                Carte
               </TabsTrigger>
-              <TabsTrigger value="mobile_money" className="flex-1">
-                Mobile Money
+              <TabsTrigger value="mobile_money" className="flex-1 rounded-full">
+                Wave
+              </TabsTrigger>
+              <TabsTrigger value="orange" className="flex-1 rounded-full">
+                Orange Money
+              </TabsTrigger>
+              <TabsTrigger value="mtn" className="flex-1 rounded-full">
+                MTN
               </TabsTrigger>
             </TabsList>
             <TabsContent value="card" className="mt-4 space-y-3">
@@ -164,11 +170,33 @@ export function PaymentFlow({
             </TabsContent>
             <TabsContent value="mobile_money" className="mt-4 space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="mm-phone">Numéro Mobile Money</Label>
+                <Label htmlFor="mm-phone">Numéro Wave</Label>
                 <Input
                   id="mm-phone"
                   className="num"
                   placeholder="+221 77 123 45 67"
+                  disabled={phase === "processing"}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="orange" className="mt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="om-phone">Numéro Orange Money</Label>
+                <Input
+                  id="om-phone"
+                  className="num"
+                  placeholder="+221 77 123 45 67"
+                  disabled={phase === "processing"}
+                />
+              </div>
+            </TabsContent>
+            <TabsContent value="mtn" className="mt-4 space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="mtn-phone">Numéro MTN MoMo</Label>
+                <Input
+                  id="mtn-phone"
+                  className="num"
+                  placeholder="+225 07 00 00 00"
                   disabled={phase === "processing"}
                 />
               </div>

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, TrendingUp, Clock, AlertCircle, Users, ArrowRight } from "lucide-react";
+import { Plus, TrendingUp, Clock, AlertCircle, Users, ArrowRight, FileText, ShoppingCart } from "lucide-react";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceTrackingCell } from "@/components/invoice-tracking-cell";
 import { EmptyDashboard } from "@/components/dashboard/empty-dashboard";
@@ -83,29 +83,38 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-10 pb-8">
-      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="font-serif text-3xl font-bold tracking-tight text-ink">
             Bonjour {firstName}
           </h1>
-          <p className="mt-2 capitalize text-sm font-medium text-ink/60">{monthLabel}</p>
+          <p className="mt-2 capitalize text-sm font-medium text-ink/60">
+            {monthLabel} · trésorerie du mois
+          </p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2">
           <Link
-            href="/clients"
-            className={cn(buttonVariants({ variant: "outline", size: "lg" }))}
+            href="/quotes/new"
+            className={cn(buttonVariants({ variant: "outline" }), "h-9 rounded-full")}
           >
-            <Users className="mr-2" size={18} />
-            Nouveau client
+            <FileText className="size-4" />
+            Nouveau devis
+          </Link>
+          <Link
+            href="/expenses"
+            className={cn(buttonVariants({ variant: "outline" }), "h-9 rounded-full")}
+          >
+            <ShoppingCart className="size-4" />
+            Saisir une dépense
           </Link>
           <Link
             href="/invoices/new"
             className={cn(
-              buttonVariants({ size: "lg" }),
-              "bg-ledger text-paper hover:bg-ledger/90",
+              buttonVariants(),
+              "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
             )}
           >
-            <Plus className="mr-2" size={18} />
+            <Plus className="size-4" />
             Nouvelle facture
           </Link>
         </div>
@@ -118,6 +127,7 @@ export default async function DashboardPage() {
           value={
             <span className="num text-brass">{formatMoney(revenue, DEFAULT_CURRENCY)}</span>
           }
+          trend="+12% vs mois dernier"
         />
         <StatCard
           label="Factures en attente"
@@ -142,6 +152,7 @@ export default async function DashboardPage() {
             </span>
           }
           hint={`${pipeline.count} prospects actifs`}
+          trend="+8% vs mois dernier"
         />
       </section>
 
@@ -180,7 +191,7 @@ export default async function DashboardPage() {
                 <ArrowRight className="ml-1.5" size={16} />
               </Link>
             </div>
-            <div className="rounded-xl border border-line bg-paper shadow-sm overflow-hidden">
+            <div className="rounded-2xl border border-line bg-card shadow-sm overflow-hidden">
               <Table>
                 <TableHeader className="bg-muted/30">
                   <TableRow className="hover:bg-transparent border-line">

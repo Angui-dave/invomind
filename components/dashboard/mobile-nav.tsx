@@ -42,7 +42,7 @@ export function MobileNav(props: MobileNavProps) {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent
           side="left"
-          className="w-[248px] border-ink bg-ink p-0 text-paper"
+          className="w-[248px] border-white/10 bg-navy p-0 text-navy-fg"
           showCloseButton
         >
           <SheetHeader className="sr-only">

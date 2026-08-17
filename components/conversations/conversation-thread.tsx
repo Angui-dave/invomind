@@ -200,7 +200,7 @@ export function ConversationThread({
             value={draft}
             onChange={(e) => setDraft(e.target.value)}
             placeholder="Écrire un message…"
-            className="min-h-[44px] max-h-32 resize-none rounded-sm"
+            className="min-h-[44px] max-h-32 resize-none rounded-2xl"
             rows={2}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -211,7 +211,7 @@ export function ConversationThread({
           />
           <Button
             type="button"
-            className="h-10 shrink-0 bg-ledger text-paper hover:bg-ledger/90"
+            className="h-10 shrink-0 rounded-full bg-ledger text-paper hover:bg-ledger/90"
             onClick={handleSend}
             aria-label="Envoyer"
           >

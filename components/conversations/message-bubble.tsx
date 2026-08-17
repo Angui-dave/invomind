@@ -24,7 +24,7 @@ export function MessageBubble({ message, contactName }: MessageBubbleProps) {
     >
       <div
         className={cn(
-          "max-w-[85%] rounded-sm px-3 py-2 text-sm shadow-[0_1px_2px_rgba(22,33,62,0.04)]",
+          "max-w-[85%] rounded-2xl px-3 py-2 text-sm shadow-sm",
           outbound
             ? "bg-ledger text-paper"
             : "border border-line bg-muted/60 text-ink",

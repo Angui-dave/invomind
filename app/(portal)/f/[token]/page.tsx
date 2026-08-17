@@ -56,12 +56,18 @@ export default async function PortalInvoicePage({
       />
 
       {isOverdue && !isPaid && (
-        <p className="rounded-sm border border-line bg-muted/60 px-3 py-2 text-sm text-ink/75">
+        <p className="rounded-2xl border border-brick/30 bg-brick/10 px-4 py-3 text-sm text-brick">
           Échéance dépassée le {formatDateFr(invoice.dueDate)}
         </p>
       )}
 
-      <LedgerCard>
+      {isPaid && (
+        <p className="rounded-2xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">
+          Facture payée
+        </p>
+      )}
+
+      <LedgerCard className="overflow-hidden rounded-3xl" perforated={false}>
         <div className="space-y-5 p-5">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -140,7 +146,7 @@ export default async function PortalInvoicePage({
         />
       )}
 
-      <footer className="mt-auto pt-8 text-center text-xs text-line">
+      <footer className="mt-auto pt-8 text-center text-xs text-ink/40">
         Propulsé par InvoMind
       </footer>
     </div>

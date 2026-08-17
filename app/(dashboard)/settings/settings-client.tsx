@@ -245,19 +245,22 @@ export function SettingsPageClient({
       </header>
 
       <Tabs defaultValue="company">
-        <TabsList variant="line" className="h-auto flex-wrap">
-          <TabsTrigger value="company">Entreprise</TabsTrigger>
-          <TabsTrigger value="appearance">Apparence</TabsTrigger>
-          <TabsTrigger value="tax">Fiscalité</TabsTrigger>
-          <TabsTrigger value="banking">Banque & QR</TabsTrigger>
-          <TabsTrigger value="billing">Abonnement</TabsTrigger>
-          <TabsTrigger value="reminders">Relances</TabsTrigger>
-          <TabsTrigger value="payments">Paiement en ligne</TabsTrigger>
-          <TabsTrigger value="channels">Canaux & webhooks</TabsTrigger>
+        <TabsList
+          variant="default"
+          className="h-auto flex-wrap rounded-full bg-muted/80 p-1"
+        >
+          <TabsTrigger value="company" className="rounded-full">Entreprise</TabsTrigger>
+          <TabsTrigger value="appearance" className="rounded-full">Apparence</TabsTrigger>
+          <TabsTrigger value="tax" className="rounded-full">TVA &amp; devise</TabsTrigger>
+          <TabsTrigger value="banking" className="rounded-full">Mobile Money</TabsTrigger>
+          <TabsTrigger value="billing" className="rounded-full">Abonnement</TabsTrigger>
+          <TabsTrigger value="reminders" className="rounded-full">Relances</TabsTrigger>
+          <TabsTrigger value="payments" className="rounded-full">Paiement en ligne</TabsTrigger>
+          <TabsTrigger value="channels" className="rounded-full">Canaux &amp; webhooks</TabsTrigger>
         </TabsList>
 
         <TabsContent value="company" className="mt-6 space-y-4">
-          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-2xl border border-line bg-card p-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Raison sociale</Label>
               <Input
@@ -351,7 +354,7 @@ export function SettingsPageClient({
         </TabsContent>
 
         <TabsContent value="appearance" className="mt-6 space-y-6">
-          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-2xl border border-line bg-card p-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Nom affiché</Label>
               <Input
@@ -493,7 +496,7 @@ export function SettingsPageClient({
             Enregistrer l’apparence
           </Button>
 
-          <div className="space-y-3 rounded-sm border border-line bg-paper p-4">
+          <div className="space-y-3 rounded-2xl border border-line bg-card p-4">
             <h2 className="font-serif text-base font-semibold text-ink">
               Modules visibles
             </h2>
@@ -550,7 +553,7 @@ export function SettingsPageClient({
         </TabsContent>
 
         <TabsContent value="tax" className="mt-6 space-y-4">
-          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-2xl border border-line bg-card p-4 sm:grid-cols-2">
             <div className="space-y-1.5">
               <Label>Devise par défaut</Label>
               <Select
@@ -624,7 +627,7 @@ export function SettingsPageClient({
         </TabsContent>
 
         <TabsContent value="banking" className="mt-6 space-y-4">
-          <div className="grid gap-3 rounded-sm border border-line bg-paper p-4 sm:grid-cols-2">
+          <div className="grid gap-3 rounded-2xl border border-line bg-card p-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Banque</Label>
               <Input
@@ -798,7 +801,7 @@ export function SettingsPageClient({
             <h3 className="mb-3 font-serif text-base font-semibold text-ink">
               Historique de facturation
             </h3>
-            <div className="rounded-sm border border-line bg-paper">
+            <div className="rounded-2xl border border-line bg-card">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -846,7 +849,7 @@ export function SettingsPageClient({
         </TabsContent>
 
         <TabsContent value="reminders" className="mt-6 space-y-6">
-          <div className="flex items-center justify-between gap-3 rounded-sm border border-line bg-paper px-4 py-3">
+          <div className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-card px-4 py-3">
             <div>
               <p className="text-sm font-medium text-ink">
                 Relances automatiques
@@ -895,7 +898,7 @@ export function SettingsPageClient({
               {TEMPLATE_VARIABLES.map((variable) => (
                 <span
                   key={variable}
-                  className="num rounded-sm border border-line bg-paper px-2 py-0.5 text-xs text-ink/70"
+                  className="num rounded-2xl border border-line bg-card px-2 py-0.5 text-xs text-ink/70"
                 >
                   {variable}
                 </span>
@@ -911,7 +914,7 @@ export function SettingsPageClient({
                   ))}
                 </TabsList>
                 {currentTemplate && (
-                  <div className="mt-3 space-y-3 rounded-sm border border-line bg-paper p-4">
+                  <div className="mt-3 space-y-3 rounded-2xl border border-line bg-card p-4">
                     <div className="space-y-1.5">
                       <Label htmlFor="tpl-subject">Objet</Label>
                       <Textarea
@@ -961,7 +964,7 @@ export function SettingsPageClient({
         </TabsContent>
 
         <TabsContent value="payments" className="mt-6 space-y-6">
-          <div className="rounded-sm border border-line bg-paper p-4">
+          <div className="rounded-2xl border border-line bg-card p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="font-serif text-base font-semibold text-ink">

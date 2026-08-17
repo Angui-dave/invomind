@@ -1,8 +1,8 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useMemo, useState } from "react";
 import Link from "next/link";
-import { Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -21,9 +21,23 @@ type AuthFormProps = {
 
 const initialState: AuthFormState = {};
 
+function passwordStrength(value: string) {
+  let score = 0;
+  if (value.length >= 8) score += 1;
+  if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score += 1;
+  if (/\d/.test(value)) score += 1;
+  if (/[^A-Za-z0-9]/.test(value)) score += 1;
+  return score;
+}
+
+const STRENGTH_LABEL = ["Faible", "Faible", "Moyen", "Bon", "Fort"] as const;
+
 export function AuthForm({ mode }: AuthFormProps) {
   const action = mode === "login" ? login : register;
   const [state, formAction, pending] = useActionState(action, initialState);
+  const [showPassword, setShowPassword] = useState(false);
+  const [password, setPassword] = useState("");
+  const strength = useMemo(() => passwordStrength(password), [password]);
 
   return (
     <div>
@@ -47,6 +61,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                 autoComplete="name"
                 aria-invalid={Boolean(state.errors?.name)}
                 className={cn(
+                  "h-10 rounded-xl",
                   state.errors?.name && "border-brick focus-visible:ring-brick/40",
                 )}
               />
@@ -62,6 +77,7 @@ export function AuthForm({ mode }: AuthFormProps) {
                 autoComplete="organization"
                 aria-invalid={Boolean(state.errors?.company)}
                 className={cn(
+                  "h-10 rounded-xl",
                   state.errors?.company &&
                     "border-brick focus-visible:ring-brick/40",
                 )}
@@ -82,6 +98,7 @@ export function AuthForm({ mode }: AuthFormProps) {
             autoComplete="email"
             aria-invalid={Boolean(state.errors?.email)}
             className={cn(
+              "h-10 rounded-xl",
               state.errors?.email && "border-brick focus-visible:ring-brick/40",
             )}
           />
@@ -92,24 +109,59 @@ export function AuthForm({ mode }: AuthFormProps) {
 
         <div className="space-y-1.5">
           <Label htmlFor="password">Mot de passe</Label>
-          <Input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete={mode === "login" ? "current-password" : "new-password"}
-            aria-invalid={Boolean(state.errors?.password)}
-            className={cn(
-              state.errors?.password &&
-                "border-brick focus-visible:ring-brick/40",
-            )}
-          />
+          <div className="relative">
+            <Input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete={mode === "login" ? "current-password" : "new-password"}
+              aria-invalid={Boolean(state.errors?.password)}
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className={cn(
+                "h-10 rounded-xl pr-10",
+                state.errors?.password &&
+                  "border-brick focus-visible:ring-brick/40",
+              )}
+            />
+            <button
+              type="button"
+              className="absolute top-1/2 right-2.5 -translate-y-1/2 text-ink/45 hover:text-ink"
+              onClick={() => setShowPassword((v) => !v)}
+              aria-label={showPassword ? "Masquer le mot de passe" : "Afficher le mot de passe"}
+            >
+              {showPassword ? (
+                <EyeOff className="size-4" />
+              ) : (
+                <Eye className="size-4" />
+              )}
+            </button>
+          </div>
+          {mode === "register" && password.length > 0 && (
+            <div className="space-y-1">
+              <div className="grid grid-cols-4 gap-1">
+                {Array.from({ length: 4 }).map((_, index) => (
+                  <span
+                    key={index}
+                    className={cn(
+                      "h-1 rounded-full",
+                      index < strength ? "bg-brass" : "bg-line",
+                    )}
+                  />
+                ))}
+              </div>
+              <p className="text-[11px] text-ink/50">
+                Force : {STRENGTH_LABEL[strength]}
+              </p>
+            </div>
+          )}
           {state.errors?.password && (
             <p className="text-xs text-brick">{state.errors.password[0]}</p>
           )}
         </div>
 
         {state.errors?.form && (
-          <p className="rounded-sm border border-brick/30 bg-brick/10 px-3 py-2 text-xs text-brick">
+          <p className="rounded-xl border border-brick/30 bg-brick/10 px-3 py-2 text-xs text-brick">
             {state.errors.form[0]}
           </p>
         )}
@@ -117,7 +169,7 @@ export function AuthForm({ mode }: AuthFormProps) {
         <Button
           type="submit"
           disabled={pending}
-          className="h-10 w-full bg-ledger text-paper hover:bg-ledger/90"
+          className="h-11 w-full rounded-full bg-ledger text-paper hover:bg-ledger/90"
         >
           {pending ? (
             <>

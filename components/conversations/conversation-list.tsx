@@ -74,7 +74,7 @@ export function ConversationList({
           />
         </div>
         <div
-          className="flex gap-1 rounded-sm border border-line bg-muted/40 p-0.5"
+          className="flex gap-1 rounded-full border border-line bg-muted/40 p-0.5"
           role="group"
           aria-label="Filtrer par canal"
         >
@@ -84,7 +84,7 @@ export function ConversationList({
               type="button"
               onClick={() => onChannelFilterChange(filter.value)}
               className={cn(
-                "flex-1 rounded-sm px-2 py-1.5 text-xs font-medium transition-ledger",
+                "flex-1 rounded-full px-2 py-1.5 text-xs font-medium transition-ledger",
                 channelFilter === filter.value
                   ? "bg-paper text-ink shadow-sm"
                   : "text-ink/55 hover:text-ink",

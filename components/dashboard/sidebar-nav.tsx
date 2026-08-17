@@ -18,6 +18,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
+import { ThemeToggle } from "@/components/theme-toggle";
 import type { CurrentUser, EnabledModules } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 
@@ -150,15 +151,15 @@ export function SidebarNav({
               className="size-8 shrink-0 rounded object-contain bg-paper/10"
             />
           ) : (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded bg-paper/12 font-serif text-sm font-semibold text-paper">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/12 font-serif text-sm font-semibold text-navy-fg">
               {orgLabel.slice(0, 1).toUpperCase()}
             </span>
           )}
           <span className="min-w-0">
-            <span className="block truncate font-serif text-base font-semibold tracking-tight text-paper">
+            <span className="block truncate font-serif text-base font-semibold tracking-tight text-navy-fg">
               {orgLabel}
             </span>
-            <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-wider text-paper/45">
+            <span className="mt-0.5 block truncate text-[10px] font-medium uppercase tracking-wider text-navy-fg/45">
               Espace actif · InvoMind
             </span>
           </span>
@@ -176,7 +177,7 @@ export function SidebarNav({
           if (items.length === 0) return null;
           return (
             <div key={group.label}>
-              <p className="mb-1 px-3 text-[10px] font-medium uppercase tracking-wider text-paper/40">
+              <p className="mb-1 px-3 text-[10px] font-medium uppercase tracking-wider text-navy-fg/40">
                 {group.label}
               </p>
               <div className="space-y-0.5">
@@ -192,16 +193,16 @@ export function SidebarNav({
                       href={item.href}
                       onClick={onNavigate}
                       className={cn(
-                        "flex items-center gap-2.5 rounded-sm px-3 py-2 text-sm transition-ledger",
+                        "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-ledger",
                         active
-                          ? "bg-paper/12 text-paper font-medium"
-                          : "text-paper/70 hover:bg-paper/8 hover:text-paper",
+                          ? "bg-white/12 text-navy-fg font-medium"
+                          : "text-navy-fg/70 hover:bg-white/8 hover:text-navy-fg",
                       )}
                     >
                       <Icon className="size-4 shrink-0" aria-hidden />
                       <span className="flex-1">{item.label}</span>
                       {count > 0 && (
-                        <span className="num rounded-sm bg-brass/90 px-1.5 py-0.5 text-[10px] font-medium text-ink">
+                        <span className="num rounded-full bg-brass px-1.5 py-0.5 text-[10px] font-medium text-navy">
                           {count}
                         </span>
                       )}
@@ -214,14 +215,17 @@ export function SidebarNav({
         })}
       </nav>
 
-      <div className="border-t border-paper/15 px-4 py-4">
-        <p className="truncate text-sm font-medium text-paper">{user.name}</p>
-        <p className="truncate text-xs text-paper/55">{user.email}</p>
+      <div className="border-t border-white/12 px-4 py-4">
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="truncate text-sm font-medium text-navy-fg">{user.name}</p>
+          <ThemeToggle className="text-navy-fg/70 hover:bg-white/10 hover:text-navy-fg" />
+        </div>
+        <p className="truncate text-xs text-navy-fg/55">{user.email}</p>
         <form action={logout}>
           <button
             type="submit"
             onClick={onNavigate}
-            className="mt-3 inline-flex items-center gap-2 text-xs text-paper/60 transition-ledger hover:text-paper"
+            className="mt-3 inline-flex items-center gap-2 text-xs text-navy-fg/60 transition-ledger hover:text-navy-fg"
           >
             <LogOut className="size-3.5" aria-hidden />
             Se déconnecter

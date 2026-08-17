@@ -312,7 +312,7 @@ export function ConversationsPageClient({
         </p>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-sm border border-line bg-paper">
+      <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card">
         <div className="flex h-full lg:hidden">
           {!mobileShowThread || !selected ? (
             <ConversationList

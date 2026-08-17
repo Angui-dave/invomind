@@ -59,7 +59,7 @@ export function CatalogPageClient({
         </div>
         <Button
           type="button"
-          className="bg-ledger text-paper hover:bg-ledger/90"
+          className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
           onClick={() => {
             setEditing(null);
             setOpen(true);
@@ -70,7 +70,7 @@ export function CatalogPageClient({
         </Button>
       </div>
 
-      <div className="rounded-sm border border-line bg-paper">
+      <div className="overflow-hidden rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">

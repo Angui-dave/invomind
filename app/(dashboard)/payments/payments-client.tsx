@@ -84,7 +84,7 @@ export function PaymentsPageClient({
         </div>
         <Button
           type="button"
-          className="bg-ledger text-paper hover:bg-ledger/90"
+          className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
           onClick={() => setOpen(true)}
         >
           <Plus className="size-4" aria-hidden />
@@ -92,7 +92,7 @@ export function PaymentsPageClient({
         </Button>
       </div>
 
-      <div className="rounded-sm border border-line bg-paper">
+      <div className="rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -115,8 +115,10 @@ export function PaymentsPageClient({
                 <TableCell className="num text-ink/70">
                   {payment.documentNumber}
                 </TableCell>
-                <TableCell className="text-ink/70">
-                  {PAYMENT_METHOD_LABELS[payment.method]}
+                <TableCell>
+                  <span className="inline-flex rounded-full border border-line bg-muted/50 px-2 py-0.5 text-xs text-ink/80">
+                    {PAYMENT_METHOD_LABELS[payment.method]}
+                  </span>
                   {payment.reference && (
                     <span className="num ml-1 text-xs text-ink/45">
                       ({payment.reference})

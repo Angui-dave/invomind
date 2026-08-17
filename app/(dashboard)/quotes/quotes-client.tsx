@@ -75,7 +75,7 @@ export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
           href="/quotes/new"
           className={cn(
             buttonVariants(),
-            "h-9 bg-ledger text-paper hover:bg-ledger/90",
+            "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
           )}
         >
           <Plus className="size-4" aria-hidden />
@@ -89,14 +89,14 @@ export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
           onValueChange={(value) => setStatus(value as StatusFilter)}
         >
           <TabsList
-            variant="line"
-            className="h-auto w-full flex-wrap justify-start"
+            variant="default"
+            className="h-auto w-full flex-wrap justify-start rounded-full bg-muted/80 p-1"
           >
             {FILTERS.map((filter) => (
               <TabsTrigger
                 key={filter.value}
                 value={filter.value}
-                className="text-xs sm:text-sm"
+                className="rounded-full text-xs sm:text-sm"
               >
                 {filter.label}
               </TabsTrigger>
@@ -111,7 +111,7 @@ export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
         />
       </div>
 
-      <div className="rounded-sm border border-line bg-paper">
+      <div className="hidden overflow-hidden rounded-2xl border border-line bg-card md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -176,6 +176,50 @@ export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
           </TableBody>
         </Table>
       </div>
+
+      <ul className="space-y-3 md:hidden">
+        {filtered.length === 0 ? (
+          <li className="rounded-2xl border border-line bg-card px-4 py-8 text-center text-sm text-ink/55">
+            Aucun devis. Créez-en un pour démarrer.
+          </li>
+        ) : (
+          filtered.map((quote) => (
+            <li
+              key={quote.id}
+              className="rounded-2xl border border-line bg-card p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <Link
+                  href={`/quotes/${quote.id}`}
+                  className="min-w-0 font-medium text-ink hover:text-ledger"
+                >
+                  {quote.clientName}
+                  <span className="mt-0.5 block num text-xs text-ink/50">
+                    {quote.number}
+                  </span>
+                </Link>
+                <InvoiceStatusBadge status={quote.status} />
+              </div>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <p className="num text-lg font-semibold">
+                  {formatMoney(quote.total, quote.currency)}
+                </p>
+                {(quote.status === "accepted" || quote.status === "sent") && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="h-7 rounded-full text-xs"
+                    onClick={() => handleConvert(quote)}
+                  >
+                    → Facture
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
     </div>
   );
 }

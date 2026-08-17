@@ -41,7 +41,7 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
   }));
 
   return (
-    <div className="rounded-xl border border-line bg-paper p-5 sm:p-6 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-5 sm:p-6 shadow-sm">
       <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
         Top 5 clients par revenu
       </h2>

@@ -26,6 +26,7 @@ import {
   parseCsv,
   type ImportEntity,
 } from "@/lib/import/csv";
+import { cn } from "@/lib/utils";
 
 export function ImportPageClient() {
   const [entity, setEntity] = useState<ImportEntity>("clients");
@@ -33,6 +34,8 @@ export function ImportPageClient() {
   const [rows, setRows] = useState<string[][]>([]);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<Record<string, string>[]>([]);
+
+  const step = headers.length === 0 ? 1 : preview.length === 0 ? 2 : 3;
 
   function handleFile(file: File) {
     const reader = new FileReader();
@@ -75,7 +78,27 @@ export function ImportPageClient() {
         </p>
       </header>
 
-      <section className="space-y-4 rounded-sm border border-line bg-paper p-4">
+      <ol className="grid gap-2 sm:grid-cols-3">
+        {[
+          { n: 1, label: "Fichier" },
+          { n: 2, label: "Mapping" },
+          { n: 3, label: "Aperçu & import" },
+        ].map((item) => (
+          <li
+            key={item.n}
+            className={cn(
+              "rounded-2xl border px-4 py-3 text-sm",
+              step >= item.n
+                ? "border-ledger/30 bg-ledger/8 text-ink"
+                : "border-line bg-card text-ink/45",
+            )}
+          >
+            <span className="num font-semibold">{item.n}.</span> {item.label}
+          </li>
+        ))}
+      </ol>
+
+      <section className="space-y-4 rounded-2xl border border-line bg-card p-4">
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label>Type de données</Label>
@@ -104,15 +127,18 @@ export function ImportPageClient() {
           </div>
           <div className="space-y-1.5">
             <Label>Fichier CSV</Label>
-            <input
-              type="file"
-              accept=".csv,text/csv"
-              className="block w-full text-sm text-ink/70 file:mr-3 file:rounded-sm file:border-0 file:bg-ledger file:px-3 file:py-1.5 file:text-sm file:text-paper"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleFile(file);
-              }}
-            />
+            <label className="flex h-24 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-line bg-muted/40 text-center text-sm text-ink/60 transition-ledger hover:border-ledger/40 hover:text-ink">
+              Glissez un CSV ici ou cliquez pour choisir
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="sr-only"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                }}
+              />
+            </label>
           </div>
         </div>
 
@@ -159,7 +185,7 @@ export function ImportPageClient() {
               <h2 className="mb-2 font-serif text-base font-semibold text-ink">
                 Aperçu (5 premières lignes)
               </h2>
-              <div className="overflow-x-auto rounded-sm border border-line">
+              <div className="overflow-x-auto rounded-2xl border border-line">
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
@@ -185,7 +211,7 @@ export function ImportPageClient() {
 
             <Button
               type="button"
-              className="bg-ledger text-paper hover:bg-ledger/90"
+              className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
               onClick={applyImport}
             >
               Importer {rows.length} ligne(s)

@@ -1,4 +1,5 @@
 export const MARKETING_NAV = [
+  { href: "/#produit", label: "Produit" },
   { href: "/#fonctionnalites", label: "Fonctionnalités" },
   { href: "/#outils", label: "Outils gratuits", badge: "Nouveau" },
   { href: "/#tarifs", label: "Tarifs" },
@@ -6,6 +7,7 @@ export const MARKETING_NAV = [
 ] as const;
 
 export const MARKETING_FOOTER_LINKS = [
+  { href: "/#produit", label: "Produit" },
   { href: "/#fonctionnalites", label: "Fonctionnalités" },
   { href: "/#tarifs", label: "Tarifs" },
   { href: "/#faq", label: "FAQ" },

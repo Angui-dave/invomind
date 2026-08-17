@@ -89,11 +89,11 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
       </header>
 
       <Tabs defaultValue="sales">
-        <TabsList variant="line" className="h-auto flex-wrap">
-          <TabsTrigger value="sales">Ventes</TabsTrigger>
-          <TabsTrigger value="pl">Pertes & Profits</TabsTrigger>
-          <TabsTrigger value="expenses">Dépenses</TabsTrigger>
-          <TabsTrigger value="vat">TVA</TabsTrigger>
+        <TabsList variant="default" className="h-auto flex-wrap rounded-full bg-muted/80 p-1">
+          <TabsTrigger value="sales" className="rounded-full">Ventes</TabsTrigger>
+          <TabsTrigger value="pl" className="rounded-full">Pertes & Profits</TabsTrigger>
+          <TabsTrigger value="expenses" className="rounded-full">Dépenses</TabsTrigger>
+          <TabsTrigger value="vat" className="rounded-full">TVA</TabsTrigger>
         </TabsList>
 
         <TabsContent value="sales" className="mt-6 space-y-6">
@@ -131,7 +131,7 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
               }
             />
           </div>
-          <div className="rounded-sm border border-line bg-paper p-4 sm:p-5">
+          <div className="rounded-2xl border border-line bg-card p-4 sm:p-5">
             <h2 className="mb-4 font-serif text-base font-semibold text-ink">
               Évolution des encaissements
             </h2>
@@ -198,7 +198,7 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
               }
             />
           </div>
-          <div className="rounded-sm border border-line bg-paper p-5">
+          <div className="rounded-2xl border border-line bg-card p-5">
             <h2 className="mb-4 font-serif text-base font-semibold text-ink">
               Compte de résultat simplifié (HT)
             </h2>
@@ -244,7 +244,7 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
             }
           />
           <div className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-sm border border-line bg-paper p-4">
+            <div className="rounded-2xl border border-line bg-card p-4">
               <h2 className="mb-4 font-serif text-base font-semibold text-ink">
                 Répartition par catégorie
               </h2>
@@ -279,7 +279,7 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
                 </PieChart>
               </ChartContainer>
             </div>
-            <div className="rounded-sm border border-line bg-paper">
+            <div className="rounded-2xl border border-line bg-card">
               <Table>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
@@ -336,7 +336,7 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
               }
             />
           </div>
-          <div className="rounded-sm border border-line bg-paper">
+          <div className="rounded-2xl border border-line bg-card">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">

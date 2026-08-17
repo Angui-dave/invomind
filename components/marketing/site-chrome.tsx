@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Menu, Sparkles } from "lucide-react";
 import { BrandLogo } from "@/components/marketing/brand-logo";
 import { MARKETING_FOOTER_LINKS, MARKETING_NAV } from "@/components/marketing/nav";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
   Sheet,
@@ -19,7 +20,7 @@ export function MarketingHeader() {
 
   return (
     <div className="sticky top-0 z-40">
-      <div className="bg-ink text-paper">
+      <div className="bg-navy text-navy-fg">
         <p className="mx-auto flex max-w-6xl items-center justify-center gap-2 px-4 py-2 text-center text-xs sm:text-sm">
           <Sparkles className="hidden size-3.5 shrink-0 text-brass sm:block" aria-hidden />
           <span>
@@ -49,6 +50,7 @@ export function MarketingHeader() {
             ))}
           </nav>
           <div className="flex items-center gap-2">
+            <ThemeToggle className="hidden sm:inline-flex" />
             <Link
               href="/login"
               className={cn(
@@ -114,6 +116,7 @@ const FOOTER_COLUMNS = [
   {
     title: "Produit",
     links: [
+      { href: "/#produit", label: "Produit" },
       { href: "/#fonctionnalites", label: "Fonctionnalités" },
       { href: "/#tarifs", label: "Tarifs" },
       { href: "/#faq", label: "FAQ" },

@@ -64,6 +64,30 @@ export function InvoicesPageClient({
   const [page, setPage] = useState(1);
 
   const source = kindTab === "invoices" ? invoices : creditNotes;
+  const billed = useMemo(
+    () => invoices.reduce((sum, inv) => sum + inv.total, 0),
+    [invoices],
+  );
+  const collected = useMemo(
+    () =>
+      invoices
+        .filter((inv) => inv.status === "paid")
+        .reduce((sum, inv) => sum + inv.total, 0),
+    [invoices],
+  );
+  const outstanding = useMemo(
+    () =>
+      invoices
+        .filter(
+          (inv) =>
+            inv.status === "sent" ||
+            inv.status === "partially_paid" ||
+            inv.status === "overdue",
+        )
+        .reduce((sum, inv) => sum + inv.total, 0),
+    [invoices],
+  );
+  const currency = invoices[0]?.currency ?? creditNotes[0]?.currency ?? "XOF";
 
   const filtered = useMemo(() => {
     let list: BusinessDocument[] = [...source];
@@ -124,13 +148,36 @@ export function InvoicesPageClient({
           href="/invoices/new"
           className={cn(
             buttonVariants(),
-            "h-9 bg-ledger text-paper hover:bg-ledger/90",
+            "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
           )}
         >
           <Plus className="size-4" aria-hidden />
           Nouvelle facture
         </Link>
       </div>
+
+      {kindTab === "invoices" && (
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="rounded-2xl border border-line bg-card p-4">
+            <p className="text-xs font-medium text-ink/55">Total facturé</p>
+            <p className="num mt-1 text-xl font-semibold text-ink">
+              {formatMoney(billed, currency)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-line bg-card p-4">
+            <p className="text-xs font-medium text-ink/55">Total encaissé</p>
+            <p className="num mt-1 text-xl font-semibold text-brass">
+              {formatMoney(collected, currency)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-line bg-card p-4">
+            <p className="text-xs font-medium text-ink/55">Restant à recouvrir</p>
+            <p className="num mt-1 text-xl font-semibold text-amber">
+              {formatMoney(outstanding, currency)}
+            </p>
+          </div>
+        </div>
+      )}
 
       <Tabs
         value={kindTab}
@@ -155,14 +202,14 @@ export function InvoicesPageClient({
             }}
           >
             <TabsList
-              variant="line"
-              className="h-auto w-full flex-wrap justify-start"
+              variant="default"
+              className="h-auto w-full flex-wrap justify-start rounded-full bg-muted/80 p-1"
             >
               {FILTERS.map((filter) => (
                 <TabsTrigger
                   key={filter.value}
                   value={filter.value}
-                  className="text-xs sm:text-sm"
+                  className="rounded-full text-xs sm:text-sm"
                 >
                   {filter.label}
                 </TabsTrigger>
@@ -182,7 +229,7 @@ export function InvoicesPageClient({
         />
       </div>
 
-      <div className="rounded-sm border border-line bg-paper">
+      <div className="hidden overflow-hidden rounded-2xl border border-line bg-card md:block">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -279,6 +326,42 @@ export function InvoicesPageClient({
           </TableBody>
         </Table>
       </div>
+
+      <ul className="space-y-3 md:hidden">
+        {pageItems.length === 0 ? (
+          <li className="rounded-2xl border border-line bg-card px-4 py-8 text-center text-sm text-ink/55">
+            Aucun document ne correspond à ces critères.
+          </li>
+        ) : (
+          pageItems.map((invoice) => (
+            <li
+              key={invoice.id}
+              className="rounded-2xl border border-line bg-card p-4 shadow-sm"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <Link
+                  href={`/invoices/${invoice.id}`}
+                  className="min-w-0 font-medium text-ink hover:text-ledger"
+                >
+                  {invoice.clientName}
+                  <span className="mt-0.5 block num text-xs text-ink/50">
+                    {invoice.number}
+                  </span>
+                </Link>
+                <InvoiceStatusBadge status={invoice.status} />
+              </div>
+              <div className="mt-3 flex items-end justify-between gap-3">
+                <p className="num text-lg font-semibold text-ink">
+                  {formatMoney(invoice.total, invoice.currency)}
+                </p>
+                <p className="num text-xs text-ink/50">
+                  {formatDateFr(invoice.dueDate)}
+                </p>
+              </div>
+            </li>
+          ))
+        )}
+      </ul>
 
       <div className="flex items-center justify-between gap-3">
         <p className="num text-sm text-ink/55">

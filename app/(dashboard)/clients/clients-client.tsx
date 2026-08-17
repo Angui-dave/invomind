@@ -104,7 +104,7 @@ export function ClientsPageClient({
           <div className="flex justify-end">
             <Button
               type="button"
-              className="bg-ledger text-paper hover:bg-ledger/90"
+              className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
               onClick={() => {
                 setEditing(null);
                 setDialogOpen(true);
@@ -115,7 +115,7 @@ export function ClientsPageClient({
             </Button>
           </div>
 
-          <div className="rounded-sm border border-line bg-paper">
+          <div className="overflow-hidden rounded-2xl border border-line bg-card">
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">

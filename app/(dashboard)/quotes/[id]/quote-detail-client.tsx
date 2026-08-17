@@ -32,7 +32,7 @@ export function QuoteDetailClient({
         <div className="flex justify-end">
           <Button
             type="button"
-            className="bg-ledger text-paper hover:bg-ledger/90"
+            className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
             onClick={() =>
               router.push(`/invoices/new?fromQuote=${document.id}`)
             }
