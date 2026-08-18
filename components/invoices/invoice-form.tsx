@@ -40,9 +40,14 @@ import {
   type ReminderMilestone,
   type ReminderMilestoneStatus,
 } from "@/lib/documents";
-import { CURRENCIES, type CurrencyCode } from "@/lib/money";
-import { computeTotals, getTaxPreset, type TaxMode } from "@/lib/tax";
+import { CURRENCIES, CURRENCY_OPTIONS, type CurrencyCode } from "@/lib/money";
+import {
+  computeTotals,
+  getTaxPresetForCurrency,
+  type TaxMode,
+} from "@/lib/tax";
 import { formatDateFr, formatMoney } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 
 type DocumentFormProps = {
   mode: "new" | "edit";
@@ -56,6 +61,13 @@ type DocumentFormProps = {
   /** Existing docs of same kind — used only for preview numbering */
   existingNumbers?: BusinessDocument[];
 };
+
+function formatClientLabel(client: Client) {
+  const name = client.name.trim();
+  const company = client.company.trim();
+  if (name && company && name !== company) return `${name} — ${company}`;
+  return name || company || "Client";
+}
 
 function createDefaultReminders(dueDate: string): ReminderMilestoneStatus[] {
   const offsets: Record<ReminderMilestone, number> = {
@@ -83,7 +95,6 @@ export function InvoiceForm({
 }: DocumentFormProps) {
   const router = useRouter();
   const kind = document?.kind ?? kindProp ?? "invoice";
-  const taxPreset = getTaxPreset(orgSettings.country);
   const orgCurrency = orgSettings.defaultCurrency;
   const [saving, setSaving] = useState(false);
 
@@ -92,28 +103,40 @@ export function InvoiceForm({
   const initialIssue = document?.issueDate ?? todayIso();
   const initialDue =
     document?.dueDate ??
-    addDays(initialIssue, initialClient?.paymentTermDays ?? 30);
+    (kind === "quote"
+      ? ""
+      : addDays(initialIssue, initialClient?.paymentTermDays ?? 30));
+  const initialCurrency =
+    document?.currency ?? initialClient?.currency ?? orgCurrency;
+  const initialPreset = getTaxPresetForCurrency(
+    initialCurrency,
+    orgSettings.country,
+  );
+  const initialDefaultRate = initialPreset?.defaultRate ?? 0;
+  const initialVatAvailable = initialPreset !== null;
 
   const [clientId, setClientId] = useState(initialClientId);
-  const [currency, setCurrency] = useState<CurrencyCode>(
-    document?.currency ?? initialClient?.currency ?? orgCurrency,
-  );
+  const [currency, setCurrency] = useState<CurrencyCode>(initialCurrency);
   const [taxMode, setTaxMode] = useState<TaxMode>(
     document?.taxMode ?? orgSettings.defaultTaxMode,
   );
   const [issueDate, setIssueDate] = useState(initialIssue);
   const [dueDate, setDueDate] = useState(initialDue);
-  const [lines, setLines] = useState<DocumentLine[]>(
-    document?.lines ?? [
+  const [lines, setLines] = useState<DocumentLine[]>(() => {
+    const source = document?.lines ?? [
       {
         id: "line_1",
         description: "Prestation",
         quantity: 1,
         unitPrice: 0,
-        taxRate: orgSettings.defaultTaxRate,
+        taxRate: initialDefaultRate,
       },
-    ],
-  );
+    ];
+    if (!initialVatAvailable) {
+      return source.map((line) => ({ ...line, taxRate: 0 }));
+    }
+    return source;
+  });
   const [onlinePayment, setOnlinePayment] = useState(
     document?.onlinePaymentEnabled ?? kind === "invoice",
   );
@@ -126,6 +149,19 @@ export function InvoiceForm({
   );
   const [paymentTab, setPaymentTab] = useState("card");
   const [showCatalog, setShowCatalog] = useState(false);
+  const [vatEnabled, setVatEnabled] = useState(
+    initialVatAvailable &&
+      (document?.lines.some((line) => line.taxRate > 0) ??
+        initialDefaultRate > 0),
+  );
+
+  const taxPreset = useMemo(
+    () => getTaxPresetForCurrency(currency, orgSettings.country),
+    [currency, orgSettings.country],
+  );
+  const vatAvailable = taxPreset !== null;
+  const defaultRate = taxPreset?.defaultRate ?? 0;
+  const vatOn = vatEnabled && vatAvailable;
 
   const client = clients.find((c) => c.id === clientId);
   const totals = useMemo(
@@ -137,28 +173,36 @@ export function InvoiceForm({
       ? document.number
       : nextDocumentNumber(kind, existingNumbers);
 
+  function applyCurrency(next: CurrencyCode) {
+    setCurrency(next);
+    const preset = getTaxPresetForCurrency(next, orgSettings.country);
+    const rate = preset && vatEnabled ? preset.defaultRate : 0;
+    setLines((prev) => prev.map((line) => ({ ...line, taxRate: rate })));
+  }
+
   function selectClient(id: string) {
     setClientId(id);
     const next = clients.find((c) => c.id === id);
-    if (next?.currency) setCurrency(next.currency);
-    if (mode === "new" && !prefilledFromConversion && next?.paymentTermDays) {
+    if (next?.currency) applyCurrency(next.currency);
+    if (
+      kind === "invoice" &&
+      mode === "new" &&
+      !prefilledFromConversion &&
+      next?.paymentTermDays
+    ) {
       const nextDue = addDays(issueDate, next.paymentTermDays);
       setDueDate(nextDue);
-      if (kind === "invoice") {
-        setReminders(createDefaultReminders(nextDue));
-      }
+      setReminders(createDefaultReminders(nextDue));
     }
   }
 
   function changeIssueDate(value: string) {
     setIssueDate(value);
-    if (mode === "new" && !prefilledFromConversion) {
+    if (kind === "invoice" && mode === "new" && !prefilledFromConversion) {
       const days = client?.paymentTermDays ?? 30;
       const nextDue = addDays(value, days);
       setDueDate(nextDue);
-      if (kind === "invoice") {
-        setReminders(createDefaultReminders(nextDue));
-      }
+      setReminders(createDefaultReminders(nextDue));
     }
   }
 
@@ -196,12 +240,22 @@ export function InvoiceForm({
         description: item.description || item.name,
         quantity: 1,
         unitPrice: item.unitPrice,
-        taxRate: item.taxRate,
+        taxRate: vatOn ? defaultRate : 0,
         catalogItemId: item.id,
       },
     ]);
     setShowCatalog(false);
     toast.success(`« ${item.name} » ajouté`);
+  }
+
+  function toggleVat(enabled: boolean) {
+    setVatEnabled(enabled);
+    setLines((prev) =>
+      prev.map((line) => ({
+        ...line,
+        taxRate: enabled ? defaultRate : 0,
+      })),
+    );
   }
 
   function toggleReminder(milestone: ReminderMilestone, enabled: boolean) {
@@ -315,12 +369,16 @@ export function InvoiceForm({
                 onValueChange={(value) => value && selectClient(value)}
               >
                 <SelectTrigger id="client" className="w-full">
-                  <SelectValue placeholder="Choisir un client" />
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {client
+                      ? formatClientLabel(client)
+                      : "Choisir un client"}
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
                   {clients.map((c) => (
                     <SelectItem key={c.id} value={c.id}>
-                      {c.name} — {c.company}
+                      {formatClientLabel(c)}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -338,6 +396,11 @@ export function InvoiceForm({
             <div className="space-y-1.5">
               <Label htmlFor="dueDate">
                 {kind === "quote" ? "Validité" : "Échéance"}
+                {kind === "quote" ? (
+                  <span className="ml-1 font-normal text-ink/45">
+                    (optionnel)
+                  </span>
+                ) : null}
               </Label>
               <Input
                 id="dueDate"
@@ -351,33 +414,20 @@ export function InvoiceForm({
               <Select
                 value={currency}
                 onValueChange={(value) =>
-                  value && setCurrency(value as CurrencyCode)
+                  value && applyCurrency(value as CurrencyCode)
                 }
               >
                 <SelectTrigger id="currency" className="w-full">
-                  <SelectValue />
+                  <span className="min-w-0 flex-1 truncate text-left">
+                    {CURRENCIES[currency].label} ({currency})
+                  </span>
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={orgCurrency}>
-                    {CURRENCIES[orgCurrency].label} ({orgCurrency})
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="taxMode">Prix</Label>
-              <Select
-                value={taxMode}
-                onValueChange={(value) =>
-                  value && setTaxMode(value as TaxMode)
-                }
-              >
-                <SelectTrigger id="taxMode" className="w-full">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="exclusive">Hors taxes (HT)</SelectItem>
-                  <SelectItem value="inclusive">TVA incluse (TTC)</SelectItem>
+                  {CURRENCY_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -388,16 +438,41 @@ export function InvoiceForm({
               <h2 className="font-serif text-base font-semibold text-ink">
                 Lignes
               </h2>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowCatalog((v) => !v)}
-                >
-                  <PackagePlus className="size-3.5" aria-hidden />
-                  Catalogue
-                </Button>
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex flex-col items-end gap-0.5">
+                  <label
+                    htmlFor="vat-enabled"
+                    className={cn(
+                      "flex items-center gap-2 text-sm text-ink/70",
+                      vatAvailable ? "cursor-pointer" : "cursor-not-allowed opacity-60",
+                    )}
+                  >
+                    <Switch
+                      id="vat-enabled"
+                      checked={vatOn}
+                      disabled={!vatAvailable}
+                      onCheckedChange={toggleVat}
+                      aria-label="Appliquer la TVA sur toutes les lignes"
+                    />
+                    TVA
+                  </label>
+                  {!vatAvailable && (
+                    <p className="text-[11px] text-ink/45">
+                      TVA non applicable en {currency}
+                    </p>
+                  )}
+                </div>
+                {kind !== "quote" && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowCatalog((v) => !v)}
+                  >
+                    <PackagePlus className="size-3.5" aria-hidden />
+                    Catalogue
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -405,7 +480,7 @@ export function InvoiceForm({
                   onClick={() =>
                     setLines((prev) => [
                       ...prev,
-                      emptyLine(orgSettings.defaultTaxRate),
+                      emptyLine(vatOn ? defaultRate : 0),
                     ])
                   }
                 >
@@ -415,7 +490,7 @@ export function InvoiceForm({
               </div>
             </div>
 
-            {showCatalog && (
+            {kind !== "quote" && showCatalog && (
               <ul className="space-y-1 rounded-sm border border-line bg-muted/40 p-2">
                 {catalogItems.map((item) => (
                   <li key={item.id}>
@@ -443,7 +518,12 @@ export function InvoiceForm({
               {lines.map((line) => (
                 <li
                   key={line.id}
-                  className="grid gap-2 rounded-sm border border-line/70 p-3 sm:grid-cols-[1fr_64px_96px_80px_auto]"
+                  className={cn(
+                    "grid gap-2 rounded-sm border border-line/70 p-3",
+                    vatOn
+                      ? "sm:grid-cols-[1fr_64px_96px_80px_auto]"
+                      : "sm:grid-cols-[1fr_64px_96px_auto]",
+                  )}
                 >
                   <div>
                     <Label className="sr-only">Description</Label>
@@ -483,27 +563,29 @@ export function InvoiceForm({
                       }
                     />
                   </div>
-                  <div>
-                    <Label className="sr-only">TVA %</Label>
-                    <Select
-                      value={String(line.taxRate)}
-                      onValueChange={(value) =>
-                        value &&
-                        updateLine(line.id, { taxRate: Number(value) })
-                      }
-                    >
-                      <SelectTrigger className="w-full num text-xs">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {taxPreset.rates.map((r) => (
-                          <SelectItem key={r.rate} value={String(r.rate)}>
-                            {r.rate} %
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
+                  {vatOn && taxPreset && (
+                    <div>
+                      <Label className="sr-only">TVA %</Label>
+                      <Select
+                        value={String(line.taxRate)}
+                        onValueChange={(value) =>
+                          value &&
+                          updateLine(line.id, { taxRate: Number(value) })
+                        }
+                      >
+                        <SelectTrigger className="w-full num text-xs">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {taxPreset.rates.map((r) => (
+                            <SelectItem key={r.rate} value={String(r.rate)}>
+                              {r.rate} %
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  )}
                   <Button
                     type="button"
                     variant="ghost"
@@ -528,16 +610,24 @@ export function InvoiceForm({
                   {formatMoney(totals.subtotalHt, currency)}
                 </span>
               </p>
-              {totals.breakdown.map((row) => (
-                <p key={row.rate} className="flex justify-between text-ink/60">
-                  <span>TVA {row.rate} %</span>
-                  <span className="num">
-                    {formatMoney(row.taxAmount, currency)}
-                  </span>
-                </p>
-              ))}
+              {vatOn &&
+                totals.breakdown
+                  .filter((row) => row.rate > 0)
+                  .map((row) => (
+                    <p
+                      key={row.rate}
+                      className="flex justify-between text-ink/60"
+                    >
+                      <span>TVA {row.rate} %</span>
+                      <span className="num">
+                        {formatMoney(row.taxAmount, currency)}
+                      </span>
+                    </p>
+                  ))}
               <p className="flex justify-between border-t border-line pt-2">
-                <span className="font-medium text-ink">Total TTC</span>
+                <span className="font-medium text-ink">
+                  {vatOn ? "Total TTC" : "Total"}
+                </span>
                 <span className="num text-lg font-semibold text-brass">
                   {formatMoney(totals.totalTtc, currency)}
                 </span>
@@ -582,9 +672,10 @@ export function InvoiceForm({
                   Pour {client?.name ?? "—"}
                 </p>
                 <p className="num mt-0.5 text-xs text-ink/50">
-                  Émise le {formatDateFr(issueDate)} ·{" "}
-                  {kind === "quote" ? "Validité" : "Échéance"}{" "}
-                  {formatDateFr(dueDate)}
+                  Émise le {formatDateFr(issueDate)}
+                  {dueDate
+                    ? ` · ${kind === "quote" ? "Validité" : "Échéance"} ${formatDateFr(dueDate)}`
+                    : ""}
                 </p>
               </div>
               <ul className="space-y-2 border-t border-line pt-3">
@@ -609,14 +700,18 @@ export function InvoiceForm({
                     {formatMoney(totals.subtotalHt, currency)}
                   </span>
                 </div>
-                <div className="flex justify-between text-ink/60">
-                  <span>TVA</span>
-                  <span className="num">
-                    {formatMoney(totals.taxTotal, currency)}
-                  </span>
-                </div>
+                {vatOn && (
+                  <div className="flex justify-between text-ink/60">
+                    <span>TVA</span>
+                    <span className="num">
+                      {formatMoney(totals.taxTotal, currency)}
+                    </span>
+                  </div>
+                )}
                 <div className="flex items-end justify-between pt-1">
-                  <span className="text-ink/65">Total TTC</span>
+                  <span className="text-ink/65">
+                    {vatOn ? "Total TTC" : "Total"}
+                  </span>
                   <span className="num text-2xl font-semibold text-brass">
                     {formatMoney(totals.totalTtc, currency)}
                   </span>

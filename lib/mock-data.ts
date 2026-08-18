@@ -18,11 +18,14 @@ export * from "@/lib/data/derive";
 export * from "@/lib/data/conversations";
 
 export function formatDateFr(iso: string): string {
+  if (!iso) return "—";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "—";
   return new Intl.DateTimeFormat("fr-FR", {
     day: "numeric",
     month: "short",
     year: "numeric",
-  }).format(new Date(iso));
+  }).format(date);
 }
 
 export function formatTimeFr(iso: string): string {

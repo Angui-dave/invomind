@@ -1,5 +1,7 @@
 /** VAT / tax presets by country + totals computation */
 
+import type { CurrencyCode } from "@/lib/money";
+
 export type TaxMode = "inclusive" | "exclusive";
 
 export interface TaxRateOption {
@@ -133,6 +135,27 @@ export function getTaxPreset(countryCode: string): CountryTaxPreset {
     TAX_PRESETS.find((p) => p.countryCode === countryCode) ??
     TAX_PRESETS[TAX_PRESETS.length - 1]
   );
+}
+
+const CURRENCY_TAX_ZONES: Partial<Record<CurrencyCode, string[]>> = {
+  XOF: ["SN", "CI", "BJ", "BF", "ML", "TG"],
+  XAF: ["CM"],
+  EUR: ["FR"],
+  CHF: ["CH"],
+  MAD: ["MA"],
+};
+
+export function getTaxPresetForCurrency(
+  currency: CurrencyCode,
+  preferredCountry?: string,
+): CountryTaxPreset | null {
+  const zone = CURRENCY_TAX_ZONES[currency];
+  if (!zone) return null;
+  const country =
+    preferredCountry && zone.includes(preferredCountry)
+      ? preferredCountry
+      : zone[0];
+  return getTaxPreset(country);
 }
 
 export interface TaxableLine {
