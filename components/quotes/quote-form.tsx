@@ -590,7 +590,7 @@ export function QuoteForm({
 
           <section className="space-y-3 rounded-2xl border border-line bg-card p-4">
             <h2 className="font-serif text-base font-semibold text-ink">
-              Conditions et notes
+              Notes
             </h2>
             <div className="flex flex-wrap gap-1.5">
               {NOTE_SNIPPETS.map((snippet) => (

@@ -165,7 +165,7 @@ export function DocumentPreview({
         {notes?.trim() ? (
           <div className="border-t border-dashed border-line pt-3">
             <p className="text-[11px] uppercase tracking-wide text-ink/45">
-              Conditions
+              Notes
             </p>
             <p className="mt-1 whitespace-pre-wrap text-xs text-ink/70">
               {notes.trim()}
