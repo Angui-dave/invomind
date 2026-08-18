@@ -1,6 +1,14 @@
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
+const iconToneClass = {
+  default: "bg-muted/60 text-ink/55",
+  ledger: "bg-ledger/12 text-ledger",
+  brass: "bg-brass/12 text-brass",
+  amber: "bg-amber/12 text-amber",
+  brick: "bg-brick/12 text-brick",
+} as const;
+
 type StatCardProps = {
   label: string;
   value: ReactNode;
@@ -9,6 +17,7 @@ type StatCardProps = {
   valueClassName?: string;
   className?: string;
   icon?: ReactNode;
+  tone?: keyof typeof iconToneClass;
 };
 
 export function StatCard({
@@ -19,20 +28,24 @@ export function StatCard({
   valueClassName,
   className,
   icon,
+  tone = "default",
 }: StatCardProps) {
   return (
     <div
       className={cn(
-        "relative flex flex-col gap-1 overflow-hidden rounded-2xl border border-line bg-card p-5 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md",
+        "glow-card-hover relative flex flex-col gap-1 overflow-hidden rounded-2xl border border-line bg-card p-5 shadow-sm",
         className,
       )}
     >
       <div className="flex items-center justify-between">
-        <p className="text-sm font-medium tracking-wide text-ink/60">
-          {label}
-        </p>
+        <p className="text-sm font-medium tracking-wide text-ink/60">{label}</p>
         {icon && (
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-muted/50 text-ink/60">
+          <div
+            className={cn(
+              "flex size-10 items-center justify-center rounded-full",
+              iconToneClass[tone],
+            )}
+          >
             {icon}
           </div>
         )}

@@ -91,9 +91,9 @@
   --ring: #2563eb;
   --chart-1: #2563eb;
   --chart-2: #10b981;
-  --chart-3: #e2e8f0;
+  --chart-3: #94a3b8;
   --chart-4: #ef4444;
-  --chart-5: #0f172a;
+  --chart-5: #f59e0b;
   --radius: 0.5rem;
   --sidebar: #ffffff;
   --sidebar-foreground: #0f172a;
@@ -129,9 +129,9 @@
   --ring: #3b82f6;
   --chart-1: #3b82f6;
   --chart-2: #34d399;
-  --chart-3: #334155;
+  --chart-3: #64748b;
   --chart-4: #f87171;
-  --chart-5: #f8fafc;
+  --chart-5: #fbbf24;
   --sidebar: #0b1220;
   --sidebar-foreground: #f8fafc;
   --sidebar-primary: #3b82f6;
@@ -259,6 +259,43 @@
     box-shadow:
       0 14px 28px -10px rgb(16 185 129 / 0.45),
       0 0 0 1px rgb(16 185 129 / 0.18);
+  }
+
+  .dashboard-hero-bg {
+    background-image:
+      radial-gradient(ellipse 70% 80% at 0% 0%, rgb(16 185 129 / 0.12), transparent 55%),
+      radial-gradient(ellipse 60% 70% at 100% 0%, rgb(37 99 235 / 0.1), transparent 52%);
+  }
+
+  .dark .dashboard-hero-bg {
+    background-image:
+      radial-gradient(ellipse 70% 80% at 0% 0%, rgb(16 185 129 / 0.16), transparent 55%),
+      radial-gradient(ellipse 60% 70% at 100% 0%, rgb(59 130 246 / 0.14), transparent 52%);
+  }
+
+  .glow-card-hover {
+    transition:
+      transform 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      box-shadow 200ms cubic-bezier(0.4, 0, 0.2, 1),
+      border-color 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .glow-card-hover:hover {
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--color-ledger) 32%, var(--color-line));
+    box-shadow:
+      0 16px 32px -18px rgb(37 99 235 / 0.28),
+      0 1px 0 rgb(255 255 255 / 0.55) inset;
+  }
+
+  .dark .glow-card-hover:hover {
+    box-shadow:
+      0 16px 32px -18px rgb(37 99 235 / 0.42),
+      0 1px 0 rgb(255 255 255 / 0.06) inset;
+  }
+
+  .progress-brand {
+    background-image: linear-gradient(90deg, #10b981 0%, #2563eb 100%);
   }
 }
 

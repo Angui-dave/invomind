@@ -18,7 +18,7 @@ import {
 const chartConfig = {
   amount: {
     label: "Revenu",
-    color: "var(--chart-1)",
+    color: "var(--color-ledger)",
   },
 } satisfies ChartConfig;
 
@@ -41,7 +41,7 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
   }));
 
   return (
-    <div className="rounded-2xl border border-line bg-card p-5 sm:p-6 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
       <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
         Top 5 clients par revenu
       </h2>
@@ -58,6 +58,12 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
             layout="vertical"
             margin={{ left: 8, right: 16, top: 0, bottom: 0 }}
           >
+            <defs>
+              <linearGradient id="fillClients" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="var(--color-ledger)" />
+                <stop offset="100%" stopColor="var(--color-brass)" />
+              </linearGradient>
+            </defs>
             <CartesianGrid
               horizontal={false}
               stroke="var(--color-line)"
@@ -87,8 +93,8 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
             />
             <Bar
               dataKey="amount"
-              fill="var(--color-amount)"
-              radius={[0, 3, 3, 0]}
+              fill="url(#fillClients)"
+              radius={[0, 6, 6, 0]}
               barSize={18}
             />
           </BarChart>

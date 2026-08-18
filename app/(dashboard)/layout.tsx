@@ -54,11 +54,19 @@ export default async function DashboardLayout({
       className="flex min-h-full flex-1 font-[family-name:var(--brand-font)]"
       style={brandingStyle}
     >
-      <aside className="hidden w-[248px] shrink-0 border-r border-white/10 bg-navy text-navy-fg lg:fixed lg:inset-y-0 lg:flex lg:flex-col">
-        <SidebarNav {...navProps} />
+      <aside className="relative z-40 hidden w-[248px] shrink-0 border-r border-white/10 bg-navy text-navy-fg lg:fixed lg:inset-y-0 lg:flex lg:flex-col">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-brass/10 to-transparent"
+        />
+        <SidebarNav className="relative z-10" {...navProps} />
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[248px]">
+      <div className="relative z-0 flex min-w-0 flex-1 flex-col lg:pl-[248px]">
+        <div
+          aria-hidden
+          className="hero-mesh pointer-events-none absolute inset-x-0 top-0 h-72 opacity-80"
+        />
         <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-line bg-paper/90 px-4 backdrop-blur-lg lg:hidden">
           <MobileNav {...navProps} />
           <span className="flex min-w-0 flex-1 items-center gap-2">
@@ -81,7 +89,9 @@ export default async function DashboardLayout({
           </span>
           <ThemeToggle className="ml-auto" />
         </header>
-        <div className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</div>
+        <div className="relative flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+          {children}
+        </div>
       </div>
     </div>
   );

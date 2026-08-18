@@ -19,7 +19,7 @@ import {
 const chartConfig = {
   revenue: {
     label: "Revenu",
-    color: "var(--chart-1)",
+    color: "var(--color-ledger)",
   },
 } satisfies ChartConfig;
 
@@ -47,12 +47,25 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
     [period, seriesByPeriod],
   );
 
+  const periodTotal = useMemo(
+    () => data.reduce((sum, point) => sum + point.revenue, 0),
+    [data],
+  );
+
   return (
-    <div className="rounded-2xl border border-line bg-card p-5 sm:p-6 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="font-serif text-lg font-semibold text-ink">
-          Évolution du revenu
-        </h2>
+        <div>
+          <h2 className="font-serif text-lg font-semibold text-ink">
+            Évolution du revenu
+          </h2>
+          <p className="mt-0.5 text-xs text-ink/50">
+            Total période ·{" "}
+            <span className="num font-medium text-ink/70">
+              {formatMoney(periodTotal, DEFAULT_CURRENCY)}
+            </span>
+          </p>
+        </div>
         <Tabs
           value={period}
           onValueChange={(value) => setPeriod(value as Period)}
@@ -74,23 +87,33 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
       {!loaded ? (
         <Skeleton className="h-[220px] w-full rounded-sm bg-line/50" />
       ) : (
-        <ChartContainer config={chartConfig} className="aspect-auto h-[220px] w-full">
-          <AreaChart data={data} margin={{ left: 4, right: 4, top: 8, bottom: 0 }}>
+        <ChartContainer
+          config={chartConfig}
+          className="aspect-auto h-[220px] w-full"
+        >
+          <AreaChart
+            data={data}
+            margin={{ left: 4, right: 4, top: 8, bottom: 0 }}
+          >
             <defs>
               <linearGradient id="fillRevenue" x1="0" y1="0" x2="0" y2="1">
                 <stop
-                  offset="5%"
-                  stopColor="var(--color-revenue)"
-                  stopOpacity={0.35}
+                  offset="0%"
+                  stopColor="var(--color-ledger)"
+                  stopOpacity={0.38}
                 />
                 <stop
-                  offset="95%"
-                  stopColor="var(--color-revenue)"
-                  stopOpacity={0.02}
+                  offset="100%"
+                  stopColor="var(--color-brass)"
+                  stopOpacity={0.04}
                 />
               </linearGradient>
             </defs>
-            <CartesianGrid vertical={false} stroke="var(--color-line)" strokeDasharray="3 3" />
+            <CartesianGrid
+              vertical={false}
+              stroke="var(--color-line)"
+              strokeDasharray="3 3"
+            />
             <XAxis
               dataKey="label"
               tickLine={false}
@@ -114,8 +137,8 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
               dataKey="revenue"
               type="monotone"
               fill="url(#fillRevenue)"
-              stroke="var(--color-revenue)"
-              strokeWidth={2}
+              stroke="var(--color-ledger)"
+              strokeWidth={2.25}
             />
           </AreaChart>
         </ChartContainer>

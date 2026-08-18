@@ -1,9 +1,11 @@
 "use client";
 
+import { Suspense, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   BookOpen,
+  ChevronDown,
   FileText,
   LayoutDashboard,
   LogOut,
@@ -19,8 +21,19 @@ import {
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
-import type { CurrentUser, EnabledModules } from "@/lib/mock-data";
+import {
+  QUOTE_STATUS_LABELS,
+  type CurrentUser,
+  type EnabledModules,
+  type QuoteStatus,
+} from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+
+type NavChild = {
+  href: string;
+  label: string;
+  status?: QuoteStatus;
+};
 
 type NavItem = {
   href: string;
@@ -28,7 +41,65 @@ type NavItem = {
   icon: typeof LayoutDashboard;
   module?: keyof EnabledModules;
   badgeCount?: number;
+  children?: NavChild[];
 };
+
+const QUOTE_STATUS_LINKS: NavChild[] = (
+  ["draft", "sent", "accepted", "refused", "expired"] as const
+).map((status) => ({
+  href: `/quotes?status=${status}`,
+  label: QUOTE_STATUS_LABELS[status],
+  status,
+}));
+
+function QuoteStatusSubnav({
+  onNavigate,
+  activeStatus,
+}: {
+  onNavigate?: () => void;
+  activeStatus?: string | null;
+}) {
+  const pathname = usePathname();
+  return (
+    <div className="mt-0.5 ml-4 space-y-0.5 border-l border-white/12 pl-2">
+      {QUOTE_STATUS_LINKS.map((child) => {
+        const childActive =
+          pathname === "/quotes" &&
+          Boolean(child.status) &&
+          activeStatus === child.status;
+        return (
+          <Link
+            key={child.href}
+            href={child.href}
+            onClick={onNavigate}
+            className={cn(
+              "block rounded-lg px-3 py-1.5 text-[13px] transition-ledger",
+              childActive
+                ? "bg-white/15 font-medium text-navy-fg"
+                : "text-navy-fg/60 hover:bg-white/8 hover:text-navy-fg",
+            )}
+          >
+            {child.label}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function QuoteStatusSubnavWithParams({
+  onNavigate,
+}: {
+  onNavigate?: () => void;
+}) {
+  const searchParams = useSearchParams();
+  return (
+    <QuoteStatusSubnav
+      onNavigate={onNavigate}
+      activeStatus={searchParams.get("status")}
+    />
+  );
+}
 
 type NavGroup = {
   label: string;
@@ -61,6 +132,8 @@ export function SidebarNav({
   organizationName,
 }: SidebarNavProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const [quotesOpen, setQuotesOpen] = useState(false);
   const orgLabel =
     organizationName || branding?.displayName || user.company || "Organisation";
 
@@ -74,7 +147,12 @@ export function SidebarNav({
     {
       label: "Ventes",
       items: [
-        { href: "/quotes", label: "Devis", icon: FileText },
+        {
+          href: "/quotes",
+          label: "Devis",
+          icon: FileText,
+          children: QUOTE_STATUS_LINKS,
+        },
         { href: "/invoices", label: "Factures", icon: Receipt },
         {
           href: "/clients",
@@ -151,7 +229,7 @@ export function SidebarNav({
               className="size-8 shrink-0 rounded object-contain bg-paper/10"
             />
           ) : (
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/12 font-serif text-sm font-semibold text-navy-fg">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-brass to-ledger font-serif text-sm font-semibold text-paper">
               {orgLabel.slice(0, 1).toUpperCase()}
             </span>
           )}
@@ -187,26 +265,73 @@ export function SidebarNav({
                     pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;
                   const count = item.badgeCount ?? 0;
+                  const hasChildren = Boolean(item.children?.length);
+                  const itemClassName = cn(
+                    "relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-ledger",
+                    active
+                      ? "bg-white/15 font-medium text-navy-fg before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-brass before:to-ledger"
+                      : "text-navy-fg/70 hover:bg-white/8 hover:text-navy-fg",
+                  );
+
                   return (
-                    <Link
-                      key={item.href}
-                      href={item.href}
-                      onClick={onNavigate}
-                      className={cn(
-                        "flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-ledger",
-                        active
-                          ? "bg-white/12 text-navy-fg font-medium"
-                          : "text-navy-fg/70 hover:bg-white/8 hover:text-navy-fg",
+                    <div key={item.href}>
+                      {hasChildren ? (
+                        <button
+                          type="button"
+                          aria-expanded={quotesOpen}
+                          aria-controls="quotes-status-nav"
+                          onClick={() => {
+                            const next = !quotesOpen;
+                            setQuotesOpen(next);
+                            if (
+                              next &&
+                              pathname !== item.href &&
+                              !pathname.startsWith(`${item.href}/`)
+                            ) {
+                              router.push(item.href);
+                            }
+                          }}
+                          className={itemClassName}
+                        >
+                          <Icon className="size-4 shrink-0" aria-hidden />
+                          <span className="flex-1 text-left">{item.label}</span>
+                          <ChevronDown
+                            className={cn(
+                              "size-4 shrink-0 transition-transform",
+                              quotesOpen && "rotate-180",
+                            )}
+                            aria-hidden
+                          />
+                        </button>
+                      ) : (
+                        <Link
+                          href={item.href}
+                          onClick={onNavigate}
+                          className={itemClassName}
+                        >
+                          <Icon className="size-4 shrink-0" aria-hidden />
+                          <span className="flex-1">{item.label}</span>
+                          {count > 0 && (
+                            <span className="num rounded-full bg-brass px-1.5 py-0.5 text-[10px] font-medium text-navy">
+                              {count}
+                            </span>
+                          )}
+                        </Link>
                       )}
-                    >
-                      <Icon className="size-4 shrink-0" aria-hidden />
-                      <span className="flex-1">{item.label}</span>
-                      {count > 0 && (
-                        <span className="num rounded-full bg-brass px-1.5 py-0.5 text-[10px] font-medium text-navy">
-                          {count}
-                        </span>
+                      {hasChildren && quotesOpen && (
+                        <div id="quotes-status-nav">
+                          <Suspense
+                            fallback={
+                              <QuoteStatusSubnav onNavigate={onNavigate} />
+                            }
+                          >
+                            <QuoteStatusSubnavWithParams
+                              onNavigate={onNavigate}
+                            />
+                          </Suspense>
+                        </div>
                       )}
-                    </Link>
+                    </div>
                   );
                 })}
               </div>

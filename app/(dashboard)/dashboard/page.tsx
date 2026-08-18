@@ -1,5 +1,15 @@
 import Link from "next/link";
-import { Plus, TrendingUp, Clock, AlertCircle, Users, ArrowRight, FileText, ShoppingCart } from "lucide-react";
+import {
+  Plus,
+  TrendingUp,
+  Clock,
+  AlertCircle,
+  Users,
+  ArrowRight,
+  FileText,
+  ShoppingCart,
+  ChevronRight,
+} from "lucide-react";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceTrackingCell } from "@/components/invoice-tracking-cell";
 import { EmptyDashboard } from "@/components/dashboard/empty-dashboard";
@@ -28,6 +38,7 @@ import {
   revenueByMonth,
   topClients,
 } from "@/lib/dal/reports";
+import { currentMonthKey, monthKey } from "@/lib/date";
 import {
   formatDateFr,
   formatMoney,
@@ -37,6 +48,12 @@ import {
 import { cn } from "@/lib/utils";
 
 const SHOW_EMPTY_STATE = false;
+const BILLABLE_STATUSES = new Set([
+  "sent",
+  "partially_paid",
+  "paid",
+  "overdue",
+]);
 
 export default async function DashboardPage() {
   const session = await verifySession();
@@ -74,6 +91,21 @@ export default async function DashboardPage() {
     {} as Record<string, number>,
   );
 
+  const monthKeyVal = currentMonthKey();
+  const billedThisMonth = invoices
+    .filter(
+      (inv) =>
+        monthKey(inv.issueDate) === monthKeyVal &&
+        BILLABLE_STATUSES.has(inv.status),
+    )
+    .reduce((sum, inv) => sum + inv.total, 0);
+  const collectionRate =
+    billedThisMonth > 0
+      ? Math.min(100, Math.round((revenue / billedThisMonth) * 100))
+      : revenue > 0
+        ? 100
+        : 0;
+
   const monthLabel = new Intl.DateTimeFormat("fr-FR", {
     month: "long",
     year: "numeric",
@@ -82,69 +114,114 @@ export default async function DashboardPage() {
   const firstName = session.user.name.split(" ")[0];
 
   return (
-    <div className="space-y-10 pb-8">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="font-serif text-3xl font-bold tracking-tight text-ink">
-            Bonjour {firstName}
-          </h1>
-          <p className="mt-2 capitalize text-sm font-medium text-ink/60">
-            {monthLabel} · trésorerie du mois
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/quotes/new"
-            className={cn(buttonVariants({ variant: "outline" }), "h-9 rounded-full")}
-          >
-            <FileText className="size-4" />
-            Nouveau devis
-          </Link>
-          <Link
-            href="/expenses"
-            className={cn(buttonVariants({ variant: "outline" }), "h-9 rounded-full")}
-          >
-            <ShoppingCart className="size-4" />
-            Saisir une dépense
-          </Link>
-          <Link
-            href="/invoices/new"
-            className={cn(
-              buttonVariants(),
-              "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
-            )}
-          >
-            <Plus className="size-4" />
-            Nouvelle facture
-          </Link>
+    <div className="space-y-8 pb-8">
+      <header className="dashboard-hero-bg relative overflow-hidden rounded-2xl border border-line/80 bg-card/85 p-5 shadow-sm backdrop-blur-md sm:p-6">
+        <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+          <div className="min-w-0">
+            <p className="inline-flex items-center gap-2 rounded-full border border-brass/25 bg-brass/10 px-3 py-1 text-xs font-medium text-brass">
+              <span className="relative flex size-2">
+                <span className="pulse-dot absolute inline-flex size-full rounded-full bg-brass opacity-60" />
+                <span className="relative inline-flex size-2 rounded-full bg-brass" />
+              </span>
+              <span className="capitalize">{monthLabel}</span>
+              <span className="text-brass/70">· trésorerie en temps réel</span>
+            </p>
+            <h1 className="mt-3 font-serif text-3xl font-bold tracking-tight text-ink">
+              Bonjour {firstName}
+            </h1>
+            <p className="mt-1.5 text-sm text-ink/65">
+              Voici l’état de votre trésorerie et vos activités récentes.
+            </p>
+            <div className="mt-5 flex flex-wrap items-center gap-2">
+              <Link
+                href="/quotes/new"
+                className={cn(
+                  buttonVariants({ variant: "outline" }),
+                  "h-9 rounded-full border-line bg-paper/70",
+                )}
+              >
+                <FileText className="size-4" />
+                Nouveau devis
+              </Link>
+              <Link
+                href="/expenses"
+                className={cn(
+                  buttonVariants({ variant: "outline" }),
+                  "h-9 rounded-full border-line bg-paper/70",
+                )}
+              >
+                <ShoppingCart className="size-4" />
+                Saisir une dépense
+              </Link>
+              <Link
+                href="/invoices/new"
+                className={cn(
+                  buttonVariants(),
+                  "glow-cta h-9 rounded-full bg-ledger px-4 text-paper hover:bg-ledger/90",
+                )}
+              >
+                <Plus className="size-4" />
+                Nouvelle facture
+              </Link>
+            </div>
+          </div>
+
+          <div className="glass-card w-full max-w-sm shrink-0 rounded-2xl p-4">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium text-ink/70">
+                Objectif trésorerie
+              </p>
+              <p className="num text-sm font-semibold text-brass">
+                {collectionRate}%
+              </p>
+            </div>
+            <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-line">
+              <div
+                className="progress-brand h-full rounded-full transition-all"
+                style={{ width: `${collectionRate}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] text-ink/50">
+              Encaissé ce mois ·{" "}
+              <span className="num font-medium text-ink/70">
+                {formatMoney(revenue, DEFAULT_CURRENCY)}
+              </span>
+            </p>
+          </div>
         </div>
       </header>
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           label="Revenu du mois"
+          tone="brass"
           icon={<TrendingUp size={20} />}
           value={
-            <span className="num text-brass">{formatMoney(revenue, DEFAULT_CURRENCY)}</span>
+            <span className="num text-brass">
+              {formatMoney(revenue, DEFAULT_CURRENCY)}
+            </span>
           }
           trend="+12% vs mois dernier"
         />
         <StatCard
           label="Factures en attente"
+          tone="amber"
           icon={<Clock size={20} />}
           value={<span className="num">{pending}</span>}
         />
         <StatCard
           label="Factures en retard"
-          icon={<AlertCircle size={20} className={overdue > 0 ? "text-brick" : ""} />}
+          tone={overdue > 0 ? "brick" : "default"}
+          icon={<AlertCircle size={20} />}
           value={
-            <span className={`num ${overdue > 0 ? "text-brick" : ""}`}>
+            <span className={cn("num", overdue > 0 && "text-brick")}>
               {overdue}
             </span>
           }
         />
         <StatCard
           label="Pipeline prospects"
+          tone="ledger"
           icon={<Users size={20} />}
           value={
             <span className="num text-brass">
@@ -184,32 +261,50 @@ export default async function DashboardPage() {
                 href="/invoices"
                 className={cn(
                   buttonVariants({ variant: "ghost", size: "sm" }),
-                  "text-ledger font-medium",
+                  "font-medium text-ledger",
                 )}
               >
                 Voir tout
                 <ArrowRight className="ml-1.5" size={16} />
               </Link>
             </div>
-            <div className="rounded-2xl border border-line bg-card shadow-sm overflow-hidden">
+            <div className="overflow-hidden rounded-2xl border border-line bg-card shadow-sm">
               <Table>
-                <TableHeader className="bg-muted/30">
-                  <TableRow className="hover:bg-transparent border-line">
-                    <TableHead className="w-[20%] text-ink/70 font-medium">Client</TableHead>
-                    <TableHead className="text-ink/70 font-medium">Numéro</TableHead>
-                    <TableHead className="text-right text-ink/70 font-medium">Montant</TableHead>
-                    <TableHead className="text-ink/70 font-medium">Statut</TableHead>
-                    <TableHead className="text-ink/70 font-medium">Échéance</TableHead>
-                    <TableHead className="text-right text-ink/70 font-medium">Suivi</TableHead>
+                <TableHeader className="bg-muted/40">
+                  <TableRow className="border-line hover:bg-transparent">
+                    <TableHead className="w-[22%] font-medium text-ink/70">
+                      Client
+                    </TableHead>
+                    <TableHead className="font-medium text-ink/70">
+                      Numéro
+                    </TableHead>
+                    <TableHead className="text-right font-medium text-ink/70">
+                      Montant
+                    </TableHead>
+                    <TableHead className="font-medium text-ink/70">
+                      Statut
+                    </TableHead>
+                    <TableHead className="font-medium text-ink/70">
+                      Échéance
+                    </TableHead>
+                    <TableHead className="text-right font-medium text-ink/70">
+                      Suivi
+                    </TableHead>
+                    <TableHead className="w-10">
+                      <span className="sr-only">Ouvrir</span>
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {recent.map((invoice) => (
-                    <TableRow key={invoice.id} className="border-line hover:bg-muted/30 transition-colors">
+                    <TableRow
+                      key={invoice.id}
+                      className="group border-line transition-colors hover:bg-ledger/5"
+                    >
                       <TableCell>
                         <Link
                           href={`/invoices/${invoice.id}`}
-                          className="font-medium text-ink hover:text-ledger transition-colors"
+                          className="font-medium text-ink transition-colors hover:text-ledger"
                         >
                           {invoice.clientName}
                         </Link>
@@ -230,6 +325,15 @@ export default async function DashboardPage() {
                         <div className="inline-flex justify-end">
                           <InvoiceTrackingCell invoice={invoice} />
                         </div>
+                      </TableCell>
+                      <TableCell className="pr-3">
+                        <Link
+                          href={`/invoices/${invoice.id}`}
+                          aria-label={`Ouvrir la facture ${invoice.number}`}
+                          className="inline-flex size-8 items-center justify-center rounded-full text-ink/0 transition-ledger group-hover:bg-ledger/10 group-hover:text-ledger"
+                        >
+                          <ChevronRight className="size-4" />
+                        </Link>
                       </TableCell>
                     </TableRow>
                   ))}

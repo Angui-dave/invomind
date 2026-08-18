@@ -33,7 +33,7 @@ export function MobileNav(props: MobileNavProps) {
         type="button"
         variant="outline"
         size="icon"
-        className="border-line lg:hidden"
+        className="rounded-full border-line lg:hidden"
         aria-label="Ouvrir le menu"
         onClick={() => setOpen(true)}
       >

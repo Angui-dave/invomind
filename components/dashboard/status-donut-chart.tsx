@@ -12,14 +12,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { STATUS_LABELS } from "@/lib/mock-data";
 
 const chartConfig = {
-  paid: { label: STATUS_LABELS.paid, color: "var(--chart-1)" },
+  paid: { label: STATUS_LABELS.paid, color: "var(--color-brass)" },
   partially_paid: {
     label: STATUS_LABELS.partially_paid,
-    color: "var(--chart-5, #B08D57)",
+    color: "var(--color-amber)",
   },
-  sent: { label: STATUS_LABELS.sent, color: "var(--chart-2)" },
+  sent: { label: STATUS_LABELS.sent, color: "var(--color-ledger)" },
   draft: { label: STATUS_LABELS.draft, color: "var(--chart-3)" },
-  overdue: { label: STATUS_LABELS.overdue, color: "var(--chart-4)" },
+  overdue: { label: STATUS_LABELS.overdue, color: "var(--color-brick)" },
 } satisfies ChartConfig;
 
 const ORDER = ["paid", "partially_paid", "sent", "draft", "overdue"] as const;
@@ -46,8 +46,13 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
     [counts],
   );
 
+  const total = useMemo(
+    () => ORDER.reduce((sum, status) => sum + (counts[status] ?? 0), 0),
+    [counts],
+  );
+
   return (
-    <div className="rounded-2xl border border-line bg-card p-5 sm:p-6 shadow-sm">
+    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
       <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
         Factures par statut
       </h2>
@@ -59,35 +64,43 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
         </div>
       ) : (
         <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-          <ChartContainer
-            config={chartConfig}
-            className="mx-auto aspect-square h-[160px] w-[160px]"
-          >
-            <PieChart>
-              <ChartTooltip
-                content={
-                  <ChartTooltipContent
-                    className="border-line bg-paper"
-                    hideLabel
-                    nameKey="status"
-                  />
-                }
-              />
-              <Pie
-                data={data}
-                dataKey="value"
-                nameKey="status"
-                innerRadius={48}
-                outerRadius={72}
-                strokeWidth={2}
-                stroke="var(--color-paper)"
-              >
-                {data.map((entry) => (
-                  <Cell key={entry.status} fill={entry.fill} />
-                ))}
-              </Pie>
-            </PieChart>
-          </ChartContainer>
+          <div className="relative mx-auto">
+            <ChartContainer
+              config={chartConfig}
+              className="aspect-square h-[160px] w-[160px]"
+            >
+              <PieChart>
+                <ChartTooltip
+                  content={
+                    <ChartTooltipContent
+                      className="border-line bg-paper"
+                      hideLabel
+                      nameKey="status"
+                    />
+                  }
+                />
+                <Pie
+                  data={data}
+                  dataKey="value"
+                  nameKey="status"
+                  innerRadius={48}
+                  outerRadius={72}
+                  strokeWidth={2}
+                  stroke="var(--color-paper)"
+                >
+                  {data.map((entry) => (
+                    <Cell key={entry.status} fill={entry.fill} />
+                  ))}
+                </Pie>
+              </PieChart>
+            </ChartContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="num text-xl font-semibold text-ink">{total}</span>
+              <span className="text-[10px] font-medium uppercase tracking-wide text-ink/45">
+                factures
+              </span>
+            </div>
+          </div>
 
           <ul className="w-full space-y-2 text-sm">
             {ORDER.map((status) => (
@@ -97,7 +110,7 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
               >
                 <span className="flex items-center gap-2 text-ink/75">
                   <span
-                    className="size-2.5 shrink-0 rounded-[2px]"
+                    className="size-2.5 shrink-0 rounded-full"
                     style={{
                       backgroundColor: chartConfig[status].color,
                     }}

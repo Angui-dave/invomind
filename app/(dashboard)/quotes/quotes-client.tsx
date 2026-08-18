@@ -8,7 +8,6 @@ import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -28,22 +27,13 @@ import { cn } from "@/lib/utils";
 
 type StatusFilter = "all" | QuoteStatus;
 
-const FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "Tous" },
-  { value: "draft", label: QUOTE_STATUS_LABELS.draft },
-  { value: "sent", label: QUOTE_STATUS_LABELS.sent },
-  { value: "accepted", label: QUOTE_STATUS_LABELS.accepted },
-  { value: "refused", label: QUOTE_STATUS_LABELS.refused },
-  { value: "expired", label: QUOTE_STATUS_LABELS.expired },
-];
-
 type QuotesPageClientProps = {
   quotes: BusinessDocument[];
+  status: StatusFilter;
 };
 
-export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
+export function QuotesPageClient({ quotes, status }: QuotesPageClientProps) {
   const router = useRouter();
-  const [status, setStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
 
   const filtered = useMemo(() => {
@@ -69,7 +59,10 @@ export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="font-serif text-2xl font-semibold text-ink">Devis</h1>
-          <p className="mt-1 text-sm text-ink/60">{filtered.length} devis</p>
+          <p className="mt-1 text-sm text-ink/60">
+            {filtered.length} devis
+            {status !== "all" ? ` · ${QUOTE_STATUS_LABELS[status]}` : ""}
+          </p>
         </div>
         <Link
           href="/quotes/new"
@@ -83,26 +76,7 @@ export function QuotesPageClient({ quotes }: QuotesPageClientProps) {
         </Link>
       </div>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <Tabs
-          value={status}
-          onValueChange={(value) => setStatus(value as StatusFilter)}
-        >
-          <TabsList
-            variant="default"
-            className="h-auto w-full flex-wrap justify-start rounded-full bg-muted/80 p-1"
-          >
-            {FILTERS.map((filter) => (
-              <TabsTrigger
-                key={filter.value}
-                value={filter.value}
-                className="rounded-full text-xs sm:text-sm"
-              >
-                {filter.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      <div className="flex justify-end">
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
