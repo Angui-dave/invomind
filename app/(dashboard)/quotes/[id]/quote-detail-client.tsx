@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { ArrowRightLeft } from "lucide-react";
-import { InvoiceForm } from "@/components/invoices/invoice-form";
+import { QuoteForm } from "@/components/quotes/quote-form";
 import { Button } from "@/components/ui/button";
 import type { Client } from "@/lib/data/clients";
 import type { CatalogItem } from "@/lib/data/catalog";
@@ -42,7 +42,7 @@ export function QuoteDetailClient({
           </Button>
         </div>
       )}
-      <InvoiceForm
+      <QuoteForm
         mode="edit"
         document={document}
         clients={clients}

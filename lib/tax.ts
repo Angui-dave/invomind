@@ -178,7 +178,7 @@ export interface DocumentTotals {
   breakdown: TaxBreakdownRow[];
 }
 
-function lineNet(line: TaxableLine): number {
+export function lineNet(line: TaxableLine): number {
   const gross = line.quantity * line.unitPrice;
   const discount = line.discountPercent
     ? gross * (line.discountPercent / 100)

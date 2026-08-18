@@ -44,6 +44,7 @@ export interface DocumentLine {
   taxRate: number;
   discountPercent?: number;
   catalogItemId?: string;
+  unit?: string;
 }
 
 export interface ReminderMilestoneStatus {
@@ -143,10 +144,15 @@ const PREFIX: Record<DocumentKind, string> = {
   credit_note: "AV",
 };
 
+export function yearFromIso(iso: string, fallback = new Date().getFullYear()): number {
+  const year = Number.parseInt(iso.slice(0, 4), 10);
+  return Number.isFinite(year) && year >= 2000 ? year : fallback;
+}
+
 export function nextDocumentNumber(
   kind: DocumentKind,
   existing: BusinessDocument[],
-  year = 2026,
+  year = new Date().getFullYear(),
 ): string {
   const prefix = `${PREFIX[kind]}-${year}-`;
   const nums = existing
@@ -231,5 +237,6 @@ export function emptyLine(taxRate = 18): DocumentLine {
     quantity: 1,
     unitPrice: 0,
     taxRate,
+    unit: "unité",
   };
 }

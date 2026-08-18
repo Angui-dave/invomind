@@ -1,4 +1,4 @@
-import { InvoiceForm } from "@/components/invoices/invoice-form";
+import { QuoteForm } from "@/components/quotes/quote-form";
 import { listCatalogItems } from "@/lib/dal/catalog";
 import { getQuotes, listClients } from "@/lib/dal/documents";
 import { getOrgSettings } from "@/lib/dal/settings";
@@ -13,9 +13,8 @@ export default async function NewQuotePage() {
   ]);
 
   return (
-    <InvoiceForm
+    <QuoteForm
       mode="new"
-      kind="quote"
       clients={clients}
       catalogItems={catalogItems}
       orgSettings={settings ?? DEFAULT_ORG_SETTINGS}

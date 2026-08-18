@@ -29,6 +29,7 @@ const LineSchema = z.object({
   taxRate: z.number(),
   discountPercent: z.number().optional(),
   catalogItemId: z.string().optional(),
+  unit: z.string().optional(),
 });
 
 const DocumentInputSchema = z.object({
@@ -84,6 +85,7 @@ export async function saveDocument(
     taxRate: l.taxRate,
     discountPercent: l.discountPercent,
     catalogItemId: l.catalogItemId,
+    unit: l.unit,
   }));
 
   const totals = recomputeDocumentTotals({
