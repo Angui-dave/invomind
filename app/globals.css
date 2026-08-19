@@ -214,6 +214,32 @@
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
   }
 
+  .scrollbar-sidebar {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .scrollbar-sidebar:hover {
+    scrollbar-color: rgb(248 250 252 / 0.2) transparent;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar {
+    width: 4px;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-sidebar::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 9999px;
+  }
+
+  .scrollbar-sidebar:hover::-webkit-scrollbar-thumb {
+    background: rgb(248 250 252 / 0.2);
+  }
+
   .glass-card {
     background: color-mix(in srgb, var(--color-paper) 82%, transparent);
     backdrop-filter: blur(16px);

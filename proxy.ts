@@ -14,6 +14,7 @@ const protectedPrefixes = [
   "/import",
   "/conversations",
   "/settings",
+  "/billing",
 ];
 
 const authRoutes = ["/login", "/register"];

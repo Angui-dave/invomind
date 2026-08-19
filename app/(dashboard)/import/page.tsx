@@ -1,8 +1,10 @@
+import { assertAdminTenant } from "@/lib/rbac/guards";
 import { FeatureGate } from "@/components/feature-gate";
 import { getCurrentOrganization } from "@/lib/dal/session";
 import { ImportPageClient } from "./import-client";
 
 export default async function ImportPage() {
+  await assertAdminTenant();
   const { features } = await getCurrentOrganization();
 
   return (

@@ -1,0 +1,12 @@
+[
+  {
+    "id": "sub_demo",
+    "tenantId": "org_demo_atelier_diallo",
+    "planId": "pro",
+    "status": "active",
+    "stripeCustomerId": null,
+    "stripeSubscriptionId": null,
+    "currentPeriodStart": "2026-08-01T00:00:00.000Z",
+    "currentPeriodEnd": null
+  }
+]

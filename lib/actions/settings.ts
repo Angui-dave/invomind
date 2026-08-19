@@ -3,8 +3,18 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { verifySession } from "@/lib/dal/session";
+import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
+import { isAdminTenant } from "@/lib/rbac/policy";
 import { findTenant } from "@/lib/mock/central";
 import { tenantStore } from "@/lib/mock/store";
+
+async function assertSettingsAdmin() {
+  const session = await verifySession();
+  if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
+    throw new Error("Action réservée aux administrateurs");
+  }
+  return session;
+}
 import type { PaymentMethod } from "@/lib/documents";
 import type { ReminderMilestone } from "@/lib/documents";
 import type { CurrencyCode } from "@/lib/money";
@@ -84,7 +94,7 @@ const EmailTemplateSchema = z.object({
 export async function updateCompanySettings(
   input: z.infer<typeof CompanySchema>,
 ): Promise<ActionResult> {
-  const session = await verifySession();
+  const session = await assertSettingsAdmin();
   const parsed = CompanySchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Profil entreprise invalide" };
@@ -104,7 +114,7 @@ export async function updateCompanySettings(
 export async function updateTaxSettings(
   input: z.infer<typeof TaxSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = TaxSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Paramètres fiscaux invalides" };
@@ -123,7 +133,7 @@ export async function updateTaxSettings(
 export async function updateBankingSettings(
   input: z.infer<typeof BankingSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = BankingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Coordonnées bancaires invalides" };
@@ -147,7 +157,7 @@ export async function updateBankingSettings(
 export async function updateRemindersSettings(
   input: z.infer<typeof RemindersSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = RemindersSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Paramètres de relance invalides" };
@@ -165,7 +175,7 @@ export async function updateRemindersSettings(
 export async function updatePaymentSettings(
   input: z.infer<typeof PaymentSettingsSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = PaymentSettingsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Paramètres de paiement invalides" };
@@ -183,7 +193,7 @@ export async function updatePaymentSettings(
 export async function updateBranding(
   input: z.infer<typeof BrandingSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = BrandingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Identité visuelle invalide" };
@@ -209,7 +219,7 @@ export async function updateBranding(
 export async function updateEnabledModules(
   input: z.infer<typeof ModulesSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = ModulesSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Modules invalides" };
@@ -227,7 +237,7 @@ export async function updateEmailTemplate(
   id: string,
   input: z.infer<typeof EmailTemplateSchema>,
 ): Promise<ActionResult> {
-  await verifySession();
+  await assertSettingsAdmin();
   const parsed = EmailTemplateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Template invalide" };

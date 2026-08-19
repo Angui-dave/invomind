@@ -35,6 +35,9 @@ yarn-error.log*
 .env.local
 .env.*.local
 !.env.example
+DATABASE_MODEL.md
+AGENTS.md
+CLAUDE.md
 
 # vercel
 .vercel

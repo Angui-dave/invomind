@@ -60,6 +60,7 @@ export async function changePlan(planId: PlanId): Promise<ActionResult> {
   void sub;
 
   revalidatePath("/settings");
+  revalidatePath("/billing");
   revalidatePath("/dashboard");
   return {
     ok: true,
@@ -81,6 +82,7 @@ export async function cancelSubscription(): Promise<ActionResult> {
   cancelTenantSubscription(session.organizationId);
 
   revalidatePath("/settings");
+  revalidatePath("/billing");
   revalidatePath("/dashboard");
   return {
     ok: true,

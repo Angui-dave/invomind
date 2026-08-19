@@ -11,10 +11,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import type { CurrentUser, EnabledModules } from "@/lib/mock-data";
+import type { AppRole } from "@/lib/rbac/types";
 
 type MobileNavProps = {
   user: CurrentUser;
   enabledModules: EnabledModules;
+  features: EnabledModules;
   prospectCount?: number;
   unreadCount?: number;
   branding?: {
@@ -22,6 +24,7 @@ type MobileNavProps = {
     logoUrl: string | null;
   };
   organizationName?: string;
+  appRole?: AppRole;
 };
 
 export function MobileNav(props: MobileNavProps) {

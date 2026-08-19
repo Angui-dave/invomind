@@ -1,0 +1,51 @@
+{
+  "roles": {
+    "ADMIN_TENANT": {
+      "description": "Owner or admin of the tenant organization",
+      "permissions": [
+        "view_dashboard",
+        "view_reports",
+        "manage_settings",
+        "manage_billing",
+        "manage_agents",
+        "use_import",
+        "manage_webhooks",
+        "view_clients",
+        "view_invoices",
+        "view_quotes",
+        "view_payments",
+        "view_expenses",
+        "view_catalog",
+        "view_suppliers",
+        "view_conversations"
+      ]
+    },
+    "AGENT": {
+      "description": "Sub-user (member) with operational CRM access only",
+      "permissions": [
+        "view_clients",
+        "view_invoices",
+        "view_quotes",
+        "view_payments",
+        "view_expenses",
+        "view_catalog",
+        "view_suppliers",
+        "view_conversations"
+      ]
+    }
+  },
+  "planGating": {
+    "BASIC": {
+      "maxAgents": 0,
+      "agentsEnabled": false
+    },
+    "PRO": {
+      "maxAgents": 3,
+      "agentsEnabled": true
+    },
+    "ENTERPRISE": {
+      "maxAgents": null,
+      "agentsEnabled": true
+    }
+  }
+}

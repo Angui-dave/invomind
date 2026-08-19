@@ -1,0 +1,5 @@
+[
+  { "userId": "usr_1", "tenantId": "org_demo_atelier_diallo", "role": "owner" },
+  { "userId": "usr_agent_1", "tenantId": "org_demo_atelier_diallo", "role": "member" },
+  { "userId": "usr_agent_2", "tenantId": "org_demo_atelier_diallo", "role": "member" }
+]

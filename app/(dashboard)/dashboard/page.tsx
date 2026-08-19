@@ -1,3 +1,4 @@
+import { assertAdminTenant } from "@/lib/rbac/guards";
 import Link from "next/link";
 import {
   Plus,
@@ -56,6 +57,7 @@ const BILLABLE_STATUSES = new Set([
 ]);
 
 export default async function DashboardPage() {
+  await assertAdminTenant();
   const session = await verifySession();
   const [
     pipeline,

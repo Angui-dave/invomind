@@ -1,3 +1,4 @@
+import { assertAdminTenant } from "@/lib/rbac/guards";
 import {
   billedRevenueHt,
   billedRevenueTtc,
@@ -17,6 +18,7 @@ import { sumByCurrency } from "@/lib/data/derive";
 import { ReportsPageClient } from "./reports-client";
 
 export default async function ReportsPage() {
+  await assertAdminTenant();
   const [
     settings,
     invoices,

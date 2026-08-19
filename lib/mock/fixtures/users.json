@@ -1,0 +1,23 @@
+[
+  {
+    "id": "usr_1",
+    "name": "Léa Diallo",
+    "email": "lea@atelier-diallo.sn",
+    "passwordHash": "mock$password123",
+    "lastTenantId": "org_demo_atelier_diallo"
+  },
+  {
+    "id": "usr_agent_1",
+    "name": "Moussa Ndiaye",
+    "email": "moussa@atelier-diallo.sn",
+    "passwordHash": "mock$agent123",
+    "lastTenantId": "org_demo_atelier_diallo"
+  },
+  {
+    "id": "usr_agent_2",
+    "name": "Fatou Sow",
+    "email": "fatou@atelier-diallo.sn",
+    "passwordHash": "mock$agent123",
+    "lastTenantId": "org_demo_atelier_diallo"
+  }
+]

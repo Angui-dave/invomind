@@ -1,8 +1,8 @@
 import "server-only";
 import { randomBytes } from "crypto";
-import { MOCK_ORG_ID, MOCK_USER_ID } from "@/lib/config";
+import { MOCK_ORG_ID } from "@/lib/config";
 import type { PlanId } from "@/lib/data/settings";
-import { CURRENT_USER, ORG_SETTINGS, PRICING_PLANS } from "@/lib/data/settings";
+import { PRICING_PLANS } from "@/lib/data/settings";
 import type { ConversationChannel } from "@/lib/data/conversations";
 
 /**
@@ -142,40 +142,17 @@ function planLimitsFromCatalog(): PlanLimits[] {
 }
 
 function createCentral(): CentralStore {
-  const now = new Date().toISOString();
+  // Load seed data from JSON fixtures
+  const fixtureTenants: CentralTenant[] = require("./fixtures/tenants.json");
+  const fixtureUsers: CentralUser[] = require("./fixtures/users.json");
+  const fixtureMemberships: CentralMembership[] = require("./fixtures/memberships.json");
+  const fixtureSubscriptions: CentralSubscription[] = require("./fixtures/subscriptions.json");
+
   return {
-    tenants: [
-      {
-        id: MOCK_ORG_ID,
-        name: ORG_SETTINGS.companyName,
-        slug: "atelier-diallo",
-        createdAt: now,
-      },
-    ],
-    users: [
-      {
-        id: MOCK_USER_ID,
-        name: CURRENT_USER.name,
-        email: CURRENT_USER.email.toLowerCase(),
-        passwordHash: "mock$password123",
-        lastTenantId: MOCK_ORG_ID,
-      },
-    ],
-    memberships: [
-      { userId: MOCK_USER_ID, tenantId: MOCK_ORG_ID, role: "owner" },
-    ],
-    subscriptions: [
-      {
-        id: "sub_demo",
-        tenantId: MOCK_ORG_ID,
-        planId: "pro",
-        status: "active",
-        stripeCustomerId: null,
-        stripeSubscriptionId: null,
-        currentPeriodStart: now,
-        currentPeriodEnd: null,
-      },
-    ],
+    tenants: [...fixtureTenants],
+    users: [...fixtureUsers],
+    memberships: [...fixtureMemberships],
+    subscriptions: [...fixtureSubscriptions],
     channelConnections: [
       {
         id: "ch_wa_demo",
@@ -242,6 +219,10 @@ export function membershipFor(
   return getCentral().memberships.find(
     (m) => m.userId === userId && m.tenantId === tenantId,
   );
+}
+
+export function membersForTenant(tenantId: string): CentralMembership[] {
+  return getCentral().memberships.filter((m) => m.tenantId === tenantId);
 }
 
 export function subscriptionForTenant(

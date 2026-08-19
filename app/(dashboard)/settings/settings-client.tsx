@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { LedgerCard } from "@/components/ledger-card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,14 +19,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   updateBankingSettings,
   updateBranding,
   updateCompanySettings,
@@ -35,11 +28,6 @@ import {
   updateRemindersSettings,
   updateTaxSettings,
 } from "@/lib/actions/settings";
-import {
-  cancelSubscription,
-  changePlan,
-  createCheckoutSession,
-} from "@/lib/actions/billing";
 import type {
   EnabledModules,
   OrgBranding,
@@ -47,34 +35,50 @@ import type {
 } from "@/lib/data/settings";
 import {
   CURRENCY_OPTIONS,
-  formatDateFr,
-  formatMoney,
   getTaxPreset,
   PAYMENT_METHOD_LABELS,
   REMINDER_DEFAULTS,
   REMINDER_MILESTONE_LABELS,
   TAX_PRESETS,
   TEMPLATE_VARIABLES,
-  type BillingHistoryItem,
   type CurrentUser,
   type CurrencyCode,
   type EmailTemplate,
   type OrgSettings,
   type PaymentMethod,
-  type PlanId,
   type PricingPlan,
   type ReminderMilestone,
   type TaxMode,
 } from "@/lib/mock-data";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { WebhookSettings } from "@/components/settings/webhook-settings";
 
 type InitialOrg = OrgSettings & OrgSettingsExtras;
 
+const SETTINGS_TABS = [
+  "company",
+  "appearance",
+  "tax",
+  "banking",
+  "billing",
+  "reminders",
+  "payments",
+  "channels",
+] as const;
+
+type SettingsTab = (typeof SETTINGS_TABS)[number];
+
+function parseSettingsTab(value: string | null): SettingsTab {
+  if (value && SETTINGS_TABS.includes(value as SettingsTab)) {
+    return value as SettingsTab;
+  }
+  return "company";
+}
+
 type SettingsPageClientProps = {
   user: CurrentUser;
   plan: PricingPlan;
-  plans: PricingPlan[];
   planLimits: {
     maxInvoicesPerMonth: number | null;
     maxClients: number | null;
@@ -84,21 +88,21 @@ type SettingsPageClientProps = {
   };
   initialOrg: InitialOrg;
   initialTemplates: EmailTemplate[];
-  billingHistory: BillingHistoryItem[];
   branding: OrgBranding | null;
   enabledModules: EnabledModules;
+  initialTab?: string;
 };
 
 export function SettingsPageClient({
   plan,
-  plans,
   planLimits,
   initialOrg,
   initialTemplates,
-  billingHistory,
   branding: initialBranding,
   enabledModules: initialModules,
+  initialTab,
 }: SettingsPageClientProps) {
+  const settingsTab = parseSettingsTab(initialTab ?? null);
   const [remindersOn, setRemindersOn] = useState(initialOrg.remindersEnabled);
   const [cadence, setCadence] = useState<ReminderMilestone[]>(
     (initialOrg.reminderCadence?.length
@@ -244,7 +248,7 @@ export function SettingsPageClient({
         </p>
       </header>
 
-      <Tabs defaultValue="company">
+      <Tabs defaultValue={settingsTab}>
         <TabsList
           variant="default"
           className="h-auto flex-wrap rounded-full bg-muted/80 p-1"
@@ -502,7 +506,8 @@ export function SettingsPageClient({
             </h2>
             <p className="text-sm text-ink/60">
               Activez les modules pour votre espace. Les modules non inclus dans
-              votre plan restent masqués.
+              votre plan restent visibles avec un badge Pro et mènent à l’écran
+              de mise à niveau.
             </p>
             {(
               [
@@ -736,116 +741,14 @@ export function SettingsPageClient({
                   / mois
                 </span>
               </p>
-              <div className="flex flex-col gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="w-full"
-                  onClick={async () => {
-                    const result = await createCheckoutSession();
-                    if (result.ok && result.url) {
-                      window.location.href = result.url;
-                      return;
-                    }
-                    if (result.ok) {
-                      toast.success(result.message ?? "OK");
-                      return;
-                    }
-                    toast.error(result.error);
-                  }}
-                >
-                  Gérer l’abonnement (Stripe)
-                </Button>
-                {plans
-                  .filter((p) => p.id !== plan.id)
-                  .map((p) => (
-                    <Button
-                      key={p.id}
-                      type="button"
-                      className="w-full bg-ledger text-paper hover:bg-ledger/90"
-                      onClick={async () => {
-                        const result = await changePlan(p.id as PlanId);
-                        if (!result.ok) {
-                          toast.error(result.error);
-                          return;
-                        }
-                        toast.success(result.message ?? `Plan ${p.name}`);
-                      }}
-                    >
-                      Passer au {p.name}
-                      {p.price > 0 ? ` (${p.priceLabel}/mois)` : ""}
-                    </Button>
-                  ))}
-                {plan.id !== "free" ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={async () => {
-                      const result = await cancelSubscription();
-                      if (!result.ok) {
-                        toast.error(result.error);
-                        return;
-                      }
-                      toast.success(result.message ?? "Abonnement annulé");
-                    }}
-                  >
-                    Annuler et revenir au Gratuit
-                  </Button>
-                ) : null}
-              </div>
+              <Link
+                href="/billing"
+                className={cn(buttonVariants(), "w-full")}
+              >
+                Voir les formules
+              </Link>
             </div>
           </LedgerCard>
-
-          <div>
-            <h3 className="mb-3 font-serif text-base font-semibold text-ink">
-              Historique de facturation
-            </h3>
-            <div className="rounded-2xl border border-line bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow className="hover:bg-transparent">
-                    <TableHead>Date</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Montant</TableHead>
-                    <TableHead>Statut</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {billingHistory.length === 0 ? (
-                    <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="py-8 text-center text-sm text-ink/55"
-                      >
-                        Aucune facture d’abonnement
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    billingHistory.map((item) => (
-                      <TableRow key={item.id}>
-                        <TableCell className="num">
-                          {formatDateFr(item.date)}
-                        </TableCell>
-                        <TableCell>{item.description}</TableCell>
-                        <TableCell className="num text-right">
-                          {formatMoney(item.amount, item.currency)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className="border-ledger/40 bg-ledger/10 text-ledger"
-                          >
-                            {item.status === "paid" ? "Payée" : "Ouverte"}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
-          </div>
         </TabsContent>
 
         <TabsContent value="reminders" className="mt-6 space-y-6">

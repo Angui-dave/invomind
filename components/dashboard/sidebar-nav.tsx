@@ -8,6 +8,7 @@ import {
   ChevronDown,
   FileText,
   LayoutDashboard,
+  Lock,
   LogOut,
   MessagesSquare,
   Package,
@@ -22,17 +23,19 @@ import {
 import { logout } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
 import {
+  INVOICE_STATUS_LABELS,
   QUOTE_STATUS_LABELS,
   type CurrentUser,
   type EnabledModules,
-  type QuoteStatus,
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
+import type { AppRole } from "@/lib/rbac/types";
+import { ADMIN_ONLY_ROUTES } from "@/lib/rbac/policy";
 
 type NavChild = {
   href: string;
   label: string;
-  status?: QuoteStatus;
+  status?: string;
 };
 
 type NavItem = {
@@ -52,19 +55,47 @@ const QUOTE_STATUS_LINKS: NavChild[] = (
   status,
 }));
 
-function QuoteStatusSubnav({
+const INVOICE_STATUS_LINKS: NavChild[] = (
+  [
+    "draft",
+    "sent",
+    "partially_paid",
+    "paid",
+    "overdue",
+    "cancelled",
+  ] as const
+).map((status) => ({
+  href: `/invoices?status=${status}`,
+  label: INVOICE_STATUS_LABELS[status],
+  status,
+}));
+
+function slugifyNavId(label: string) {
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function StatusSubnav({
+  links,
+  basePath,
   onNavigate,
   activeStatus,
 }: {
+  links: NavChild[];
+  basePath: string;
   onNavigate?: () => void;
   activeStatus?: string | null;
 }) {
   const pathname = usePathname();
   return (
     <div className="mt-0.5 ml-4 space-y-0.5 border-l border-white/12 pl-2">
-      {QUOTE_STATUS_LINKS.map((child) => {
+      {links.map((child) => {
         const childActive =
-          pathname === "/quotes" &&
+          pathname === basePath &&
           Boolean(child.status) &&
           activeStatus === child.status;
         return (
@@ -87,14 +118,20 @@ function QuoteStatusSubnav({
   );
 }
 
-function QuoteStatusSubnavWithParams({
+function StatusSubnavWithParams({
+  links,
+  basePath,
   onNavigate,
 }: {
+  links: NavChild[];
+  basePath: string;
   onNavigate?: () => void;
 }) {
   const searchParams = useSearchParams();
   return (
-    <QuoteStatusSubnav
+    <StatusSubnav
+      links={links}
+      basePath={basePath}
       onNavigate={onNavigate}
       activeStatus={searchParams.get("status")}
     />
@@ -111,6 +148,7 @@ type SidebarNavProps = {
   className?: string;
   user: CurrentUser;
   enabledModules: EnabledModules;
+  features: EnabledModules;
   prospectCount?: number;
   unreadCount?: number;
   branding?: {
@@ -119,6 +157,7 @@ type SidebarNavProps = {
   };
   /** Active tenant name from session (URL is shared; org comes from cookie) */
   organizationName?: string;
+  appRole?: AppRole;
 };
 
 export function SidebarNav({
@@ -126,14 +165,16 @@ export function SidebarNav({
   className,
   user,
   enabledModules,
+  features,
   prospectCount = 0,
   unreadCount = 0,
   branding,
   organizationName,
+  appRole = "ADMIN_TENANT",
 }: SidebarNavProps) {
   const pathname = usePathname();
   const router = useRouter();
-  const [quotesOpen, setQuotesOpen] = useState(false);
+  const [openMenus, setOpenMenus] = useState<Record<string, boolean>>({});
   const orgLabel =
     organizationName || branding?.displayName || user.company || "Organisation";
 
@@ -153,12 +194,17 @@ export function SidebarNav({
           icon: FileText,
           children: QUOTE_STATUS_LINKS,
         },
-        { href: "/invoices", label: "Factures", icon: Receipt },
+        {
+          href: "/invoices",
+          label: "Factures",
+          icon: Receipt,
+          children: INVOICE_STATUS_LINKS,
+        },
         {
           href: "/clients",
           label: "Clients",
           icon: Users,
-          badgeCount: enabledModules.pipeline ? prospectCount : undefined,
+          badgeCount: features.pipeline ? prospectCount : undefined,
         },
         {
           href: "/conversations",
@@ -208,10 +254,21 @@ export function SidebarNav({
           icon: Upload,
           module: "importTool",
         },
+        { href: "/agents", label: "Agents", icon: Users },
         { href: "/settings", label: "Paramètres", icon: Settings },
       ],
     },
   ];
+
+  const isAgent = appRole === "AGENT";
+  if (isAgent) {
+    const adminPaths = ADMIN_ONLY_ROUTES as readonly string[];
+    for (const group of navGroups) {
+      group.items = group.items.filter(
+        (item) => !adminPaths.includes(item.href),
+      );
+    }
+  }
 
   return (
     <div className={cn("flex h-full flex-col", className)}>
@@ -245,13 +302,15 @@ export function SidebarNav({
       </div>
 
       <nav
-        className="flex-1 space-y-4 overflow-y-auto px-2 pb-4"
+        className="scrollbar-sidebar min-h-0 flex-1 space-y-4 overflow-y-auto px-2 pb-4"
         aria-label="Navigation principale"
       >
         {navGroups.map((group) => {
-          const items = group.items.filter(
-            (item) => !item.module || enabledModules[item.module],
-          );
+          const items = group.items.filter((item) => {
+            if (item.module && !enabledModules[item.module]) return false;
+            if (isAgent && item.module && !features[item.module]) return false;
+            return true;
+          });
           if (items.length === 0) return null;
           return (
             <div key={group.label}>
@@ -260,57 +319,86 @@ export function SidebarNav({
               </p>
               <div className="space-y-0.5">
                 {items.map((item) => {
-                  const active =
-                    pathname === item.href ||
-                    pathname.startsWith(`${item.href}/`);
                   const Icon = item.icon;
-                  const count = item.badgeCount ?? 0;
+                  const locked = Boolean(
+                    item.module && !features[item.module],
+                  );
+                  const href = locked
+                    ? isAgent
+                      ? item.href
+                      : "/billing"
+                    : item.href;
+                  const active =
+                    !locked &&
+                    (pathname === item.href ||
+                      pathname.startsWith(`${item.href}/`));
+                  const count = locked ? 0 : (item.badgeCount ?? 0);
                   const hasChildren = Boolean(item.children?.length);
+                  const isOpen = openMenus[item.href] ?? active;
+                  const statusNavId = `${slugifyNavId(item.label)}-status-nav`;
                   const itemClassName = cn(
                     "relative flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm transition-ledger",
                     active
                       ? "bg-white/15 font-medium text-navy-fg before:absolute before:inset-y-1.5 before:left-0 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-brass before:to-ledger"
-                      : "text-navy-fg/70 hover:bg-white/8 hover:text-navy-fg",
+                      : locked
+                        ? "text-navy-fg/55 hover:bg-white/8 hover:text-navy-fg"
+                        : "text-navy-fg/70 hover:bg-white/8 hover:text-navy-fg",
                   );
+                  const proBadge = locked ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-brass/45 bg-brass/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-brass">
+                      <Lock className="size-2.5" aria-hidden />
+                      Pro
+                    </span>
+                  ) : null;
 
                   return (
                     <div key={item.href}>
                       {hasChildren ? (
                         <button
                           type="button"
-                          aria-expanded={quotesOpen}
-                          aria-controls="quotes-status-nav"
+                          aria-expanded={isOpen}
+                          aria-controls={statusNavId}
                           onClick={() => {
-                            const next = !quotesOpen;
-                            setQuotesOpen(next);
+                            const next = !isOpen;
+                            setOpenMenus((prev) => ({
+                              ...prev,
+                              [item.href]: next,
+                            }));
                             if (
                               next &&
                               pathname !== item.href &&
                               !pathname.startsWith(`${item.href}/`)
                             ) {
-                              router.push(item.href);
+                              router.push(href);
                             }
                           }}
                           className={itemClassName}
                         >
                           <Icon className="size-4 shrink-0" aria-hidden />
                           <span className="flex-1 text-left">{item.label}</span>
+                          {proBadge}
                           <ChevronDown
                             className={cn(
                               "size-4 shrink-0 transition-transform",
-                              quotesOpen && "rotate-180",
+                              isOpen && "rotate-180",
                             )}
                             aria-hidden
                           />
                         </button>
                       ) : (
                         <Link
-                          href={item.href}
+                          href={href}
                           onClick={onNavigate}
+                          aria-label={
+                            locked
+                              ? `${item.label}, plan Pro requis`
+                              : undefined
+                          }
                           className={itemClassName}
                         >
                           <Icon className="size-4 shrink-0" aria-hidden />
                           <span className="flex-1">{item.label}</span>
+                          {proBadge}
                           {count > 0 && (
                             <span className="num rounded-full bg-brass px-1.5 py-0.5 text-[10px] font-medium text-navy">
                               {count}
@@ -318,14 +406,20 @@ export function SidebarNav({
                           )}
                         </Link>
                       )}
-                      {hasChildren && quotesOpen && (
-                        <div id="quotes-status-nav">
+                      {hasChildren && isOpen && item.children && (
+                        <div id={statusNavId}>
                           <Suspense
                             fallback={
-                              <QuoteStatusSubnav onNavigate={onNavigate} />
+                              <StatusSubnav
+                                links={item.children}
+                                basePath={item.href}
+                                onNavigate={onNavigate}
+                              />
                             }
                           >
-                            <QuoteStatusSubnavWithParams
+                            <StatusSubnavWithParams
+                              links={item.children}
+                              basePath={item.href}
                               onNavigate={onNavigate}
                             />
                           </Suspense>

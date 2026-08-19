@@ -13,7 +13,12 @@ Il inclut un portail client dédié, des intégrations de paiement (Stripe, Swis
 - **Dépenses & Fournisseurs** : Suivi des frais, gestion des fournisseurs et grand livre (*Ledger*).
 - **Messagerie Omnicanal** : Centralisation des conversations clients (intégrations Webhooks Meta & TikTok prévues).
 - **Abonnements & Billing** : Gestion des plans SaaS (Free, Pro) gérée via Stripe.
+- **Catalogue Produits & Services** : Gestion d'un catalogue d'articles réutilisables dans les factures et devis.
+- **Import de Données** : Outil d'importation de données en masse depuis des fichiers externes.
+- **Agents IA** : Page dédiée aux agents intelligents (réservée au plan Pro via *Feature Gating*).
+- **Feature Gating** : Système de contrôle d'accès aux fonctionnalités selon le plan souscrit (Free / Pro) via le composant `FeatureGate`.
 - **Tableau de Bord Analytique** : Graphiques de revenus, taux d'impayés, top clients (Recharts).
+- **Outils Publics Gratuits** : Calculateur de TVA (`/outils/calculateur-tva`) et générateur de QR code facture (`/outils/generateur-qr-facture`) accessibles sans compte.
 
 ## 🛠️ Stack Technique
 
@@ -49,7 +54,10 @@ invomind/
 │   ├── auth/               # Logique de session (JWT, cookies)
 │   └── webhooks/           # Typages et validation de webhooks (Stripe, Meta)
 ├── scripts/                # Scripts utilitaires (Seed, Migrations)
-└── docker/                 # Configuration Docker (Base de données locale)
+├── drizzle/                # Fichiers de migration générés par Drizzle Kit
+├── docker/                 # Configuration Docker (Base de données locale)
+├── docs/                   # Documentation complémentaire
+└── public/                 # Assets statiques
 ```
 
 ## 🚀 Démarrage Rapide
@@ -111,6 +119,30 @@ Si vous avez exécuté `npm run db:seed`, un compte de démonstration sera cré�
 - `npm run db:migrate` : Exécute les migrations sur la DB.
 - `npm run db:seed` : Injecte les fausses données de test.
 - `npm run db:studio` : Ouvre Drizzle Studio (interface web pour gérer les données de la base).
+
+## ⚙️ Variables d'Environnement
+
+Copiez `.env.example` vers `.env` et renseignez les valeurs. Voici les principales variables :
+
+| Variable | Description |
+|---|---|
+| `NEXT_PUBLIC_APP_URL` | URL de base de l'application |
+| `NEXT_PUBLIC_USE_MOCK_DATA` | `true` pour utiliser des données en mémoire (sans DB), `false` pour PostgreSQL |
+| `SESSION_SECRET` | Clé de signature JWT pour les sessions (obligatoire) |
+| `DATABASE_URL` | URL de connexion PostgreSQL (rôle applicatif) |
+| `DATABASE_URL_OWNER` | URL de connexion PostgreSQL (rôle owner, pour les migrations) |
+| `STRIPE_SECRET_KEY` | Clé secrète Stripe |
+| `STRIPE_WEBHOOK_SECRET` | Secret de signature des webhooks Stripe |
+| `STRIPE_PRICE_PRO` | ID du Price Stripe pour le plan Pro |
+| `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` | Clé publique Stripe |
+| `META_VERIFY_TOKEN` | Token de vérification webhook Meta |
+| `META_APP_SECRET` | Secret de l'application Meta |
+| `TIKTOK_CLIENT_KEY` | Clé API TikTok |
+| `TIKTOK_CLIENT_SECRET` | Secret API TikTok |
+| `CONVERSATIONS_WEBHOOK_URL` | URL du webhook sortant pour les conversations |
+| `CONVERSATIONS_WEBHOOK_SECRET` | Secret HMAC du webhook conversations |
+
+> **Mode Mock** : En définissant `NEXT_PUBLIC_USE_MOCK_DATA=true`, l'application fonctionne entièrement avec des données en mémoire, sans nécessiter de base de données PostgreSQL. Idéal pour un premier lancement rapide ou des démonstrations.
 
 ## 🔒 Multi-tenancy et Sécurité
 

@@ -1,4 +1,6 @@
 import { verifySession } from "@/lib/dal/session";
+import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
+import { isAdminTenant } from "@/lib/rbac/policy";
 import {
   getMaskedConfig,
   recentDeliveries,
@@ -28,6 +30,9 @@ function isValidWebhookUrl(url: string): boolean {
 
 export async function GET() {
   const session = await verifySession();
+  if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
+    return Response.json({ error: "Non autorisé" }, { status: 403 });
+  }
   const organizationId = session.organizationId;
   return Response.json({
     config: await getMaskedConfig(organizationId),
@@ -37,6 +42,9 @@ export async function GET() {
 
 export async function PUT(request: Request) {
   const session = await verifySession();
+  if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
+    return Response.json({ error: "Non autorisé" }, { status: 403 });
+  }
   const organizationId = session.organizationId;
 
   let json: unknown;

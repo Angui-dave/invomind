@@ -5,20 +5,19 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { getCurrentOrganization } from "@/lib/dal/session";
 import { activeProspectsValue } from "@/lib/dal/prospects";
 import { unreadTotal } from "@/lib/dal/conversations";
+import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
 
 export default async function DashboardLayout({
   children,
 }: {
   children: ReactNode;
 }) {
-  const [{ session, branding, features }, prospectStats, unread] =
+  const [{ session, branding, features, enabledModules }, prospectStats, unread] =
     await Promise.all([
       getCurrentOrganization(),
       activeProspectsValue(),
       unreadTotal(),
     ]);
-
-  const enabledModules = features;
 
   const user = {
     id: session.user.id,
@@ -37,9 +36,12 @@ export default async function DashboardLayout({
   const displayName =
     branding?.displayName || session.organization.name || "InvoMind";
 
+  const appRole = mapTenantRoleToAppRole(session.role);
+
   const navProps = {
     user,
     enabledModules,
+    features,
     prospectCount: prospectStats.count,
     unreadCount: unread,
     organizationName: session.organization.name,
@@ -47,6 +49,7 @@ export default async function DashboardLayout({
       displayName,
       logoUrl: branding?.logoUrl ?? null,
     },
+    appRole,
   };
 
   return (

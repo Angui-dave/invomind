@@ -11,6 +11,8 @@ type FeatureGateProps = {
   allowed: boolean;
   featureLabel: string;
   children: ReactNode;
+  /** Hide the upgrade link (e.g. for agents who cannot access billing) */
+  showUpgradeLink?: boolean;
 };
 
 /** Renders children when the plan allows the feature; otherwise an upgrade prompt. */
@@ -18,6 +20,7 @@ export function FeatureGate({
   allowed,
   featureLabel,
   children,
+  showUpgradeLink = true,
 }: FeatureGateProps) {
   if (allowed) return <>{children}</>;
 
@@ -32,13 +35,16 @@ export function FeatureGate({
             {featureLabel} — plan supérieur requis
           </h2>
           <p className="mt-1 max-w-md text-sm text-ink/65">
-            Cette fonctionnalité n’est pas incluse dans votre abonnement actuel.
-            Passez au plan Pro ou Business pour l’activer.
+            {showUpgradeLink
+              ? "Cette fonctionnalité n'est pas incluse dans votre abonnement actuel. Passez au plan Pro ou Business pour l'activer."
+              : "Cette fonctionnalité n'est pas disponible sur votre plan actuel. Contactez l'administrateur de votre organisation."}
           </p>
         </div>
-        <Link href="/settings" className={cn(buttonVariants())}>
-          Voir les abonnements
-        </Link>
+        {showUpgradeLink && (
+          <Link href="/billing" className={cn(buttonVariants())}>
+            Voir les abonnements
+          </Link>
+        )}
       </div>
     </LedgerCard>
   );
@@ -53,7 +59,7 @@ export function LimitBanner({ message }: LimitBannerProps) {
     <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-sm border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-ink">
       <p>{message}</p>
       <Link
-        href="/settings"
+        href="/billing"
         className={cn(buttonVariants({ size: "sm", variant: "outline" }))}
       >
         Mettre à niveau

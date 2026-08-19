@@ -3,6 +3,8 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { verifySession } from "@/lib/dal/session";
+import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
+import { isAdminTenant } from "@/lib/rbac/policy";
 import {
   assertCanCreateClient,
   assertFeature,
@@ -27,6 +29,9 @@ export async function importRows(
   rows: Record<string, string>[],
 ): Promise<ActionResult> {
   const session = await verifySession();
+  if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
+    return { ok: false, error: "Action réservée aux administrateurs" };
+  }
   try {
     await assertFeature(
       session.organizationId,

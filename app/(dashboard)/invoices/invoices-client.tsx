@@ -35,27 +35,19 @@ type SortDirection = "asc" | "desc";
 
 const PAGE_SIZE = 8;
 
-const FILTERS: { value: StatusFilter; label: string }[] = [
-  { value: "all", label: "Toutes" },
-  { value: "draft", label: INVOICE_STATUS_LABELS.draft },
-  { value: "sent", label: INVOICE_STATUS_LABELS.sent },
-  { value: "partially_paid", label: INVOICE_STATUS_LABELS.partially_paid },
-  { value: "paid", label: INVOICE_STATUS_LABELS.paid },
-  { value: "overdue", label: INVOICE_STATUS_LABELS.overdue },
-];
-
 type InvoicesPageClientProps = {
   invoices: BusinessDocument[];
   creditNotes: BusinessDocument[];
+  status: StatusFilter;
 };
 
 export function InvoicesPageClient({
   invoices,
   creditNotes,
+  status,
 }: InvoicesPageClientProps) {
   const router = useRouter();
   const [kindTab, setKindTab] = useState<KindTab>("invoices");
-  const [status, setStatus] = useState<StatusFilter>("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({
     key: "dueDate",
@@ -142,6 +134,9 @@ export function InvoicesPageClient({
           </h1>
           <p className="mt-1 text-sm text-ink/60">
             {filtered.length} document{filtered.length > 1 ? "s" : ""}
+            {kindTab === "invoices" && status !== "all"
+              ? ` · ${INVOICE_STATUS_LABELS[status]}`
+              : ""}
           </p>
         </div>
         <Link
@@ -192,31 +187,7 @@ export function InvoicesPageClient({
         </TabsList>
       </Tabs>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        {kindTab === "invoices" && (
-          <Tabs
-            value={status}
-            onValueChange={(value) => {
-              setStatus(value as StatusFilter);
-              setPage(1);
-            }}
-          >
-            <TabsList
-              variant="default"
-              className="h-auto w-full flex-wrap justify-start rounded-full bg-muted/80 p-1"
-            >
-              {FILTERS.map((filter) => (
-                <TabsTrigger
-                  key={filter.value}
-                  value={filter.value}
-                  className="rounded-full text-xs sm:text-sm"
-                >
-                  {filter.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
-        )}
+      <div className="flex justify-end">
         <Input
           value={query}
           onChange={(e) => {
