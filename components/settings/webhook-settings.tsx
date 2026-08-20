@@ -75,8 +75,17 @@ export function WebhookSettings() {
 
   useEffect(() => {
     void load();
-    setMetaUrl(`${window.location.origin}/api/webhooks/meta`);
-    setTiktokUrl(`${window.location.origin}/api/webhooks/tiktok`);
+    const laravelBase = (
+      process.env.NEXT_PUBLIC_LARAVEL_API_URL || ""
+    ).replace(/\/+$/, "");
+    if (laravelBase) {
+      setMetaUrl(`${laravelBase}/webhooks/meta`);
+      setTiktokUrl(`${laravelBase}/webhooks/tiktok`);
+    } else {
+      // Next BFF proxies to Laravel when USE_LARAVEL_API / LARAVEL_API_URL is set.
+      setMetaUrl(`${window.location.origin}/api/webhooks/meta`);
+      setTiktokUrl(`${window.location.origin}/api/webhooks/tiktok`);
+    }
   }, [load]);
 
   async function handleSave() {
@@ -124,9 +133,15 @@ export function WebhookSettings() {
       });
       const data = await res.json();
       await load();
-      if (data.status === "success") {
+      const status =
+        typeof data.status === "string"
+          ? data.status
+          : typeof data?.delivery?.status === "string"
+            ? data.delivery.status
+            : null;
+      if (status === "success" || status === "sent") {
         toast.success("Test envoyé avec succès");
-      } else if (data.status === "skipped") {
+      } else if (status === "skipped") {
         toast.message("Webhook désactivé — envoi ignoré");
       } else {
         toast.error(
@@ -163,8 +178,9 @@ export function WebhookSettings() {
   return (
     <div className="space-y-6">
       <div className="rounded-sm border border-line bg-muted/30 px-4 py-3 text-sm text-ink/70">
-        La configuration et le journal de livraisons sont stockés en mémoire
-        serveur. Ils sont remis à zéro au redémarrage.
+        En mode Laravel, la configuration webhook et le journal de livraisons
+        sont persistés en base. En mode démo (mock), ils restent en mémoire
+        serveur et sont remis à zéro au redémarrage.
       </div>
 
       <section className="space-y-4 rounded-sm border border-line bg-paper p-4">
@@ -259,7 +275,8 @@ export function WebhookSettings() {
           </h3>
           <p className="text-xs text-ink/55">
             URL à déclarer dans votre App Meta (WhatsApp / Messenger /
-            Instagram) pour recevoir les messages entrants.
+            Instagram) pour recevoir les messages entrants. Traité par
+            Laravel (proxy Next si URL locale).
           </p>
         </div>
 

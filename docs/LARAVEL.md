@@ -1,93 +1,214 @@
-# Laravel backend (multi-tenant, URL unique)
+# Laravel backend (source de vérité)
 
-## Principe : une URL, des tenants via la session
+## Principe : une URL, des tenants via session + header
 
 **Tous les clients utilisent la même URL** (ex. `https://app.invomind.com`).  
-Il n’y a **pas** de sous-domaine (`atelier.invomind.com`) ni de préfixe de path (`/t/atelier/...`) pour choisir le tenant.
+Pas de sous-domaine ni de préfixe de path pour le tenant.
 
-La différenciation se fait uniquement par le **cookie de session** signé :
+### Front (Next.js)
 
-```ts
-// Cookie httpOnly: invomind_session (JWT)
-{ userId, organizationId, sessionId, expiresAt }
-```
+Deux cookies HttpOnly :
 
-Flux à chaque requête dashboard :
+- `invomind_session` — JWT signé `{ userId, organizationId, role, expiresAt }` (**sans** token Sanctum)
+- `invomind_access` — Bearer Sanctum (cookie séparé)
 
-1. `proxy.ts` vérifie que le cookie contient `userId` + `organizationId`
-2. `verifySession()` charge l’utilisateur, le tenant et le membership depuis le store **central**
-3. `tenantStoreById(organizationId)` charge **uniquement** les données de ce tenant (clients, factures, branding…)
+Flux dashboard :
 
-Côté Laravel, le même principe s’applique avec un middleware **`InitializeTenancyByUser`** (pas `InitializeTenancyByDomain`) : après Sanctum, on initialise la connexion DB du tenant à partir de `organization_id` / `last_tenant_id` en session.
+1. `proxy.ts` vérifie le cookie session (`userId` + `organizationId`)
+2. `verifySession()` appelle `GET /api/auth/me` avec Bearer + `X-Organization-Id`
+3. `lib/dal/*` et `lib/actions/*` appellent Laravel via `lib/laravel/client.ts`
 
----
+### Backend (Laravel)
 
-Le front Next.js tourne en **mocks multi-tenant** :
-
-- **Central** : [`lib/mock/central.ts`](../lib/mock/central.ts) — tenants, users, memberships, plans, subscriptions, channelConnections
-- **Par tenant** : [`lib/mock/store.ts`](../lib/mock/store.ts) — une « base » isolée (`Map<tenantId, MockStore>`), comme une DB dédiée
-
-## Flag
-
-```env
-NEXT_PUBLIC_USE_MOCK_DATA=true   # défaut — mocks
-# NEXT_PUBLIC_USE_MOCK_DATA=false  # plus tard : client HTTP Laravel
-```
-
-## Architecture cible (stancl/tenancy)
+- Une **seule base** ; isolation par colonne `organization_id`
+- Auth : **Sanctum** personal access tokens
+- Middleware `auth:sanctum` + `tenant` (`ResolveTenant`) : lit `X-Organization-Id` (sinon première membership)
+- Admin : middleware `admin` (rôles `owner` | `admin`)
 
 ```mermaid
 flowchart TB
-  App["Next.js - URL unique"] --> API["Laravel API Sanctum"]
-  API --> CentralDB["DB centrale"]
-  API --> Mid["InitializeTenancyByUser"]
-  Mid --> TenantDB["DB du tenant"]
+  App["Next.js URL unique"] --> API["Laravel /api Sanctum"]
+  API --> Mid["ResolveTenant X-Organization-Id"]
+  Mid --> DB["PostgreSQL unique org_id"]
 ```
 
-### Base centrale
+## Flags front
 
-Tables : `tenants`, `users`, `tenant_user` (memberships + role), `plans`, `subscriptions`, `channel_connections`.
+```env
+USE_LARAVEL_API=true                 # source de vérité (recommandé)
+LARAVEL_API_URL=http://localhost:8000/api
+NEXT_PUBLIC_USE_MOCK_DATA=false      # désactiver les mocks en mode Laravel
+```
 
-### Base par tenant
+Si `USE_LARAVEL_API=false`, le front retombe sur `lib/mock/*` (démo locale uniquement).
 
-Tout le métier : clients, documents, payments, expenses, catalog, conversations, prospects, org_settings, branding, enabled_modules, webhooks logs.
+## Entitlements & modules
 
-Création à l’inscription via job `CreateDatabase` / `MigrateDatabase` (stancl).
-
-### Résolution du tenant — pas de sous-domaine
-
-Middleware custom **`InitializeTenancyByUser`** :
-
-1. Auth Sanctum → user
-2. Lire `organization_id` / `tenant_id` depuis la session (ou `last_tenant_id`)
-3. `tenancy()->initialize($tenant)`
-
-C’est ce qui garantit **une seule URL SaaS** pour tous les clients.
+- `GET /organization/entitlements` est la source des quotas et flags plan ∩ org (pipeline, conversations, reports, expenses, catalog, import_tool).
+- Front : `lib/billing/entitlements.ts` + `getCurrentOrganization().features`.
+- Sidebar / FeatureGate utilisent `features` (intersection), pas seulement les toggles org.
+- Plans Free / Pro / Business : 5 factures & 10 clients (Free), Pro 9 900 XOF, import CSV dès Pro.
 
 ## Couches front → Laravel
 
-| Front actuel | Laravel |
-|--------------|---------|
-| `lib/mock/central.ts` | Models + migrations central |
-| `lib/mock/store.ts` + `tenantStore()` | Models tenant + tenancy scope |
-| `lib/dal/*` | `GET` JSON Sanctum |
-| `lib/actions/*` | `POST/PUT/PATCH/DELETE` |
-| `lib/auth/session.ts` | Sanctum SPA cookie |
-| `lib/billing/entitlements.ts` | Policy / middleware plan |
-| `lib/webhooks/store.ts` | Queues + tables tenant |
+| Front | Laravel |
+|-------|---------|
+| `lib/dal/*` | `GET` JSON |
+| `lib/actions/*` | `POST` / `PUT` / `DELETE` |
+| `lib/laravel/mappers.ts` | snake_case → camelCase (y compris BFF conversations) |
+| `lib/billing/entitlements.ts` | `GET /organization/entitlements` (+ garde-fous UI) |
+| Cookies session | JWT session + Bearer Sanctum séparé |
 
-## Contrat API (indicatif)
+## Contrat API (réel)
 
-- `POST /api/register` → crée tenant DB + user + membership owner + sub free + session
-- `POST /api/login` → session + `{ user, organization, plan }`
-- `GET /api/clients`, `POST /api/clients`, … (toujours dans le contexte tenancy)
-- `PATCH /api/organization/branding`, `PATCH /api/organization/modules`
-- `POST /api/billing/change-plan`, `POST /api/billing/cancel`
-- Portail public `GET /api/portal/{token}` : résolution tenant par token (équivalent `findTenantIdByPortalToken`)
-- Webhooks Meta/TikTok : résolution via `channel_connections.external_id`
+Préfixe : `/api`. Auth Bearer + `X-Organization-Id` sauf routes publiques.
 
-## Auth mock actuelle
+### Auth (public)
 
-- Démo : `lea@atelier-diallo.sn` / `password123` → org Atelier Diallo (données seed)
-- Inscription : crée un **nouveau** tenant + store vide (isolation réelle entre orgs)
-- Cookie JWT local (`invomind_session`) avec `userId` + `organizationId`
+| Méthode | Path |
+|---------|------|
+| POST | `/auth/register` — 201 + `email_verification_required` (pas de token) |
+| POST | `/auth/login` |
+| POST | `/auth/forgot-password` |
+| POST | `/auth/reset-password` |
+| POST | `/auth/invitations/accept` |
+| GET | `/auth/email/verify/{id}/{hash}` (signed) |
+| POST | `/auth/email/resend` |
+
+### Auth (Sanctum)
+
+| Méthode | Path |
+|---------|------|
+| POST | `/auth/logout` |
+| GET | `/auth/me` |
+
+### Organisation (tenant)
+
+| Méthode | Path | Notes |
+|---------|------|-------|
+| GET | `/organization` | |
+| GET | `/organization/entitlements` | |
+| PUT | `/organization/settings\|tax\|banking\|reminders\|payments\|branding\|modules` | admin |
+| GET/POST | `/organization/invitations` | admin |
+| DELETE | `/organization/invitations/{id}` | admin — révoquer |
+
+### Métier
+
+| Ressource | Paths |
+|-----------|-------|
+| Clients | `GET/POST /clients`, `GET/PUT/DELETE /clients/{id}` |
+| Documents | `GET/POST /documents`, `GET/PUT /documents/{id}`, `PUT …/status` (devis), `POST …/issue`, `…/send`, `GET …/pdf` |
+| Prospects | `GET/POST /prospects`, `PUT /prospects/{id}/stage` |
+| Expenses | `GET/POST /expenses`, `PUT /expenses/{id}`, `GET /expense-categories` |
+| Payments | `GET/POST /payments` |
+| Suppliers | `GET/POST /suppliers`, `PUT /suppliers/{id}` |
+| Catalog | `GET/POST /catalog`, `PUT /catalog/{id}` |
+| Conversations | `GET /conversations`, `…/messages?conversation_id=`, `…/inbox`, `POST …/send` |
+| Reports | `GET /reports/dashboard`, `GET /reports/overview` |
+| Import | `POST /import/{entity}` — `clients` \| `suppliers` \| `catalog` \| `expenses` |
+| Email templates | `GET /email-templates`, `PUT /email-templates/{event}` |
+| Agents | `GET /agents`, `PUT /agents/{id}/enable\|disable` (`POST /agents` → 410) |
+
+### Portail (public)
+
+| Méthode | Path |
+|---------|------|
+| GET | `/portal/{token}` |
+| POST | `/portal/{token}/checkout` |
+| GET | `/portal/{token}/pdf`, `/portal/{token}/receipt.pdf` |
+| POST | `/portal/{token}/pay` → **410** (utiliser checkout) |
+
+### Auth (réponse unifiée login / me / acceptInvitation)
+
+```json
+{
+  "user": { "id": "...", "name": "...", "email": "..." },
+  "organization_id": "uuid",
+  "organization": { "id": "...", "name": "...", "slug": "...", "plan_id": "free" },
+  "role": "owner|admin|member",
+  "token": "…"
+}
+```
+
+`token` est omis sur `GET /auth/me`.  
+`register` renvoie `email_verification_required: true` **sans** token.
+
+`GET /organization` inclut `subscription_invoices` (historique billing).  
+Les documents passent par `DocumentResource`. Clients / payments / expenses / catalog / conversations ont des Resources dédiées.
+
+### Billing SaaS (CinetPay uniquement)
+
+| Méthode | Path |
+|---------|------|
+| POST | `/billing/checkout` — body `{ plan_id: pro\|business, customer_phone? }` → `{ checkout_url }` |
+| POST | `/billing/change-plan` — `free` uniquement ; plans payants → **402** (utiliser checkout) |
+| POST | `/billing/cancel` |
+
+Période prépayée **30 jours**. Scheduler `subscriptions:expire` repasse en Free à échéance. Pas d’auto-renouvellement.
+
+### Webhooks inbound (public — pointer les providers ici)
+
+| Path | Usage |
+|------|-------|
+| `GET/POST /webhooks/meta` | Meta verify + messages → conversations |
+| `POST /webhooks/tiktok` | TikTok → conversations |
+| `GET/POST /webhooks/cinetpay` | Paiements factures **et** abonnement SaaS |
+
+Les routes Next `app/api/webhooks/{meta,tiktok}` proxifient vers Laravel. **CinetPay → Laravel direct** (pas de proxy Stripe — Stripe retiré du produit).
+
+---
+
+## Queue, scheduler, mail
+
+Queue **database**. Depuis `backend/` :
+
+```bash
+php artisan queue:work
+php artisan schedule:work
+```
+
+- Toutes les 15 min : `documents:mark-overdue`, `documents:dispatch-reminders`, `subscriptions:expire`
+- Jobs : `TenantAwareJob` (`tries=3`, backoff, `organization_id`)
+
+Mail : `MAIL_MAILER=log` en local ; `resend` en prod (`RESEND_API_KEY`).
+
+```bash
+php artisan mail:test toi@example.com
+```
+
+## PDF
+
+`GenerateDocumentPdfJob` → `storage/app/documents/{organization_id}/{document_id}.pdf`
+
+```
+POST /documents/{id}/issue
+POST /documents/{id}/send
+GET  /documents/{id}/pdf
+GET  /portal/{token}/pdf
+```
+
+Next proxifie : `/api/documents/{id}/pdf`, `/api/portal/{token}/pdf`.
+
+## CinetPay
+
+```
+POST /portal/{token}/checkout          # facture client
+POST /billing/checkout                 # abonnement SaaS
+GET|POST /api/webhooks/cinetpay
+```
+
+Env Laravel : `CINETPAY_*`, `PSP_DRIVER=fake` pour tests.
+
+## Auth équipe
+
+```
+POST /auth/forgot-password
+POST /auth/reset-password
+POST /organization/invitations
+DELETE /organization/invitations/{id}
+POST /auth/invitations/accept
+GET  /agents
+PUT  /agents/{id}/enable|disable
+```
+
+Pages Next : `/forgot-password`, `/reset-password`, `/accept-invitation`.

@@ -3,6 +3,7 @@ import { isConversationChannel } from "@/lib/data/conversations";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
+import { mapConversationSendStatus } from "@/lib/laravel/mappers";
 import { signPayload } from "@/lib/webhooks/signature";
 import { getConfig, logDelivery } from "@/lib/webhooks/store";
 import type { DeliveryAttempt, SendMessagePayload } from "@/lib/webhooks/types";
@@ -69,7 +70,11 @@ export async function POST(request: Request) {
         thread_ref: payload.threadRef,
       },
     });
-    return Response.json(response);
+    const normalized = mapConversationSendStatus(response);
+    return Response.json({
+      ...normalized,
+      raw: response,
+    });
   }
 
   const config = await getConfig(organizationId);

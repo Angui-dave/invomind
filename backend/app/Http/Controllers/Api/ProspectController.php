@@ -5,13 +5,16 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ProspectRequest;
 use App\Models\Prospect;
+use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ProspectController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'pipeline');
+
         $prospects = Prospect::where('organization_id', $this->orgId($request))
             ->orderBy('created_at', 'desc')
             ->get();
@@ -19,8 +22,10 @@ class ProspectController extends Controller
         return response()->json($prospects);
     }
 
-    public function store(ProspectRequest $request): JsonResponse
+    public function store(ProspectRequest $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'pipeline');
+
         $prospect = Prospect::create([
             ...$request->validated(),
             'organization_id' => $this->orgId($request),
@@ -30,8 +35,10 @@ class ProspectController extends Controller
         return response()->json($prospect, 201);
     }
 
-    public function updateStage(Request $request, string $id): JsonResponse
+    public function updateStage(Request $request, string $id, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'pipeline');
+
         $data = $request->validate([
             'stage' => ['required', 'in:nouveau,qualifie,devis,negociation,gagne,perdu'],
         ]);

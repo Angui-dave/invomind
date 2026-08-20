@@ -6,7 +6,7 @@ const PARTNERS = [
   "Orange Money",
   "MTN MoMo",
   "Moov",
-  "Stripe",
+  "CinetPay",
   "Swiss QR",
 ] as const;
 

@@ -2,6 +2,7 @@ import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
+import { mapWebhookConfigResponse } from "@/lib/laravel/mappers";
 import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
 import { isAdminTenant } from "@/lib/rbac/policy";
 import {
@@ -39,7 +40,7 @@ export async function GET() {
       token,
       organizationId: session.organizationId,
     });
-    return Response.json(response);
+    return Response.json(mapWebhookConfigResponse(response));
   }
   if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
     return Response.json({ error: "Non autorisé" }, { status: 403 });
@@ -78,17 +79,18 @@ export async function PUT(request: Request) {
     typeof body.enabled === "boolean" ? body.enabled : undefined;
 
   if (isLaravelApiEnabled()) {
+    const payload: Record<string, unknown> = {};
+    if (url !== undefined) payload.url = url;
+    if (secret !== undefined) payload.secret = secret;
+    if (enabled !== undefined) payload.enabled = enabled;
+
     const response = await laravelRequest("/conversations/webhook", {
       method: "PUT",
       token,
       organizationId: session.organizationId,
-      body: {
-        url,
-        secret,
-        enabled,
-      },
+      body: payload,
     });
-    return Response.json(response);
+    return Response.json(mapWebhookConfigResponse(response));
   }
 
   if (url !== undefined && !isValidWebhookUrl(url)) {

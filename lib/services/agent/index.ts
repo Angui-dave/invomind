@@ -1,7 +1,7 @@
 import type { IAgentService } from "./types";
 import { MockAgentService } from "./mock-agent-service";
 
-export type { IAgentService, AgentDto, CreateAgentInput, UpdateAgentInput, InviteAgentInput, AgentStatus } from "./types";
+export type { IAgentService, AgentDto, CreateAgentInput, UpdateAgentInput, InviteAgentInput, AgentStatus, InvitationDto } from "./types";
 
 let _instance: IAgentService | null = null;
 

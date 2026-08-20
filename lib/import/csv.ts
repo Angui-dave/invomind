@@ -45,13 +45,21 @@ function splitCsvLine(line: string, delimiter: string): string[] {
   return result;
 }
 
-export type ImportEntity = "clients" | "expenses" | "catalog";
+export type ImportEntity = "clients" | "expenses" | "catalog" | "suppliers";
 
 export const IMPORT_FIELD_OPTIONS: Record<
   ImportEntity,
   { key: string; label: string }[]
 > = {
   clients: [
+    { key: "name", label: "Nom" },
+    { key: "company", label: "Entreprise" },
+    { key: "email", label: "E-mail" },
+    { key: "phone", label: "Téléphone" },
+    { key: "city", label: "Ville" },
+    { key: "country", label: "Pays" },
+  ],
+  suppliers: [
     { key: "name", label: "Nom" },
     { key: "company", label: "Entreprise" },
     { key: "email", label: "E-mail" },

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
 import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
 import { isAdminTenant } from "@/lib/rbac/policy";
@@ -12,10 +13,14 @@ import {
 import { opaquePortalToken } from "@/lib/documents";
 import { todayIso } from "@/lib/date";
 import type { ImportEntity } from "@/lib/import/csv";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import { tenantStore } from "@/lib/mock/store";
 import type { Client } from "@/lib/data/clients";
 import type { CatalogItem } from "@/lib/data/catalog";
 import type { Expense } from "@/lib/data/expenses";
+import type { Supplier } from "@/lib/data/suppliers";
 import type { CurrencyCode } from "@/lib/money";
 
 export type ActionResult =
@@ -23,6 +28,7 @@ export type ActionResult =
   | { ok: false; error: string };
 
 const RowSchema = z.record(z.string(), z.string());
+const EntitySchema = z.enum(["clients", "expenses", "catalog", "suppliers"]);
 
 export async function importRows(
   entity: ImportEntity,
@@ -45,9 +51,7 @@ export async function importRows(
     };
   }
 
-  const entityParsed = z
-    .enum(["clients", "expenses", "catalog"])
-    .safeParse(entity);
+  const entityParsed = EntitySchema.safeParse(entity);
   if (!entityParsed.success) {
     return { ok: false, error: "Type d’import invalide" };
   }
@@ -55,6 +59,39 @@ export async function importRows(
   const parsedRows = z.array(RowSchema).safeParse(rows);
   if (!parsedRows.success || parsedRows.data.length === 0) {
     return { ok: false, error: "Aucune ligne à importer" };
+  }
+
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      const result = await laravelRequest<{
+        imported: number;
+        errors: Array<{ row: number; error: string }>;
+      }>(`/import/${entityParsed.data}`, {
+        method: "POST",
+        token,
+        organizationId,
+        body: { rows: parsedRows.data },
+      });
+
+      revalidatePath("/clients");
+      revalidatePath("/expenses");
+      revalidatePath("/catalog");
+      revalidatePath("/suppliers");
+      revalidatePath("/import");
+      revalidatePath("/dashboard");
+
+      if (result.imported === 0 && result.errors.length > 0) {
+        return {
+          ok: false,
+          error: result.errors[0]?.error ?? "Aucune ligne importée",
+        };
+      }
+
+      return { ok: true, count: result.imported };
+    } catch (e) {
+      return { ok: false, error: actionErrorMessage(e, "Erreur d’importation") };
+    }
   }
 
   try {
@@ -80,6 +117,23 @@ export async function importRows(
           portalToken: `cli-${opaquePortalToken().slice(0, 12)}`,
         };
         store.clients.unshift(client);
+        imported++;
+      }
+    }
+
+    if (entityParsed.data === "suppliers") {
+      for (const row of parsedRows.data) {
+        if (!row.name?.trim()) continue;
+        const supplier: Supplier = {
+          id: `sup_${Math.random().toString(36).slice(2, 8)}`,
+          name: row.name.trim(),
+          company: row.company?.trim() ?? "",
+          email: row.email?.trim() ?? "",
+          phone: row.phone?.trim() || undefined,
+          city: row.city?.trim() || undefined,
+          country: row.country?.trim() || undefined,
+        };
+        store.suppliers.unshift(supplier);
         imported++;
       }
     }
@@ -141,6 +195,7 @@ export async function importRows(
     revalidatePath("/clients");
     revalidatePath("/expenses");
     revalidatePath("/catalog");
+    revalidatePath("/suppliers");
     revalidatePath("/import");
     revalidatePath("/dashboard");
     return { ok: true, count: imported };

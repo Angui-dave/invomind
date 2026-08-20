@@ -6,7 +6,6 @@ import {
   Ban,
   Building2,
   Check,
-  CreditCard,
   Loader2,
   Receipt,
   Sparkles,
@@ -27,6 +26,7 @@ import {
   changePlan,
   createCheckoutSession,
 } from "@/lib/actions/billing";
+import { isAllowedCheckoutUrl } from "@/lib/security/safe-redirect";
 import {
   type BillingHistoryItem,
   type PlanId,
@@ -60,10 +60,21 @@ export function BillingPlans({
 
   async function handleChangePlan(planId: PlanId, name: string) {
     setPending(planId);
-    const result = await changePlan(planId);
+    const result =
+      planId === "free"
+        ? await changePlan(planId)
+        : await createCheckoutSession(planId);
     setPending(null);
     if (!result.ok) {
       toast.error(result.error);
+      return;
+    }
+    if (result.url) {
+      if (!isAllowedCheckoutUrl(result.url)) {
+        toast.error("URL de paiement invalide.");
+        return;
+      }
+      window.location.href = result.url;
       return;
     }
     toast.success(result.message ?? `Plan ${name}`);
@@ -80,21 +91,6 @@ export function BillingPlans({
     }
     toast.success(result.message ?? "Abonnement annulé");
     router.refresh();
-  }
-
-  async function handleStripe() {
-    setPending("stripe");
-    const result = await createCheckoutSession();
-    setPending(null);
-    if (result.ok && result.url) {
-      window.location.href = result.url;
-      return;
-    }
-    if (result.ok) {
-      toast.success(result.message ?? "OK");
-      return;
-    }
-    toast.error(result.error);
   }
 
   return (
@@ -114,24 +110,10 @@ export function BillingPlans({
             </h1>
             <p className="mt-1.5 max-w-lg text-sm text-ink/65">
               Débloquez Conversations, l’import CSV et les relances
-              automatiques. Changez de formule à tout moment.
+              automatiques. Paiement prépayé 30 jours via CinetPay (Mobile
+              Money / carte). Renouvelez avant l’échéance pour conserver votre
+              formule.
             </p>
-            <div className="mt-5">
-              <Button
-                type="button"
-                variant="outline"
-                disabled={busy}
-                onClick={handleStripe}
-                className="h-9 rounded-full border-line bg-paper/70"
-              >
-                {pending === "stripe" ? (
-                  <Loader2 className="size-4 animate-spin" aria-hidden />
-                ) : (
-                  <CreditCard className="size-4" aria-hidden />
-                )}
-                Gérer via Stripe
-              </Button>
-            </div>
           </div>
 
           <div className="glass-card w-full max-w-sm shrink-0 rounded-2xl p-4">

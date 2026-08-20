@@ -1,4 +1,4 @@
-/** Barrel re-export — keeps existing imports working after the data split */
+/** @deprecated Prefer `@/lib/data/*` + `@/lib/formatters` — barrel kept for gradual migration */
 
 import { TODAY } from "@/lib/date";
 

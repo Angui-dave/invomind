@@ -211,11 +211,14 @@ export function SettingsPageClient({
       return;
     }
     if (currentTemplate) {
-      const tplResult = await updateEmailTemplate(currentTemplate.milestone, {
-        subject: currentTemplate.subject,
-        body: currentTemplate.body,
-        label: currentTemplate.label,
-      });
+      const tplResult = await updateEmailTemplate(
+        currentTemplate.event ?? currentTemplate.milestone ?? currentTemplate.id,
+        {
+          subject: currentTemplate.subject,
+          body: currentTemplate.body,
+          label: currentTemplate.label,
+        },
+      );
       if (!tplResult.ok) {
         toast.error(tplResult.error);
         return;
@@ -872,7 +875,7 @@ export function SettingsPageClient({
                 <h3 className="font-serif text-base font-semibold text-ink">
                   Prestataire de paiement
                 </h3>
-                <p className="text-xs text-ink/55">Stripe / Mobile Money</p>
+                <p className="text-xs text-ink/55">CinetPay / Mobile Money</p>
               </div>
               {connected ? (
                 <div className="flex items-center gap-2">

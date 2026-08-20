@@ -15,8 +15,8 @@ class SubscriptionInvoice extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'organization_id', 'date', 'description', 'amount',
-        'currency', 'status', 'stripe_invoice_id',
+        'organization_id', 'payment_intent_id', 'date', 'description', 'amount',
+        'currency', 'status', 'provider', 'provider_transaction_id',
     ];
 
     protected function casts(): array

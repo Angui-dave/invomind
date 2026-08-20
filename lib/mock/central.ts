@@ -45,8 +45,6 @@ export type CentralSubscription = {
   tenantId: string;
   planId: PlanId;
   status: SubscriptionStatus;
-  stripeCustomerId: string | null;
-  stripeSubscriptionId: string | null;
   currentPeriodStart: string | null;
   currentPeriodEnd: string | null;
 };
@@ -92,13 +90,14 @@ const globalForCentral = globalThis as unknown as {
   __invomindCentral?: CentralStore;
 };
 
+/** Align with Laravel PlanSeeder */
 function planLimitsFromCatalog(): PlanLimits[] {
   return PRICING_PLANS.map((p) => {
     if (p.id === "free") {
       return {
         ...p,
-        maxInvoicesPerMonth: 3,
-        maxClients: 5,
+        maxInvoicesPerMonth: 5,
+        maxClients: 10,
         autoReminders: false,
         onlinePayments: false,
         pipeline: false,
@@ -310,8 +309,6 @@ export function provisionTenant(
     tenantId: tenant.id,
     planId: "free",
     status: "active",
-    stripeCustomerId: null,
-    stripeSubscriptionId: null,
     currentPeriodStart: now,
     currentPeriodEnd: null,
   };
@@ -338,8 +335,6 @@ export function setTenantPlan(
       tenantId,
       planId,
       status,
-      stripeCustomerId: null,
-      stripeSubscriptionId: null,
       currentPeriodStart: now,
       currentPeriodEnd: null,
     };

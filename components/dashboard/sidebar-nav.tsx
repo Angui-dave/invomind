@@ -164,7 +164,7 @@ export function SidebarNav({
   onNavigate,
   className,
   user,
-  enabledModules,
+  enabledModules: _enabledModules,
   features,
   prospectCount = 0,
   unreadCount = 0,
@@ -307,8 +307,7 @@ export function SidebarNav({
       >
         {navGroups.map((group) => {
           const items = group.items.filter((item) => {
-            if (item.module && !enabledModules[item.module]) return false;
-            if (isAgent && item.module && !features[item.module]) return false;
+            if (item.module && !features[item.module]) return false;
             return true;
           });
           if (items.length === 0) return null;

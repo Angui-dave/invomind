@@ -3,45 +3,71 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Models\Membership;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
-/**
- * Placeholder controller for the Agents module.
- * The agent service is currently mock-only on the frontend.
- * Implement actual agent logic when the feature is ready.
- */
 class AgentController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        return response()->json([]);
+        $members = Membership::query()
+            ->where('organization_id', $this->orgId($request))
+            ->where('role', 'member')
+            ->with('user')
+            ->orderBy('created_at')
+            ->get()
+            ->map(fn (Membership $membership) => $this->payload($membership));
+
+        return response()->json($members);
     }
 
-    public function store(Request $request): JsonResponse
+    public function store(): JsonResponse
     {
-        $data = $request->validate([
-            'name' => ['required', 'string'],
-            'type' => ['required', 'string'],
-            'config' => ['sometimes', 'array'],
-        ]);
-
         return response()->json([
-            'id' => (string) \Illuminate\Support\Str::uuid(),
-            'name' => $data['name'],
-            'type' => $data['type'],
-            'enabled' => true,
-            'config' => $data['config'] ?? [],
-        ], 201);
+            'message' => 'La création directe d’agent est désactivée. Utilisez POST /organization/invitations.',
+        ], 410);
     }
 
     public function enable(Request $request, string $id): JsonResponse
     {
-        return response()->json(['id' => $id, 'enabled' => true]);
+        $membership = $this->member($request, $id);
+        $membership->update(['disabled_at' => null]);
+
+        return response()->json($this->payload($membership->fresh('user')));
     }
 
     public function disable(Request $request, string $id): JsonResponse
     {
-        return response()->json(['id' => $id, 'enabled' => false]);
+        $membership = $this->member($request, $id);
+        $membership->update(['disabled_at' => now()]);
+
+        return response()->json($this->payload($membership->fresh('user')));
+    }
+
+    private function member(Request $request, string $id): Membership
+    {
+        return Membership::query()
+            ->where('organization_id', $this->orgId($request))
+            ->where('role', 'member')
+            ->where('id', $id)
+            ->firstOrFail();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function payload(Membership $membership): array
+    {
+        return [
+            'id' => $membership->id,
+            'user_id' => $membership->user_id,
+            'name' => $membership->user?->name,
+            'email' => $membership->user?->email,
+            'role' => $membership->role,
+            'status' => $membership->isDisabled() ? 'disabled' : 'active',
+            'disabled_at' => $membership->disabled_at,
+            'created_at' => $membership->created_at,
+        ];
     }
 }

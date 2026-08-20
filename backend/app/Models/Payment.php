@@ -9,16 +9,25 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
-    use HasUuids, BelongsToOrganization;
+    use BelongsToOrganization, HasUuids;
+
+    public const SOURCE_MANUAL = 'manual';
+
+    public const SOURCE_PORTAL_PSP = 'portal_psp';
+
+    public const SOURCE_IMPORT = 'import';
 
     protected $keyType = 'string';
+
     public $incrementing = false;
+
     public $timestamps = false;
 
     protected $fillable = [
         'organization_id', 'document_id', 'document_number', 'client_id',
         'client_name', 'amount', 'currency', 'method', 'paid_at',
-        'reference', 'notes',
+        'reference', 'notes', 'payment_intent_id', 'provider',
+        'provider_transaction_id', 'source',
     ];
 
     protected function casts(): array
@@ -34,5 +43,10 @@ class Payment extends Model
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function paymentIntent(): BelongsTo
+    {
+        return $this->belongsTo(PaymentIntent::class);
     }
 }

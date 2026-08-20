@@ -98,6 +98,7 @@ const EmailTemplateSchema = z.object({
 export async function updateCompanySettings(
   input: z.infer<typeof CompanySchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = CompanySchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Profil entreprise invalide" };
@@ -126,7 +127,7 @@ export async function updateCompanySettings(
       return { ok: false, error: actionErrorMessage(error, "Profil entreprise invalide") };
     }
   }
-  const session = await assertSettingsAdmin();
+  const session = await verifySession();
   const parsed = CompanySchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Profil entreprise invalide" };
@@ -146,6 +147,7 @@ export async function updateCompanySettings(
 export async function updateTaxSettings(
   input: z.infer<typeof TaxSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = TaxSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Paramètres fiscaux invalides" };
@@ -167,7 +169,6 @@ export async function updateTaxSettings(
       return { ok: false, error: actionErrorMessage(error, "Paramètres fiscaux invalides") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = TaxSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Paramètres fiscaux invalides" };
@@ -186,6 +187,7 @@ export async function updateTaxSettings(
 export async function updateBankingSettings(
   input: z.infer<typeof BankingSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = BankingSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Coordonnées bancaires invalides" };
@@ -211,7 +213,6 @@ export async function updateBankingSettings(
       return { ok: false, error: actionErrorMessage(error, "Coordonnées bancaires invalides") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = BankingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Coordonnées bancaires invalides" };
@@ -235,6 +236,7 @@ export async function updateBankingSettings(
 export async function updateRemindersSettings(
   input: z.infer<typeof RemindersSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = RemindersSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Paramètres de relance invalides" };
@@ -255,7 +257,6 @@ export async function updateRemindersSettings(
       return { ok: false, error: actionErrorMessage(error, "Paramètres de relance invalides") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = RemindersSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Paramètres de relance invalides" };
@@ -273,6 +274,7 @@ export async function updateRemindersSettings(
 export async function updatePaymentSettings(
   input: z.infer<typeof PaymentSettingsSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = PaymentSettingsSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Paramètres de paiement invalides" };
@@ -293,7 +295,6 @@ export async function updatePaymentSettings(
       return { ok: false, error: actionErrorMessage(error, "Paramètres de paiement invalides") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = PaymentSettingsSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Paramètres de paiement invalides" };
@@ -311,6 +312,7 @@ export async function updatePaymentSettings(
 export async function updateBranding(
   input: z.infer<typeof BrandingSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = BrandingSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Identité visuelle invalide" };
@@ -334,7 +336,6 @@ export async function updateBranding(
       return { ok: false, error: actionErrorMessage(error, "Identité visuelle invalide") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = BrandingSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Identité visuelle invalide" };
@@ -360,6 +361,7 @@ export async function updateBranding(
 export async function updateEnabledModules(
   input: z.infer<typeof ModulesSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = ModulesSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Modules invalides" };
@@ -385,7 +387,6 @@ export async function updateEnabledModules(
       return { ok: false, error: actionErrorMessage(error, "Modules invalides") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = ModulesSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Modules invalides" };
@@ -403,6 +404,7 @@ export async function updateEmailTemplate(
   milestone: string,
   input: z.infer<typeof EmailTemplateSchema>,
 ): Promise<ActionResult> {
+  await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
     const parsed = EmailTemplateSchema.safeParse(input);
     if (!parsed.success) return { ok: false, error: "Template invalide" };
@@ -423,7 +425,6 @@ export async function updateEmailTemplate(
       return { ok: false, error: actionErrorMessage(error, "Template invalide") };
     }
   }
-  await assertSettingsAdmin();
   const parsed = EmailTemplateSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, error: "Template invalide" };

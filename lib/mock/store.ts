@@ -171,7 +171,7 @@ export function createEmptyStore(
       reminderCadence: ["J-3", "J+3", "J+7", "J+14"],
       payment: {
         connected: false,
-        provider: "stripe",
+        provider: "cinetpay",
         acceptedMethods: ["card", "transfer"],
         feeNote: PAYMENT_PROVIDER.feeNote,
       },

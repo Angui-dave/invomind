@@ -48,7 +48,9 @@ type ApiOrganizationResponse = {
     pipeline?: boolean;
     conversations?: boolean;
     reports?: boolean;
-    stripe_price_id?: string | null;
+    expenses?: boolean;
+    catalog?: boolean;
+    import_tool?: boolean;
   } | null;
 };
 
@@ -56,6 +58,9 @@ type ApiEntitlementsResponse = {
   pipeline?: boolean;
   conversations?: boolean;
   reports?: boolean;
+  expenses?: boolean;
+  catalog?: boolean;
+  import_tool?: boolean;
 };
 
 export type VerifiedSession = {
@@ -78,15 +83,18 @@ export type VerifiedSession = {
 
 function intersectModules(
   enabled: EnabledModules,
-  plan: ReturnType<typeof planById>,
+  planFlags: Pick<
+    EnabledModules,
+    "pipeline" | "conversations" | "expenses" | "catalog" | "reports" | "importTool"
+  >,
 ): EnabledModules {
   return {
-    pipeline: enabled.pipeline && plan.pipeline,
-    conversations: enabled.conversations && plan.conversations,
-    expenses: enabled.expenses && plan.expenses,
-    catalog: enabled.catalog && plan.catalog,
-    reports: enabled.reports && plan.reports,
-    importTool: enabled.importTool && plan.importTool,
+    pipeline: enabled.pipeline && planFlags.pipeline,
+    conversations: enabled.conversations && planFlags.conversations,
+    expenses: enabled.expenses && planFlags.expenses,
+    catalog: enabled.catalog && planFlags.catalog,
+    reports: enabled.reports && planFlags.reports,
+    importTool: enabled.importTool && planFlags.importTool,
   };
 }
 
@@ -101,22 +109,29 @@ export const verifySession = cache(async (): Promise<VerifiedSession> => {
       const me = await laravelRequest<{
         user: { id: string; name: string; email: string };
         organization_id: string;
+        organization?: { id: string; name: string; slug: string; plan_id?: PlanId } | null;
         role: "owner" | "admin" | "member";
       }>("/auth/me", {
         token: payload.accessToken,
         organizationId: payload.organizationId,
       });
 
+      // Keep the session cookie org — do not overwrite with an unrelated membership.
+      const organizationId = payload.organizationId;
+      if (me.organization_id !== organizationId) {
+        redirect("/login?clear_session=1");
+      }
+
       return {
         sessionId: payload.sessionId,
         userId: me.user.id,
-        organizationId: me.organization_id,
+        organizationId,
         user: me.user,
         organization: {
-          id: me.organization_id,
-          name: "Organization",
-          slug: "organization",
-          planId: "free",
+          id: organizationId,
+          name: me.organization?.name ?? "Organization",
+          slug: me.organization?.slug ?? "organization",
+          planId: (me.organization?.plan_id ?? "free") as PlanId,
         },
         role: me.role ?? payload.role ?? "member",
       };
@@ -165,14 +180,35 @@ export const getOptionalSession = cache(async () => {
 export const getCurrentOrganization = cache(async () => {
   const session = await verifySession();
   if (isLaravelApiEnabled()) {
+    const token = (await readSessionCookie())?.accessToken;
     const organization = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token: (await readSessionCookie())?.accessToken,
+      token,
       organizationId: session.organizationId,
     });
     const entitlements = await laravelRequest<ApiEntitlementsResponse>("/organization/entitlements", {
-      token: (await readSessionCookie())?.accessToken,
+      token,
       organizationId: session.organizationId,
     });
+
+    const enabledModules: EnabledModules = {
+      pipeline: Boolean(organization.features?.pipeline),
+      conversations: Boolean(organization.features?.conversations),
+      expenses: Boolean(organization.features?.expenses),
+      catalog: Boolean(organization.features?.catalog),
+      reports: Boolean(organization.features?.reports),
+      importTool: Boolean(organization.features?.import_tool),
+    };
+
+    const planFlags: EnabledModules = {
+      pipeline: Boolean(entitlements.pipeline ?? organization.plan?.pipeline),
+      conversations: Boolean(entitlements.conversations ?? organization.plan?.conversations),
+      expenses: Boolean(entitlements.expenses ?? organization.plan?.expenses ?? true),
+      catalog: Boolean(entitlements.catalog ?? organization.plan?.catalog ?? true),
+      reports: Boolean(entitlements.reports ?? organization.plan?.reports ?? true),
+      importTool: Boolean(entitlements.import_tool ?? organization.plan?.import_tool),
+    };
+
+    const features = intersectModules(enabledModules, planFlags);
 
     return {
       session: {
@@ -195,26 +231,12 @@ export const getCurrentOrganization = cache(async () => {
             primaryColor: "#2563eb",
             accentColor: "#10b981",
             fontFamily: "Inter",
-            documentTemplate: "classic",
+            documentTemplate: "classic" as const,
             locale: "fr-SN",
-            currency: "XOF",
+            currency: "XOF" as const,
           },
-      enabledModules: {
-        pipeline: Boolean(organization.features?.pipeline),
-        conversations: Boolean(organization.features?.conversations),
-        expenses: Boolean(organization.features?.expenses),
-        catalog: Boolean(organization.features?.catalog),
-        reports: Boolean(organization.features?.reports),
-        importTool: Boolean(organization.features?.import_tool),
-      },
-      features: {
-        pipeline: Boolean(entitlements.pipeline),
-        conversations: Boolean(entitlements.conversations),
-        expenses: Boolean(organization.features?.expenses),
-        catalog: Boolean(organization.features?.catalog),
-        reports: Boolean(entitlements.reports),
-        importTool: Boolean(organization.features?.import_tool),
-      },
+      enabledModules,
+      features,
       subscription: organization.subscription ?? null,
       plan: organization.plan
         ? {
@@ -233,10 +255,9 @@ export const getCurrentOrganization = cache(async () => {
             pipeline: Boolean(organization.plan.pipeline),
             conversations: Boolean(organization.plan.conversations),
             reports: Boolean(organization.plan.reports),
-            expenses: Boolean(organization.features?.expenses),
-            catalog: Boolean(organization.features?.catalog),
-            importTool: Boolean(organization.features?.import_tool),
-            stripePriceId: organization.plan.stripe_price_id ?? null,
+            expenses: Boolean(organization.plan.expenses ?? planFlags.expenses),
+            catalog: Boolean(organization.plan.catalog ?? planFlags.catalog),
+            importTool: Boolean(organization.plan.import_tool ?? planFlags.importTool),
           }
         : {
             id: "free" as PlanId,
@@ -254,10 +275,9 @@ export const getCurrentOrganization = cache(async () => {
             pipeline: false,
             conversations: false,
             reports: true,
-            expenses: false,
-            catalog: false,
+            expenses: true,
+            catalog: true,
             importTool: false,
-            stripePriceId: null,
           },
     };
   }
@@ -278,8 +298,6 @@ export const getCurrentOrganization = cache(async () => {
           organizationId: subscription.tenantId,
           planId: subscription.planId,
           status: subscription.status,
-          stripeCustomerId: subscription.stripeCustomerId,
-          stripeSubscriptionId: subscription.stripeSubscriptionId,
           currentPeriodStart: subscription.currentPeriodStart
             ? new Date(subscription.currentPeriodStart)
             : null,
@@ -309,7 +327,6 @@ export const getCurrentOrganization = cache(async () => {
       expenses: plan.expenses,
       catalog: plan.catalog,
       importTool: plan.importTool,
-      stripePriceId: null,
     },
   };
 });

@@ -33,6 +33,13 @@ export type PaymentMethod =
   | "cash"
   | "check";
 
+export type PortalPaymentStatus =
+  | "unpaid"
+  | "processing"
+  | "paid"
+  | "partially_paid"
+  | "failed";
+
 export type ReminderMilestone = "J-3" | "J+3" | "J+7" | "J+14";
 export type ReminderState = "sent" | "scheduled" | "disabled";
 
@@ -77,6 +84,8 @@ export interface BusinessDocument {
   portalToken: string;
   sourceDocumentId?: string;
   notes?: string;
+  frozen?: boolean;
+  pdfReady?: boolean;
 }
 
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {

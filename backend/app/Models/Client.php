@@ -20,6 +20,10 @@ class Client extends Model
         'payment_term_days', 'reminders_enabled', 'portal_token',
     ];
 
+    protected $hidden = [
+        'portal_token',
+    ];
+
     protected function casts(): array
     {
         return ['reminders_enabled' => 'boolean'];

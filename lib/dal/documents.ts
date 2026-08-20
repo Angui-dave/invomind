@@ -19,7 +19,7 @@ import {
 import type { Client } from "@/lib/data/clients";
 import type { OrgBranding, OrgSettings } from "@/lib/data/settings";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
-import type { BusinessDocument } from "@/lib/documents";
+import type { BusinessDocument, PortalPaymentStatus } from "@/lib/documents";
 import type { Payment } from "@/lib/data/payments";
 import { applyDerivedStatus } from "@/lib/data/documents";
 import { TODAY } from "@/lib/date";
@@ -63,10 +63,18 @@ export async function listClients(): Promise<Client[]> {
 }
 
 export async function getClientById(id: string): Promise<Client | null> {
-  await verifySession();
+  const session = await verifySession();
   if (isLaravelApiEnabled()) {
-    const clients = await listClients();
-    return clients.find((c) => c.id === id) ?? null;
+    const token = (await readSessionCookie())?.accessToken;
+    try {
+      const row = await laravelRequest<unknown>(`/clients/${id}`, {
+        token,
+        organizationId: session.organizationId,
+      });
+      return mapClient(row);
+    } catch {
+      return null;
+    }
   }
   const store = await tenantStore();
   return store.clients.find((c) => c.id === id) ?? null;
@@ -155,6 +163,8 @@ type PortalContext = {
   client: Client | null;
   orgSettings: OrgSettings;
   branding: OrgBranding | null;
+  outstandingBalance: number;
+  paymentStatus: PortalPaymentStatus;
 };
 
 type ApiPortalPayload = {
@@ -165,7 +175,27 @@ type ApiPortalPayload = {
     settings?: unknown;
     branding?: unknown;
   } | null;
+  outstanding_balance?: unknown;
+  payment_status?: unknown;
 };
+
+function parsePortalPaymentStatus(value: unknown): PortalPaymentStatus | null {
+  if (
+    value === "unpaid" ||
+    value === "processing" ||
+    value === "paid" ||
+    value === "partially_paid" ||
+    value === "failed"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function moneyAmount(value: unknown, fallback = 0): number {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+}
 
 export async function getPortalInvoiceContext(
   token: string,
@@ -174,16 +204,30 @@ export async function getPortalInvoiceContext(
     try {
       const payload = await laravelRequest<ApiPortalPayload>(`/portal/${token}`);
       if (!payload.document) return null;
+      const invoice = mapDocument(payload.document);
+      const payments = Array.isArray(payload.payments)
+        ? payload.payments.map(mapPayment)
+        : [];
+      const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
       return {
-        invoice: mapDocument(payload.document),
-        payments: Array.isArray(payload.payments)
-          ? payload.payments.map(mapPayment)
-          : [],
+        invoice,
+        payments,
         client: payload.client ? mapClient(payload.client) : null,
         orgSettings: mapOrgSettings(payload.organization?.settings),
         branding: payload.organization?.branding
           ? mapBranding(payload.organization.branding)
           : null,
+        outstandingBalance: moneyAmount(
+          payload.outstanding_balance,
+          Math.max(0, invoice.total - paid),
+        ),
+        paymentStatus:
+          parsePortalPaymentStatus(payload.payment_status) ??
+          (invoice.status === "paid"
+            ? "paid"
+            : invoice.status === "partially_paid"
+              ? "partially_paid"
+              : "unpaid"),
       };
     } catch {
       return null;
@@ -198,12 +242,23 @@ export async function getPortalInvoiceContext(
   );
   if (!doc) return null;
 
+  const invoice = withStatus(doc, store);
+  const payments = store.payments.filter((payment) => payment.documentId === doc.id);
+  const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
+
   return {
-    invoice: withStatus(doc, store),
-    payments: store.payments.filter((payment) => payment.documentId === doc.id),
+    invoice,
+    payments,
     client: store.clients.find((item) => item.id === doc.clientId) ?? null,
     orgSettings: store.orgSettings ?? DEFAULT_ORG_SETTINGS,
     branding: store.branding ?? null,
+    outstandingBalance: Math.max(0, Math.round((invoice.total - paid) * 100) / 100),
+    paymentStatus:
+      invoice.status === "paid"
+        ? "paid"
+        : invoice.status === "partially_paid"
+          ? "partially_paid"
+          : "unpaid",
   };
 }
 
@@ -246,22 +301,17 @@ export async function overdueInvoiceCount(): Promise<number> {
 export async function allocateDocumentNumber(
   kind: BusinessDocument["kind"],
 ): Promise<string> {
+  const year = new Date().getFullYear();
+  const prefix = kind === "invoice" ? "FAC" : kind === "quote" ? "DEV" : "AV";
+
+  // Laravel allocates a provisional BROUILLON-* number on create, then the
+  // definitive FAC/DEV/AV sequence on issue. Preview the same contract.
   if (isLaravelApiEnabled()) {
-    const year = new Date().getFullYear();
-    const prefix = kind === "invoice" ? "FAC" : kind === "quote" ? "DEV" : "AV";
-    const docs = await listDocuments(kind);
-    const max = docs.reduce((acc, r) => {
-      if (!r.number.startsWith(`${prefix}-${year}-`)) return acc;
-      const n = Number(r.number.split("-").pop());
-      return Number.isFinite(n) ? Math.max(acc, n) : acc;
-    }, 0);
-    return `${prefix}-${year}-${String(max + 1).padStart(3, "0")}`;
+    return `BROUILLON-${prefix}`;
   }
+
   await verifySession();
   const store = await tenantStore();
-  const year = new Date().getFullYear();
-  const prefix =
-    kind === "invoice" ? "FAC" : kind === "quote" ? "DEV" : "AV";
   const docs = store.documents.filter((d) => d.kind === kind);
   const max = docs.reduce((acc, r) => {
     if (!r.number.startsWith(`${prefix}-${year}-`)) return acc;

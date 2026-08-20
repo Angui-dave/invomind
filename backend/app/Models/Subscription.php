@@ -15,7 +15,6 @@ class Subscription extends Model
 
     protected $fillable = [
         'organization_id', 'plan_id', 'status',
-        'stripe_customer_id', 'stripe_subscription_id',
         'current_period_start', 'current_period_end',
     ];
 

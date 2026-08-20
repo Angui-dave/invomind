@@ -15,6 +15,7 @@ class OrganizationBranding extends Model
 
     protected $fillable = [
         'organization_id', 'display_name', 'logo_url', 'primary_color', 'accent_color',
+        'font_family', 'document_template', 'locale', 'currency',
     ];
 
     public function organization(): BelongsTo

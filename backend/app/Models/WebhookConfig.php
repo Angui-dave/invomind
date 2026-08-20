@@ -14,9 +14,14 @@ class WebhookConfig extends Model
 
     protected $fillable = ['organization_id', 'url', 'secret', 'enabled'];
 
+    protected $hidden = ['secret'];
+
     protected function casts(): array
     {
-        return ['enabled' => 'boolean'];
+        return [
+            'enabled' => 'boolean',
+            'secret' => 'encrypted',
+        ];
     }
 
     public function organization(): BelongsTo

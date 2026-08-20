@@ -2,6 +2,7 @@ import "server-only";
 import { cookies } from "next/headers";
 import { randomBytes } from "crypto";
 import {
+  ACCESS_TOKEN_COOKIE,
   decryptSession,
   encryptSession,
   SESSION_COOKIE,
@@ -11,13 +12,14 @@ import {
 import { MOCK_ORG_ID, MOCK_SESSION_ID, MOCK_USER_ID } from "@/lib/config";
 
 export {
+  ACCESS_TOKEN_COOKIE,
   decryptSession,
   encryptSession,
   SESSION_COOKIE,
   type SessionPayload,
 } from "@/lib/auth/crypto";
 
-/** No-op password helpers kept for Laravel parity */
+/** No-op password helpers kept for Laravel parity (mock mode only). */
 export async function hashPassword(password: string): Promise<string> {
   return `mock$${password}`;
 }
@@ -32,9 +34,19 @@ export async function verifyPassword(
   return password.length >= 8;
 }
 
+function cookieOptions(expiresAt: Date) {
+  return {
+    httpOnly: true as const,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    expires: expiresAt,
+    path: "/",
+  };
+}
+
 /**
- * Creates a signed session cookie without touching a database.
- * Ready to swap for Laravel Sanctum cookie/token later.
+ * Creates a signed session JWT cookie + optional Sanctum bearer cookie.
+ * The bearer is never embedded in the JWT (limits blast radius of SESSION_SECRET).
  */
 export async function createSession(
   userId: string = MOCK_USER_ID,
@@ -47,29 +59,36 @@ export async function createSession(
     sessionId: MOCK_SESSION_ID,
     userId,
     organizationId,
-    accessToken,
     role,
     expiresAt: expiresAt.toISOString(),
   });
 
   const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, jwt, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    expires: expiresAt,
-    path: "/",
-  });
+  const opts = cookieOptions(expiresAt);
+  cookieStore.set(SESSION_COOKIE, jwt, opts);
+
+  if (accessToken) {
+    cookieStore.set(ACCESS_TOKEN_COOKIE, accessToken, opts);
+  } else {
+    cookieStore.delete(ACCESS_TOKEN_COOKIE);
+  }
 }
 
 export async function deleteSession(): Promise<void> {
   const cookieStore = await cookies();
   cookieStore.delete(SESSION_COOKIE);
+  cookieStore.delete(ACCESS_TOKEN_COOKIE);
 }
 
 export async function readSessionCookie(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
-  return decryptSession(cookieStore.get(SESSION_COOKIE)?.value);
+  const payload = await decryptSession(cookieStore.get(SESSION_COOKIE)?.value);
+  if (!payload) return null;
+  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+  return {
+    ...payload,
+    ...(accessToken ? { accessToken } : {}),
+  };
 }
 
 export function slugifyOrgName(name: string): string {

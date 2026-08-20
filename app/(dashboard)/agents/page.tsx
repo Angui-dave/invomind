@@ -1,12 +1,13 @@
 import { assertAdminTenant } from "@/lib/rbac/guards";
-import { verifySession } from "@/lib/dal/session";
-import { getAgentService } from "@/lib/services/agent";
+import { listAgents, listPendingInvitations } from "@/lib/dal/agents";
 import { AgentsPageClient } from "./agents-client";
 
 export default async function AgentsPage() {
   await assertAdminTenant();
-  const session = await verifySession();
-  const agents = await getAgentService().listAgents(session.organizationId);
+  const [agents, invitations] = await Promise.all([
+    listAgents(),
+    listPendingInvitations(),
+  ]);
 
-  return <AgentsPageClient agents={agents} />;
+  return <AgentsPageClient agents={agents} invitations={invitations} />;
 }

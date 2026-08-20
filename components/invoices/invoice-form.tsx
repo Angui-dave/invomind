@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import { FileDown, FileMinus2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { CatalogPicker } from "@/components/documents/catalog-picker";
 import { ClientPicker } from "@/components/documents/client-picker";
@@ -24,7 +25,8 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { saveDocument } from "@/lib/actions/documents";
+import { saveDocument, sendDocument } from "@/lib/actions/documents";
+import { downloadPdfFromUrl } from "@/lib/pdf-download";
 import type { Client } from "@/lib/data/clients";
 import type { CatalogItem } from "@/lib/data/catalog";
 import type { OrgSettings } from "@/lib/data/settings";
@@ -33,10 +35,8 @@ import { addDays, todayIso } from "@/lib/date";
 import {
   DOCUMENT_KIND_LABELS,
   emptyLine,
-  nextDocumentNumber,
   PAYMENT_METHOD_LABELS,
   REMINDER_DEFAULTS,
-  yearFromIso,
   type BusinessDocument,
   type DocumentKind,
   type DocumentLine,
@@ -92,7 +92,9 @@ export function InvoiceForm({
   const kind = document?.kind ?? kindProp ?? "invoice";
   const orgCurrency = orgSettings.defaultCurrency;
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [clients, setClients] = useState(initialClients);
+  const frozen = Boolean(document?.frozen);
 
   const initialClientId = document?.clientId ?? clients[0]?.id ?? "";
   const initialClient = clients.find((c) => c.id === initialClientId);
@@ -169,7 +171,7 @@ export function InvoiceForm({
   const previewNumber =
     mode === "edit" && document?.number
       ? document.number
-      : nextDocumentNumber(kind, existingNumbers, yearFromIso(issueDate));
+      : `BROUILLON-${kind === "invoice" ? "FAC" : kind === "credit_note" ? "AV" : "DEV"}`;
 
   function applyCurrency(next: CurrencyCode) {
     setCurrency(next);
@@ -255,53 +257,65 @@ export function InvoiceForm({
     );
   }
 
-  async function handleSave() {
+  function validateForm(): boolean {
     if (!clientId) {
       toast.error("Choisissez un client");
-      return;
+      return false;
     }
     if (lines.every((line) => !line.description.trim())) {
       toast.error("Ajoutez au moins une ligne");
-      return;
+      return false;
     }
+    return true;
+  }
+
+  function documentInput() {
+    return {
+      kind,
+      clientId,
+      status: "draft" as const,
+      currency,
+      taxMode,
+      issueDate,
+      dueDate,
+      lines: lines
+        .filter((line) => line.description.trim())
+        .map((line) => ({
+          id:
+            line.id.startsWith("line_") || line.id.startsWith("tmp_")
+              ? undefined
+              : line.id,
+          description: line.description.trim(),
+          quantity: line.quantity,
+          unitPrice: line.unitPrice,
+          taxRate: line.taxRate,
+          catalogItemId: line.catalogItemId,
+          unit: line.unit,
+        })),
+      onlinePaymentEnabled: onlinePayment,
+      remindersEnabled:
+        kind === "invoice" &&
+        reminders.some((r) => r.state === "scheduled" || r.state === "sent"),
+      notes: document?.notes,
+      sourceDocumentId: document?.sourceDocumentId,
+      paymentMethod: document?.paymentMethod ?? null,
+    };
+  }
+
+  async function persistDraft() {
+    return saveDocument(
+      mode === "edit" ? (document?.id ?? null) : null,
+      documentInput(),
+    );
+  }
+
+  async function handleSave() {
+    if (frozen || !validateForm()) return;
 
     const label = DOCUMENT_KIND_LABELS[kind];
     setSaving(true);
     try {
-      const result = await saveDocument(
-        mode === "edit" ? (document?.id ?? null) : null,
-        {
-          kind,
-          clientId,
-          status: document?.status ?? "draft",
-          currency,
-          taxMode,
-          issueDate,
-          dueDate,
-          lines: lines
-            .filter((line) => line.description.trim())
-            .map((line) => ({
-              id:
-                line.id.startsWith("line_") || line.id.startsWith("tmp_")
-                  ? undefined
-                  : line.id,
-              description: line.description.trim(),
-              quantity: line.quantity,
-              unitPrice: line.unitPrice,
-              taxRate: line.taxRate,
-              catalogItemId: line.catalogItemId,
-              unit: line.unit,
-            })),
-          onlinePaymentEnabled: onlinePayment,
-          remindersEnabled:
-            kind === "invoice" &&
-            reminders.some((r) => r.state === "scheduled" || r.state === "sent"),
-          notes: document?.notes,
-          sourceDocumentId: document?.sourceDocumentId,
-          paymentMethod: document?.paymentMethod ?? null,
-        },
-      );
-
+      const result = await persistDraft();
       if (!result.ok) {
         toast.error(result.error);
         return;
@@ -317,6 +331,74 @@ export function InvoiceForm({
     }
   }
 
+  async function handleCreateAndSend() {
+    if (frozen || !validateForm()) return;
+
+    setSaving(true);
+    try {
+      const saved = await persistDraft();
+      if (!saved.ok) {
+        toast.error(saved.error);
+        return;
+      }
+      const id = saved.id ?? document?.id;
+      if (!id) return;
+
+      if (!client?.email?.trim()) {
+        toast.error("Le client n’a pas d’adresse e-mail.");
+        router.push(`/invoices/${id}`);
+        router.refresh();
+        return;
+      }
+
+      const sent = await sendDocument(id);
+      if (!sent.ok) {
+        toast.error(sent.error);
+        return;
+      }
+
+      toast.success(`${DOCUMENT_KIND_LABELS[kind]} émis(e) et envoyé(e)`);
+      router.push("/invoices");
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSendEmail() {
+    if (!document?.id) return;
+    if (!client?.email?.trim()) {
+      toast.error("Le client n’a pas d’adresse e-mail.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const sent = await sendDocument(document.id);
+      if (!sent.ok) {
+        toast.error(sent.error);
+        return;
+      }
+      toast.success("E-mail envoyé");
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!document?.id) return;
+    setDownloading(true);
+    try {
+      await downloadPdfFromUrl(`/api/documents/${document.id}/pdf`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Téléchargement impossible",
+      );
+    } finally {
+      setDownloading(false);
+    }
+  }
+
   const kindLabel = DOCUMENT_KIND_LABELS[kind];
 
   return (
@@ -329,9 +411,11 @@ export function InvoiceForm({
               : `${kindLabel} ${document?.number}`}
           </h1>
           <p className="mt-1 text-sm text-ink/60">
-            {mode === "new"
-              ? "Remplissez les lignes : l’aperçu et la TVA se mettent à jour en direct."
-              : "Modifiez les détails, la TVA, les relances et le paiement."}
+            {frozen
+              ? "Pièce émise : les champs sont figés. Téléchargez le PDF ou créez un avoir pour corriger."
+              : mode === "new"
+                ? "Remplissez les lignes : l’aperçu et la TVA se mettent à jour en direct."
+                : "Modifiez les détails, la TVA, les relances et le paiement."}
           </p>
         </div>
         {mode === "edit" && document && (
@@ -347,7 +431,10 @@ export function InvoiceForm({
       </header>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-6">
+        <fieldset
+          disabled={frozen}
+          className={`space-y-6 ${frozen ? "pointer-events-none opacity-60" : ""}`}
+        >
           <section className="grid gap-3 rounded-2xl border border-line bg-card p-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Client</Label>
@@ -426,7 +513,7 @@ export function InvoiceForm({
               />
             </section>
           )}
-        </div>
+        </fieldset>
 
         <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <DocumentPreview
@@ -461,6 +548,7 @@ export function InvoiceForm({
                   <Switch
                     checked={onlinePayment}
                     onCheckedChange={setOnlinePayment}
+                    disabled={frozen}
                     aria-label="Activer le paiement en ligne"
                   />
                 </div>
@@ -537,18 +625,67 @@ export function InvoiceForm({
           )}
 
           <div className="flex flex-wrap gap-2">
-            <Button
-              type="button"
-              className="bg-ledger text-paper hover:bg-ledger/90"
-              disabled={saving}
-              onClick={() => void handleSave()}
-            >
-              {saving
-                ? "Enregistrement…"
-                : mode === "new"
-                  ? `Créer le ${kindLabel.toLowerCase()}`
-                  : "Enregistrer"}
-            </Button>
+            {!frozen ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void handleSave()}
+                >
+                  {saving
+                    ? "Enregistrement…"
+                    : mode === "new"
+                      ? `Enregistrer le brouillon`
+                      : "Enregistrer"}
+                </Button>
+                <Button
+                  type="button"
+                  className="bg-ledger text-paper hover:bg-ledger/90"
+                  disabled={saving}
+                  onClick={() => void handleCreateAndSend()}
+                >
+                  {saving
+                    ? "Envoi…"
+                    : mode === "new"
+                      ? "Créer et envoyer"
+                      : "Émettre et envoyer"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  className="bg-ledger text-paper hover:bg-ledger/90"
+                  disabled={downloading}
+                  onClick={() => void handleDownloadPdf()}
+                >
+                  <FileDown />
+                  {downloading ? "Préparation du PDF…" : "Télécharger le PDF"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={saving}
+                  onClick={() => void handleSendEmail()}
+                >
+                  <Mail />
+                  {saving ? "Envoi…" : "Envoyer par e-mail"}
+                </Button>
+                {kind === "invoice" && document ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      router.push(`/invoices/new?creditOf=${document.id}`)
+                    }
+                  >
+                    <FileMinus2 />
+                    Créer un avoir
+                  </Button>
+                ) : null}
+              </>
+            )}
             <Button
               type="button"
               variant="outline"

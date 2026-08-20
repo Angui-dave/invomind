@@ -1,15 +1,18 @@
 import {
   boolean,
   integer,
+  jsonb,
   numeric,
   pgEnum,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   uniqueIndex,
+  index,
   uuid,
 } from "drizzle-orm/pg-core";
-import { organizations } from "./platform";
+import { organizations, users } from "./platform";
 import { portalTokenPolicy, tenantPolicy } from "./helpers";
 
 export const documentKindEnum = pgEnum("document_kind", [
@@ -99,6 +102,15 @@ export const documents = pgTable(
     portalToken: text("portal_token").notNull(),
     sourceDocumentId: uuid("source_document_id"),
     notes: text("notes"),
+    issuedAt: timestamp("issued_at", { withTimezone: true }),
+    issuedByUserId: uuid("issued_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    frozen: boolean("frozen").notNull().default(false),
+    pdfDiskPath: text("pdf_disk_path"),
+    pdfSha256: text("pdf_sha256"),
+    snapshotJson: jsonb("snapshot_json"),
+    fiscalYear: integer("fiscal_year"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -111,6 +123,31 @@ export const documents = pgTable(
     portalTokenPolicy(t.portalToken),
     uniqueIndex("documents_org_number_idx").on(t.organizationId, t.number),
     uniqueIndex("documents_portal_token_idx").on(t.portalToken),
+    uniqueIndex("documents_org_kind_year_number_idx").on(
+      t.organizationId,
+      t.kind,
+      t.fiscalYear,
+      t.number,
+    ),
+  ],
+).enableRLS();
+
+export const documentSequences = pgTable(
+  "document_sequences",
+  {
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    kind: documentKindEnum("kind").notNull(),
+    year: integer("year").notNull(),
+    lastNumber: integer("last_number").notNull().default(0),
+  },
+  (t) => [
+    tenantPolicy(t.organizationId),
+    primaryKey({
+      columns: [t.organizationId, t.kind, t.year],
+      name: "document_sequences_pk",
+    }),
   ],
 ).enableRLS();
 
@@ -152,8 +189,50 @@ export const documentReminders = pgTable(
     milestone: text("milestone").notNull(),
     state: text("state").notNull(),
     date: text("date").notNull(),
+    scheduledFor: timestamp("scheduled_for", { withTimezone: true }),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    outboundDeliveryId: uuid("outbound_delivery_id"),
   },
-  (t) => [tenantPolicy(t.organizationId)],
+  (t) => [
+    tenantPolicy(t.organizationId),
+    uniqueIndex("document_reminders_document_milestone_idx").on(
+      t.documentId,
+      t.milestone,
+    ),
+  ],
+).enableRLS();
+
+export const outboundDeliveries = pgTable(
+  "outbound_deliveries",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "cascade" }),
+    channel: text("channel").notNull(),
+    event: text("event").notNull(),
+    toAddress: text("to_address").notNull(),
+    subject: text("subject"),
+    status: text("status").notNull().default("queued"),
+    providerMessageId: text("provider_message_id"),
+    error: text("error"),
+    payloadJson: jsonb("payload_json"),
+    sentAt: timestamp("sent_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    tenantPolicy(t.organizationId),
+    index("outbound_deliveries_org_doc_event_idx").on(
+      t.organizationId,
+      t.documentId,
+      t.event,
+    ),
+  ],
 ).enableRLS();
 
 export const payments = pgTable(
@@ -177,11 +256,49 @@ export const payments = pgTable(
     paidAt: text("paid_at").notNull(),
     reference: text("reference"),
     notes: text("notes"),
+    paymentIntentId: uuid("payment_intent_id"),
+    provider: text("provider"),
+    providerTransactionId: text("provider_transaction_id"),
+    source: text("source").notNull().default("manual"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
   },
   (t) => [tenantPolicy(t.organizationId)],
+).enableRLS();
+
+export const paymentIntents = pgTable(
+  "payment_intents",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organizations.id, { onDelete: "cascade" }),
+    documentId: uuid("document_id")
+      .notNull()
+      .references(() => documents.id, { onDelete: "restrict" }),
+    amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
+    currency: text("currency").notNull().default("XOF"),
+    provider: text("provider").notNull().default("cinetpay"),
+    providerTransactionId: text("provider_transaction_id").unique(),
+    checkoutUrl: text("checkout_url"),
+    status: text("status").notNull().default("pending"),
+    methodHint: text("method_hint"),
+    customerPhone: text("customer_phone"),
+    idempotencyKey: text("idempotency_key").notNull().unique(),
+    rawPayload: jsonb("raw_payload"),
+    paidAt: timestamp("paid_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    tenantPolicy(t.organizationId),
+    index("payment_intents_document_status_idx").on(t.documentId, t.status),
+  ],
 ).enableRLS();
 
 export const expenseCategories = pgTable(

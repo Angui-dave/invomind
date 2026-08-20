@@ -4,8 +4,13 @@ import { getCurrentOrganization } from "@/lib/dal/session";
 import { getBillingHistory } from "@/lib/dal/settings";
 import { PRICING_PLANS } from "@/lib/data/settings";
 
-export default async function BillingPage() {
+type BillingPageProps = {
+  searchParams: Promise<{ paid?: string }>;
+};
+
+export default async function BillingPage({ searchParams }: BillingPageProps) {
   await assertAdminTenant();
+  const params = await searchParams;
   const [{ plan }, billingHistory] = await Promise.all([
     getCurrentOrganization(),
     getBillingHistory(),
@@ -23,10 +28,19 @@ export default async function BillingPage() {
   };
 
   return (
-    <BillingPlans
-      currentPlan={currentPlan}
-      plans={PRICING_PLANS}
-      billingHistory={billingHistory}
-    />
+    <div className="space-y-4">
+      {params.paid === "1" ? (
+        <p className="rounded-xl border border-brass/35 bg-brass/10 px-3 py-2 text-sm text-brass">
+          Paiement reçu. Votre plan sera mis à jour dès confirmation CinetPay
+          (quelques secondes). Rechargez la page si le plan n’a pas encore
+          changé.
+        </p>
+      ) : null}
+      <BillingPlans
+        currentPlan={currentPlan}
+        plans={PRICING_PLANS}
+        billingHistory={billingHistory}
+      />
+    </div>
   );
 }

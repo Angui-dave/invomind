@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { decryptSession, SESSION_COOKIE } from "@/lib/auth/crypto";
+import {
+  ACCESS_TOKEN_COOKIE,
+  decryptSession,
+  SESSION_COOKIE,
+} from "@/lib/auth/crypto";
 
 const protectedPrefixes = [
   "/dashboard",
@@ -15,18 +19,24 @@ const protectedPrefixes = [
   "/conversations",
   "/settings",
   "/billing",
+  "/agents",
 ];
 
-const authRoutes = ["/login", "/register"];
+const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
+
+function homeForRole(role: string | undefined): string {
+  return role === "member" ? "/clients" : "/dashboard";
+}
 
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
-  
+
   // Intercept logout/clear_session first
   const clearSession = req.nextUrl.searchParams.get("clear_session");
   if (clearSession === "1") {
     const res = NextResponse.redirect(new URL("/login", req.nextUrl));
     res.cookies.delete(SESSION_COOKIE);
+    res.cookies.delete(ACCESS_TOKEN_COOKIE);
     return res;
   }
 
@@ -48,7 +58,9 @@ export default async function proxy(req: NextRequest) {
   }
 
   if (isAuthRoute && isLoggedIn) {
-    return NextResponse.redirect(new URL("/dashboard", req.nextUrl));
+    return NextResponse.redirect(
+      new URL(homeForRole(session?.role), req.nextUrl),
+    );
   }
 
   return NextResponse.next();

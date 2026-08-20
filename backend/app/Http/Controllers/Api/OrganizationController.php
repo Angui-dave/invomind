@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Settings\BankingSettingsRequest;
 use App\Http\Requests\Settings\CompanySettingsRequest;
 use App\Http\Requests\Settings\TaxSettingsRequest;
+use App\Http\Resources\OrganizationResource;
 use App\Models\Organization;
 use App\Models\OrganizationBranding;
 use App\Models\OrganizationFeatures;
@@ -16,12 +17,18 @@ use Illuminate\Http\Request;
 
 class OrganizationController extends Controller
 {
-    public function show(Request $request): JsonResponse
+    public function show(Request $request): OrganizationResource
     {
-        $org = Organization::with(['settings', 'branding', 'features', 'plan', 'subscription'])
-            ->findOrFail($this->orgId($request));
+        $org = Organization::with([
+            'settings',
+            'branding',
+            'features',
+            'plan',
+            'subscription',
+            'subscriptionInvoices',
+        ])->findOrFail($this->orgId($request));
 
-        return response()->json($org);
+        return new OrganizationResource($org);
     }
 
     public function entitlements(Request $request, EntitlementService $service): JsonResponse
@@ -83,10 +90,20 @@ class OrganizationController extends Controller
     {
         $data = $request->validate([
             'display_name' => ['nullable', 'string'],
-            'logo_url' => ['nullable', 'string'],
-            'primary_color' => ['sometimes', 'string'],
-            'accent_color' => ['sometimes', 'string'],
+            'primary_color' => ['sometimes', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'accent_color' => ['sometimes', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
+            'logo_url' => ['nullable', 'string', 'url'],
+            'font_family' => ['sometimes', 'string', 'max:100'],
+            'document_template' => ['sometimes', 'in:classic,modern,minimal'],
+            'locale' => ['sometimes', 'string', 'max:16'],
+            'currency' => ['sometimes', 'string', 'size:3'],
         ]);
+
+        if (! empty($data['logo_url']) && ! \App\Support\SafeOutboundUrl::isAllowed($data['logo_url'])) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'logo_url' => ['Le logo doit être une URL HTTPS vers un hôte public.'],
+            ]);
+        }
 
         $branding = OrganizationBranding::findOrFail($this->orgId($request));
         $branding->update($data);

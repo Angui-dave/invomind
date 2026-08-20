@@ -35,13 +35,14 @@ export async function getMessages(
   const session = await verifySession();
   if (isLaravelApiEnabled()) {
     const token = (await readSessionCookie())?.accessToken;
-    const rows = await laravelRequest<unknown[]>("/conversations/messages", {
+    const qs = conversationId
+      ? `/conversations/messages?conversation_id=${encodeURIComponent(conversationId)}`
+      : "/conversations/messages";
+    const rows = await laravelRequest<unknown[]>(qs, {
       token,
       organizationId: session.organizationId,
     });
-    const mapped = rows.map(mapConversationMessage);
-    if (!conversationId) return mapped;
-    return mapped.filter((m) => m.conversationId === conversationId);
+    return rows.map(mapConversationMessage);
   }
   const store = await tenantStore();
   const msgs = store.messages;

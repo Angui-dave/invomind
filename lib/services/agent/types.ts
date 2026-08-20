@@ -27,6 +27,13 @@ export type InviteAgentInput = {
   name: string;
 };
 
+export type InvitationDto = {
+  id: string;
+  email: string;
+  role: "admin" | "member";
+  expiresAt: string;
+};
+
 export interface IAgentService {
   listAgents(tenantId: string): Promise<AgentDto[]>;
   getAgent(tenantId: string, agentId: string): Promise<AgentDto | null>;

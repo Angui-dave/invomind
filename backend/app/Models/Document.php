@@ -10,9 +10,10 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Document extends Model
 {
-    use HasUuids, BelongsToOrganization;
+    use BelongsToOrganization, HasUuids;
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = [
@@ -21,7 +22,11 @@ class Document extends Model
         'total', 'subtotal_ht', 'tax_total', 'online_payment_enabled',
         'paid_online_at', 'payment_method', 'reminders_enabled',
         'portal_token', 'source_document_id', 'notes',
+        'issued_at', 'issued_by_user_id', 'frozen',
+        'pdf_disk_path', 'pdf_sha256', 'snapshot_json', 'fiscal_year',
     ];
+
+    protected $appends = ['pdf_ready'];
 
     protected function casts(): array
     {
@@ -31,12 +36,36 @@ class Document extends Model
             'tax_total' => 'decimal:2',
             'online_payment_enabled' => 'boolean',
             'reminders_enabled' => 'boolean',
+            'frozen' => 'boolean',
+            'issued_at' => 'datetime',
+            'snapshot_json' => 'array',
+            'fiscal_year' => 'integer',
         ];
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
+    }
+
+    public function isFrozen(): bool
+    {
+        return (bool) $this->frozen;
+    }
+
+    public function getPdfReadyAttribute(): bool
+    {
+        return filled($this->pdf_sha256);
     }
 
     public function client(): BelongsTo
     {
         return $this->belongsTo(Client::class);
+    }
+
+    public function issuedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'issued_by_user_id');
     }
 
     public function lines(): HasMany
@@ -49,9 +78,19 @@ class Document extends Model
         return $this->hasMany(DocumentReminder::class);
     }
 
+    public function outboundDeliveries(): HasMany
+    {
+        return $this->hasMany(OutboundDelivery::class);
+    }
+
     public function payments(): HasMany
     {
         return $this->hasMany(Payment::class);
+    }
+
+    public function paymentIntents(): HasMany
+    {
+        return $this->hasMany(PaymentIntent::class);
     }
 
     public function sourceDocument(): BelongsTo

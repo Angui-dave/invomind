@@ -4,48 +4,64 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ConversationSendRequest;
+use App\Http\Resources\ConversationResource;
 use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\InboundMessage;
+use App\Services\EntitlementService;
 use App\Services\WebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ConversationController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection
     {
+        $entitlements->assertModule($this->orgId($request), 'conversations');
+
         $conversations = Conversation::where('organization_id', $this->orgId($request))
             ->orderBy('last_message_at', 'desc')
             ->get();
 
-        return response()->json($conversations);
+        return ConversationResource::collection($conversations);
     }
 
-    public function messages(Request $request): JsonResponse
+    public function messages(Request $request, EntitlementService $entitlements): JsonResponse
     {
-        $messages = ConversationMessage::where('organization_id', $this->orgId($request))
-            ->orderBy('sent_at')
-            ->get();
+        $entitlements->assertModule($this->orgId($request), 'conversations');
+
+        $query = ConversationMessage::where('organization_id', $this->orgId($request));
+
+        if ($request->filled('conversation_id')) {
+            $query->where('conversation_id', $request->query('conversation_id'));
+        }
+
+        $messages = $query->orderBy('sent_at')->get();
 
         return response()->json($messages);
     }
 
-    public function send(ConversationSendRequest $request, WebhookService $webhook): JsonResponse
+    public function send(ConversationSendRequest $request, WebhookService $webhook, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'conversations');
+
         $data = $request->validated();
         $orgId = $this->orgId($request);
 
+        $conversation = Conversation::where('organization_id', $orgId)
+            ->findOrFail($data['conversation_id']);
+
         $message = ConversationMessage::create([
             'organization_id' => $orgId,
-            'conversation_id' => $data['conversation_id'],
+            'conversation_id' => $conversation->id,
             'direction' => 'outbound',
             'body' => $data['body'],
             'status' => 'pending',
         ]);
 
         $result = $webhook->send($orgId, [
-            'conversationId' => $data['conversation_id'],
+            'conversationId' => $conversation->id,
             'channel' => $data['channel'],
             'to' => $data['to'],
             'body' => $data['body'],
@@ -54,8 +70,7 @@ class ConversationController extends Controller
 
         $message->update(['status' => $result['status'] === 'success' ? 'sent' : $result['status']]);
 
-        Conversation::where('id', $data['conversation_id'])
-            ->update(['last_message_at' => now()]);
+        $conversation->update(['last_message_at' => now()]);
 
         return response()->json([
             'message' => $message,
@@ -63,8 +78,10 @@ class ConversationController extends Controller
         ]);
     }
 
-    public function inbox(Request $request): JsonResponse
+    public function inbox(Request $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'conversations');
+
         $since = $request->query('since');
         $orgId = $this->orgId($request);
 

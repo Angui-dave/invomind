@@ -70,7 +70,7 @@ async function main() {
         pipeline: true,
         conversations: true,
         reports: true,
-        stripePriceId: process.env.STRIPE_PRICE_PRO ?? null,
+        stripePriceId: null,
       },
     ])
     .onConflictDoNothing();
@@ -157,7 +157,8 @@ async function main() {
   await db.insert(schema.emailTemplates).values(
     DEFAULT_EMAIL_TEMPLATES.map((t) => ({
       organizationId: org.id,
-      milestone: t.milestone,
+      channel: "email",
+      event: `reminder_${t.milestone}`,
       label: t.label,
       subject: t.subject,
       body: t.body,

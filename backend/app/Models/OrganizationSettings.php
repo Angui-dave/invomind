@@ -8,9 +8,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class OrganizationSettings extends Model
 {
     protected $table = 'organization_settings';
+
     protected $primaryKey = 'organization_id';
+
     protected $keyType = 'string';
+
     public $incrementing = false;
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -19,7 +23,12 @@ class OrganizationSettings extends Model
         'default_tax_rate', 'bank_name', 'iban', 'bic', 'qr_iban', 'twint_number',
         'mobile_money_provider', 'mobile_money_number', 'legal_mentions',
         'reminders_enabled', 'reminder_cadence', 'payment_connected',
-        'accepted_payment_methods',
+        'accepted_payment_methods', 'psp_provider', 'psp_site_id',
+        'psp_api_key', 'psp_environment',
+    ];
+
+    protected $hidden = [
+        'psp_api_key',
     ];
 
     protected function casts(): array
@@ -29,6 +38,7 @@ class OrganizationSettings extends Model
             'accepted_payment_methods' => 'array',
             'reminders_enabled' => 'boolean',
             'payment_connected' => 'boolean',
+            'psp_api_key' => 'encrypted',
         ];
     }
 

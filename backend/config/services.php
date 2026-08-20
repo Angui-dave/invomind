@@ -45,9 +45,21 @@ return [
         'client_secret' => env('TIKTOK_CLIENT_SECRET'),
     ],
 
-    'stripe' => [
-        'secret' => env('STRIPE_SECRET_KEY'),
-        'webhook_secret' => env('STRIPE_WEBHOOK_SECRET'),
+    'cinetpay' => [
+        'site_id' => env('CINETPAY_SITE_ID'),
+        'api_key' => env('CINETPAY_API_KEY'),
+        'secret_key' => env('CINETPAY_SECRET_KEY'),
+        'notify_url' => env('CINETPAY_NOTIFY_URL'),
+        'return_url' => env('CINETPAY_RETURN_URL'),
+        'env' => env('CINETPAY_ENV', 'sandbox'),
+    ],
+
+    'psp' => [
+        'driver' => env('PSP_DRIVER', 'cinetpay'),
+    ],
+
+    'frontend' => [
+        'url' => env('FRONTEND_URL', 'http://localhost:3000'),
     ],
 
 ];

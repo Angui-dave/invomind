@@ -4,6 +4,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { organizations } from "./platform";
@@ -44,6 +45,10 @@ export const organizationSettings = pgTable(
       .array()
       .notNull()
       .default(["card", "mobile_money", "transfer"]),
+    pspProvider: text("psp_provider"),
+    pspSiteId: text("psp_site_id"),
+    pspApiKey: text("psp_api_key"),
+    pspEnvironment: text("psp_environment").default("sandbox"),
     updatedAt: timestamp("updated_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -94,7 +99,8 @@ export const emailTemplates = pgTable(
     organizationId: uuid("organization_id")
       .notNull()
       .references(() => organizations.id, { onDelete: "cascade" }),
-    milestone: text("milestone").notNull(),
+    channel: text("channel").notNull().default("email"),
+    event: text("event").notNull(),
     label: text("label").notNull(),
     subject: text("subject").notNull(),
     body: text("body").notNull(),
@@ -102,5 +108,12 @@ export const emailTemplates = pgTable(
       .notNull()
       .defaultNow(),
   },
-  (t) => [tenantPolicy(t.organizationId)],
+  (t) => [
+    tenantPolicy(t.organizationId),
+    uniqueIndex("email_templates_org_channel_event_idx").on(
+      t.organizationId,
+      t.channel,
+      t.event,
+    ),
+  ],
 ).enableRLS();

@@ -14,7 +14,20 @@ class Membership extends Model
     public $incrementing = false;
     public $timestamps = false;
 
-    protected $fillable = ['organization_id', 'user_id', 'role'];
+    protected $fillable = ['organization_id', 'user_id', 'role', 'disabled_at'];
+
+    protected function casts(): array
+    {
+        return [
+            'disabled_at' => 'datetime',
+            'created_at' => 'datetime',
+        ];
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
+    }
 
     public function user(): BelongsTo
     {

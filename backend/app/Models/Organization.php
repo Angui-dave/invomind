@@ -13,6 +13,7 @@ class Organization extends Model
     use HasUuids;
 
     protected $keyType = 'string';
+
     public $incrementing = false;
 
     protected $fillable = ['name', 'slug', 'plan_id'];
@@ -30,6 +31,11 @@ class Organization extends Model
     public function subscription(): HasOne
     {
         return $this->hasOne(Subscription::class);
+    }
+
+    public function subscriptionInvoices(): HasMany
+    {
+        return $this->hasMany(SubscriptionInvoice::class)->orderByDesc('date');
     }
 
     public function settings(): HasOne
@@ -97,8 +103,18 @@ class Organization extends Model
         return $this->hasMany(Conversation::class);
     }
 
+    public function invitations(): HasMany
+    {
+        return $this->hasMany(OrganizationInvitation::class);
+    }
+
     public function emailTemplates(): HasMany
     {
         return $this->hasMany(EmailTemplate::class);
+    }
+
+    public function outboundDeliveries(): HasMany
+    {
+        return $this->hasMany(OutboundDelivery::class);
     }
 }

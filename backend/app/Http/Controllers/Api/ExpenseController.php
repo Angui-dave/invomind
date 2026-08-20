@@ -4,26 +4,33 @@ namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ExpenseRequest;
+use App\Http\Resources\ExpenseResource;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\Supplier;
+use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ExpenseController extends Controller
 {
-    public function index(Request $request): JsonResponse
+    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection
     {
+        $entitlements->assertModule($this->orgId($request), 'expenses');
+
         $expenses = Expense::where('organization_id', $this->orgId($request))
             ->with(['category', 'supplier'])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        return response()->json($expenses);
+        return ExpenseResource::collection($expenses);
     }
 
-    public function store(ExpenseRequest $request): JsonResponse
+    public function store(ExpenseRequest $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'expenses');
+
         $data = $request->validated();
         $orgId = $this->orgId($request);
 
@@ -46,11 +53,15 @@ class ExpenseController extends Controller
             'tax_amount' => $taxAmount,
         ]);
 
-        return response()->json($expense->load(['category', 'supplier']), 201);
+        return (new ExpenseResource($expense->load(['category', 'supplier'])))
+            ->response()
+            ->setStatusCode(201);
     }
 
-    public function update(ExpenseRequest $request, string $id): JsonResponse
+    public function update(ExpenseRequest $request, string $id, EntitlementService $entitlements): ExpenseResource
     {
+        $entitlements->assertModule($this->orgId($request), 'expenses');
+
         $data = $request->validated();
         $orgId = $this->orgId($request);
 
@@ -74,11 +85,13 @@ class ExpenseController extends Controller
             'tax_amount' => $taxAmount,
         ]);
 
-        return response()->json($expense->load(['category', 'supplier']));
+        return new ExpenseResource($expense->fresh()->load(['category', 'supplier']));
     }
 
-    public function categories(Request $request): JsonResponse
+    public function categories(Request $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'expenses');
+
         $categories = ExpenseCategory::where('organization_id', $this->orgId($request))->get();
 
         return response()->json($categories);

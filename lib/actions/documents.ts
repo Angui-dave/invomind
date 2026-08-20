@@ -67,7 +67,7 @@ export async function saveDocument(
       const payload = {
         kind: data.kind,
         client_id: data.clientId,
-        status: data.status,
+        status: "draft",
         currency: data.currency,
         tax_mode: data.taxMode,
         issue_date: data.issueDate,
@@ -209,5 +209,99 @@ export async function saveDocument(
     revalidatePath(`/invoices/${id}`);
     revalidatePath(`/quotes/${id}`);
   }
+  return { ok: true, id };
+}
+
+export async function issueDocument(id: string): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/documents/${id}/issue`, {
+        method: "POST",
+        token,
+        organizationId,
+      });
+      revalidateDocumentPaths(id);
+      return { ok: true, id };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Émission impossible") };
+    }
+  }
+  return mockIssueDocument(id);
+}
+
+export async function sendDocument(id: string): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/documents/${id}/send`, {
+        method: "POST",
+        token,
+        organizationId,
+      });
+      revalidateDocumentPaths(id);
+      return { ok: true, id };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Envoi impossible") };
+    }
+  }
+  return mockIssueDocument(id);
+}
+
+export async function updateQuoteStatus(
+  id: string,
+  status: "accepted" | "refused" | "expired",
+): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/documents/${id}/status`, {
+        method: "PUT",
+        token,
+        organizationId,
+        body: { status },
+      });
+      revalidateDocumentPaths(id);
+      return { ok: true, id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Mise à jour du devis impossible"),
+      };
+    }
+  }
+
+  await verifySession();
+  const store = await tenantStore();
+  const idx = store.documents.findIndex((d) => d.id === id && d.kind === "quote");
+  if (idx < 0) return { ok: false, error: "Devis introuvable" };
+  const doc = store.documents[idx];
+  if (!["sent", "accepted", "refused", "expired"].includes(doc.status)) {
+    return { ok: false, error: "Le devis doit être émis avant de changer de statut" };
+  }
+  store.documents[idx] = { ...doc, status };
+  revalidateDocumentPaths(id);
+  return { ok: true, id };
+}
+
+function revalidateDocumentPaths(id: string) {
+  revalidatePath("/invoices");
+  revalidatePath("/quotes");
+  revalidatePath("/dashboard");
+  revalidatePath(`/invoices/${id}`);
+  revalidatePath(`/quotes/${id}`);
+}
+
+async function mockIssueDocument(id: string): Promise<ActionResult> {
+  const store = await tenantStore();
+  const idx = store.documents.findIndex((d) => d.id === id);
+  if (idx < 0) return { ok: false, error: "Document introuvable" };
+  const doc = store.documents[idx];
+  store.documents[idx] = {
+    ...doc,
+    status: (doc.kind === "credit_note" ? "issued" : "sent") as BusinessDocument["status"],
+    frozen: true,
+  };
+  revalidateDocumentPaths(id);
   return { ok: true, id };
 }

@@ -7,7 +7,7 @@ const PAYMENT_PARTNERS = [
   "Orange Money",
   "MTN",
   "Moov",
-  "Stripe",
+  "CinetPay",
 ] as const;
 
 export default function AuthLayout({ children }: { children: ReactNode }) {

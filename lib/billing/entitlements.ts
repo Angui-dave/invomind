@@ -1,4 +1,8 @@
 import "server-only";
+import { cache } from "react";
+import { readSessionCookie } from "@/lib/auth/session";
+import { isLaravelApiEnabled } from "@/lib/config";
+import { laravelRequest } from "@/lib/laravel/client";
 import { tenantStoreById } from "@/lib/mock/store";
 import { planById } from "@/lib/mock/central";
 import type { PlanId } from "@/lib/data/settings";
@@ -8,6 +12,9 @@ export type Entitlements = {
   planId: PlanId;
   maxInvoicesPerMonth: number | null;
   maxClients: number | null;
+  maxAgents: number | null;
+  agentsUsed: number;
+  canInviteAgent: boolean;
   autoReminders: boolean;
   onlinePayments: boolean;
   pipeline: boolean;
@@ -22,10 +29,65 @@ export type Entitlements = {
   canCreateClient: boolean;
 };
 
-export async function getEntitlements(
+type ApiEntitlementsResponse = {
+  plan_id?: PlanId;
+  can_create_invoice?: boolean;
+  invoices_used?: number;
+  invoices_limit?: number | null;
+  can_create_client?: boolean;
+  clients_used?: number;
+  clients_limit?: number | null;
+  max_agents?: number | null;
+  agents_used?: number;
+  can_invite_agent?: boolean;
+  auto_reminders?: boolean;
+  online_payments?: boolean;
+  pipeline?: boolean;
+  conversations?: boolean;
+  reports?: boolean;
+  expenses?: boolean;
+  catalog?: boolean;
+  import_tool?: boolean;
+};
+
+function mapApiEntitlements(row: ApiEntitlementsResponse): Entitlements {
+  return {
+    planId: (row.plan_id ?? "free") as PlanId,
+    maxInvoicesPerMonth: row.invoices_limit ?? null,
+    maxClients: row.clients_limit ?? null,
+    maxAgents: row.max_agents ?? null,
+    agentsUsed: Number(row.agents_used ?? 0),
+    canInviteAgent: Boolean(row.can_invite_agent),
+    autoReminders: Boolean(row.auto_reminders),
+    onlinePayments: Boolean(row.online_payments),
+    pipeline: Boolean(row.pipeline),
+    conversations: Boolean(row.conversations),
+    reports: Boolean(row.reports),
+    expenses: Boolean(row.expenses),
+    catalog: Boolean(row.catalog),
+    importTool: Boolean(row.import_tool),
+    invoicesThisMonth: Number(row.invoices_used ?? 0),
+    clientCount: Number(row.clients_used ?? 0),
+    canCreateInvoice: Boolean(row.can_create_invoice),
+    canCreateClient: Boolean(row.can_create_client),
+  };
+}
+
+const fetchLaravelEntitlements = cache(
+  async (organizationId: string): Promise<Entitlements> => {
+    const token = (await readSessionCookie())?.accessToken;
+    const row = await laravelRequest<ApiEntitlementsResponse>(
+      "/organization/entitlements",
+      { token, organizationId },
+    );
+    return mapApiEntitlements(row);
+  },
+);
+
+function mockEntitlements(
   organizationId: string,
   planId: PlanId,
-): Promise<Entitlements> {
+): Entitlements {
   const store = tenantStoreById(organizationId);
   const plan = planById(planId);
   const key = monthKey(todayIso());
@@ -38,6 +100,9 @@ export async function getEntitlements(
     planId,
     maxInvoicesPerMonth: plan.maxInvoicesPerMonth,
     maxClients: plan.maxClients,
+    maxAgents: planId === "free" ? 0 : planId === "pro" ? 3 : 10,
+    agentsUsed: 0,
+    canInviteAgent: planId !== "free",
     autoReminders: plan.autoReminders,
     onlinePayments: plan.onlinePayments,
     pipeline: plan.pipeline,
@@ -54,6 +119,16 @@ export async function getEntitlements(
     canCreateClient:
       plan.maxClients === null || clientCount < plan.maxClients,
   };
+}
+
+export async function getEntitlements(
+  organizationId: string,
+  planId: PlanId,
+): Promise<Entitlements> {
+  if (isLaravelApiEnabled()) {
+    return fetchLaravelEntitlements(organizationId);
+  }
+  return mockEntitlements(organizationId, planId);
 }
 
 export async function assertCanCreateInvoice(
@@ -90,6 +165,9 @@ export async function assertFeature(
     | "autoReminders"
     | "onlinePayments"
     | "importTool"
+    | "expenses"
+    | "catalog"
+    | "reports"
   >,
 ): Promise<void> {
   const e = await getEntitlements(organizationId, planId);

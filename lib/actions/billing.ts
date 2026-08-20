@@ -2,29 +2,75 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import {
   cancelTenantSubscription,
   setTenantPlan,
 } from "@/lib/mock/central";
-import { tenantStoreById } from "@/lib/mock/store";
 import type { PlanId } from "@/lib/data/settings";
-import { todayIso } from "@/lib/date";
 
 export type ActionResult =
   | { ok: true; url?: string; message?: string }
   | { ok: false; error: string };
 
-export async function createCheckoutSession(): Promise<ActionResult> {
-  await verifySession();
+const PlanSchema = z.enum(["free", "pro", "business"]);
+const PaidPlanSchema = z.enum(["pro", "business"]);
+
+/** Start a prepaid CinetPay checkout for Pro/Business. */
+export async function createCheckoutSession(
+  planId: PlanId,
+  customerPhone?: string,
+): Promise<ActionResult> {
+  const session = await verifySession();
+  if (session.role !== "owner" && session.role !== "admin") {
+    return { ok: false, error: "Action réservée aux administrateurs" };
+  }
+
+  const parsed = PaidPlanSchema.safeParse(planId);
+  if (!parsed.success) {
+    return { ok: false, error: "Seuls Pro et Business nécessitent un paiement CinetPay" };
+  }
+
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      const res = await laravelRequest<{
+        checkout_url?: string;
+        message?: string;
+      }>("/billing/checkout", {
+        method: "POST",
+        token,
+        organizationId,
+        body: {
+          plan_id: parsed.data,
+          ...(customerPhone ? { customer_phone: customerPhone } : {}),
+        },
+      });
+      if (!res.checkout_url) {
+        return { ok: false, error: "CinetPay n’a pas renvoyé d’URL de paiement" };
+      }
+      return { ok: true, url: res.checkout_url };
+    } catch (e) {
+      return {
+        ok: false,
+        error: actionErrorMessage(e, "Impossible de démarrer le paiement CinetPay"),
+      };
+    }
+  }
+
+  // Mock mode: activate immediately without PSP.
+  setTenantPlan(session.organizationId, parsed.data, "active");
+  revalidatePath("/billing");
+  revalidatePath("/dashboard");
   return {
-    ok: false,
-    error:
-      "Stripe n’est pas configuré. Utilisez le changement de plan manuel en développement, ou définissez STRIPE_SECRET_KEY.",
+    ok: true,
+    message: `Plan ${parsed.data} activé (mode démo)`,
   };
 }
-
-const PlanSchema = z.enum(["free", "pro", "business"]);
 
 export async function changePlan(planId: PlanId): Promise<ActionResult> {
   const session = await verifySession();
@@ -37,26 +83,36 @@ export async function changePlan(planId: PlanId): Promise<ActionResult> {
     return { ok: false, error: "Plan invalide" };
   }
 
-  const sub = setTenantPlan(session.organizationId, parsed.data, "active");
-  const store = tenantStoreById(session.organizationId);
-
+  // Paid plans must use CinetPay checkout.
   if (parsed.data !== "free") {
-    store.billingHistory.unshift({
-      id: `bill_${Date.now()}`,
-      date: todayIso(),
-      description: `Abonnement ${parsed.data} — activation`,
-      amount:
-        parsed.data === "pro"
-          ? 12_000
-          : parsed.data === "business"
-            ? 29_000
-            : 0,
-      currency: store.branding.currency,
-      status: "paid",
-    });
+    return createCheckoutSession(parsed.data);
   }
 
-  // Sync legacy user.plan field if present on demo-shaped data — no longer used
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      const res = await laravelRequest<{ message?: string }>("/billing/change-plan", {
+        method: "POST",
+        token,
+        organizationId,
+        body: { plan_id: parsed.data },
+      });
+      revalidatePath("/settings");
+      revalidatePath("/billing");
+      revalidatePath("/dashboard");
+      return {
+        ok: true,
+        message: res.message ?? `Organisation passée au plan ${parsed.data}`,
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        error: actionErrorMessage(e, "Impossible de changer de plan"),
+      };
+    }
+  }
+
+  const sub = setTenantPlan(session.organizationId, parsed.data, "active");
   void sub;
 
   revalidatePath("/settings");
@@ -68,15 +124,38 @@ export async function changePlan(planId: PlanId): Promise<ActionResult> {
   };
 }
 
-/** @deprecated Prefer changePlan("pro") */
+/** @deprecated Prefer changePlan("pro") or createCheckoutSession */
 export async function upgradeToProManual(): Promise<ActionResult> {
-  return changePlan("pro");
+  return createCheckoutSession("pro");
 }
 
 export async function cancelSubscription(): Promise<ActionResult> {
   const session = await verifySession();
   if (session.role !== "owner" && session.role !== "admin") {
     return { ok: false, error: "Action réservée aux administrateurs" };
+  }
+
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      const res = await laravelRequest<{ message?: string }>("/billing/cancel", {
+        method: "POST",
+        token,
+        organizationId,
+      });
+      revalidatePath("/settings");
+      revalidatePath("/billing");
+      revalidatePath("/dashboard");
+      return {
+        ok: true,
+        message: res.message ?? "Abonnement annulé — retour au plan Gratuit",
+      };
+    } catch (e) {
+      return {
+        ok: false,
+        error: actionErrorMessage(e, "Impossible d’annuler l’abonnement"),
+      };
+    }
   }
 
   cancelTenantSubscription(session.organizationId);

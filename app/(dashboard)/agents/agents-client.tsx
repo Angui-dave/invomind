@@ -22,49 +22,57 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  createAgent,
   disableAgent,
   enableAgent,
+  inviteAgent,
 } from "@/lib/actions/agents";
+import type { InvitationDto } from "@/lib/services/agent";
 import type { AgentDto } from "@/lib/services/agent";
 
 type AgentsPageClientProps = {
   agents: AgentDto[];
+  invitations: InvitationDto[];
 };
 
-export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProps) {
+export function AgentsPageClient({
+  agents: initialAgents,
+  invitations: initialInvitations,
+}: AgentsPageClientProps) {
   const [agents, setAgents] = useState<AgentDto[]>(initialAgents);
+  const [invitations, setInvitations] = useState<InvitationDto[]>(initialInvitations);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [pending, setPending] = useState(false);
 
-  async function handleCreate() {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      toast.error("Tous les champs sont requis");
+  async function handleInvite() {
+    if (!email.trim()) {
+      toast.error("Indiquez l’e-mail du collègue");
       return;
     }
-    const result = await createAgent({ name, email, password });
+    setPending(true);
+    const result = await inviteAgent({ email: email.trim() });
+    setPending(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    setAgents((prev) => [
-      ...prev,
-      {
-        id: result.id!,
-        name,
-        email,
-        role: "member",
-        status: "active",
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    setInvitations((prev) => {
+      if (prev.some((item) => item.email === email.trim().toLowerCase())) {
+        return prev;
+      }
+      return [
+        {
+          id: result.id ?? `inv_${Date.now()}`,
+          email: email.trim().toLowerCase(),
+          role: "member",
+          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        },
+        ...prev,
+      ];
+    });
     setDialogOpen(false);
-    setName("");
     setEmail("");
-    setPassword("");
-    toast.success("Agent créé avec succès");
+    toast.success("Invitation envoyée par e-mail");
   }
 
   async function handleToggleStatus(agent: AgentDto) {
@@ -99,7 +107,8 @@ export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProp
             Gestion des agents
           </h1>
           <p className="mt-1 text-sm text-ink/60">
-            Invitez et gérez les sous-utilisateurs de votre organisation
+            Invitez vos collègues par e-mail. Ils définissent leur propre mot de
+            passe.
           </p>
         </div>
         <Button
@@ -108,9 +117,35 @@ export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProp
           onClick={() => setDialogOpen(true)}
         >
           <Plus className="size-4" aria-hidden />
-          Ajouter un agent
+          Inviter un agent
         </Button>
       </div>
+
+      {invitations.length > 0 && (
+        <div className="overflow-hidden rounded-2xl border border-line bg-card">
+          <p className="border-b border-line px-4 py-3 text-sm font-medium text-ink">
+            Invitations en attente
+          </p>
+          <Table>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>E-mail</TableHead>
+                <TableHead>Rôle</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invitations.map((invitation) => (
+                <TableRow key={invitation.id}>
+                  <TableCell className="text-ink/80">{invitation.email}</TableCell>
+                  <TableCell className="text-ink/60">
+                    {invitation.role === "admin" ? "Admin" : "Agent"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-line bg-card">
         <Table>
@@ -130,7 +165,7 @@ export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProp
                   colSpan={5}
                   className="py-10 text-center text-sm text-ink/55"
                 >
-                  Aucun membre dans cette organisation.
+                  Aucun agent dans cette organisation.
                 </TableCell>
               </TableRow>
             ) : (
@@ -143,17 +178,9 @@ export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProp
                   <TableCell>
                     <Badge
                       variant="outline"
-                      className={
-                        agent.role === "owner" || agent.role === "admin"
-                          ? "border-brass/40 bg-brass/12 text-brass"
-                          : "border-line text-ink/60"
-                      }
+                      className="border-line text-ink/60"
                     >
-                      {agent.role === "owner"
-                        ? "Propriétaire"
-                        : agent.role === "admin"
-                          ? "Admin"
-                          : "Agent"}
+                      Agent
                     </Badge>
                   </TableCell>
                   <TableCell>
@@ -169,26 +196,22 @@ export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProp
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    {agent.role === "member" && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="size-8"
-                        title={
-                          agent.status === "active"
-                            ? "Désactiver"
-                            : "Réactiver"
-                        }
-                        onClick={() => handleToggleStatus(agent)}
-                      >
-                        {agent.status === "active" ? (
-                          <UserX className="size-4 text-brick" />
-                        ) : (
-                          <UserCheck className="size-4 text-ledger" />
-                        )}
-                      </Button>
-                    )}
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="size-8"
+                      title={
+                        agent.status === "active" ? "Désactiver" : "Réactiver"
+                      }
+                      onClick={() => handleToggleStatus(agent)}
+                    >
+                      {agent.status === "active" ? (
+                        <UserX className="size-4 text-brick" />
+                      ) : (
+                        <UserCheck className="size-4 text-ledger" />
+                      )}
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))
@@ -200,41 +223,30 @@ export function AgentsPageClient({ agents: initialAgents }: AgentsPageClientProp
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Créer un agent</DialogTitle>
+            <DialogTitle>Inviter un agent</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
+            <p className="text-sm text-ink/65">
+              Un e-mail lui permettra de choisir son mot de passe. Vous ne
+              saisissez jamais le mot de passe à sa place.
+            </p>
             <div className="space-y-1.5">
-              <Label>Nom</Label>
+              <Label htmlFor="invite-email">E-mail</Label>
               <Input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="Prénom Nom"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>E-mail</Label>
-              <Input
+                id="invite-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="agent@entreprise.com"
               />
             </div>
-            <div className="space-y-1.5">
-              <Label>Mot de passe</Label>
-              <Input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Min. 8 caractères"
-              />
-            </div>
             <Button
               type="button"
               className="w-full bg-ledger text-paper hover:bg-ledger/90"
-              onClick={handleCreate}
+              disabled={pending}
+              onClick={() => void handleInvite()}
             >
-              Créer l'agent
+              {pending ? "Envoi…" : "Envoyer l’invitation"}
             </Button>
           </div>
         </DialogContent>

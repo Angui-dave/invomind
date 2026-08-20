@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
+import { FileDown, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { CatalogPicker } from "@/components/documents/catalog-picker";
 import { ClientPicker } from "@/components/documents/client-picker";
@@ -20,14 +21,13 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { saveDocument } from "@/lib/actions/documents";
+import { saveDocument, sendDocument } from "@/lib/actions/documents";
+import { downloadPdfFromUrl } from "@/lib/pdf-download";
 import type { CatalogItem } from "@/lib/data/catalog";
 import type { Client } from "@/lib/data/clients";
 import type { OrgSettings } from "@/lib/data/settings";
 import { todayIso } from "@/lib/date";
 import {
-  nextDocumentNumber,
-  yearFromIso,
   type BusinessDocument,
   type DocumentLine,
 } from "@/lib/documents";
@@ -109,6 +109,7 @@ export function QuoteForm({
 
   const [clients, setClients] = useState(initialClients);
   const [saving, setSaving] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [clientId, setClientId] = useState(initialClientId);
   const [currency, setCurrency] = useState<CurrencyCode>(initialCurrency);
   const [taxMode, setTaxMode] = useState<TaxMode>(
@@ -125,7 +126,7 @@ export function QuoteForm({
   );
   const [errors, setErrors] = useState<FieldErrors>({});
   const [pendingDraft, setPendingDraft] = useState<QuoteDraft | null>(null);
-  const submitIntent = useRef<"draft" | "sent" | "keep">("sent");
+  const submitIntent = useRef<"draft" | "sent">("sent");
   const skipLeavePrompt = useRef(false);
 
   const lineState = useDocumentLines(initialLines);
@@ -155,7 +156,7 @@ export function QuoteForm({
   const previewNumber =
     mode === "edit" && document?.number
       ? document.number
-      : nextDocumentNumber("quote", existingNumbers, yearFromIso(issueDate));
+      : "BROUILLON-DEV";
 
   const snapshot = useMemo(
     () =>
@@ -337,18 +338,26 @@ export function QuoteForm({
     focusable?.focus();
   }
 
-  async function persist(intent: "draft" | "sent" | "keep") {
+  const remaining = dueDate ? daysBetween(todayIso(), dueDate) : null;
+  const validityHint =
+    dueDate && remaining !== null
+      ? remaining < 0
+        ? `Expiré depuis le ${formatDateFr(dueDate)}`
+        : remaining === 0
+          ? `Expire aujourd’hui (${formatDateFr(dueDate)})`
+          : `Expire le ${formatDateFr(dueDate)}, dans ${remaining} jour${remaining > 1 ? "s" : ""}`
+      : null;
+  const frozen = Boolean(document?.frozen);
+
+  async function persist(intent: "draft" | "sent") {
+    if (frozen) return;
+
     const nextErrors = validate();
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) {
       focusFirstError(nextErrors);
       return;
     }
-
-    const status =
-      intent === "keep"
-        ? (document?.status ?? "draft")
-        : intent;
 
     setSaving(true);
     try {
@@ -357,7 +366,7 @@ export function QuoteForm({
         {
           kind: "quote",
           clientId,
-          status,
+          status: "draft",
           currency,
           taxMode,
           issueDate,
@@ -389,12 +398,32 @@ export function QuoteForm({
         return;
       }
 
+      const id = result.id ?? document?.id;
+      if (intent === "sent") {
+        if (!client?.email?.trim()) {
+          toast.error("Le client n’a pas d’adresse e-mail.");
+          if (id && mode === "new") {
+            skipLeavePrompt.current = true;
+            discardDraft();
+            router.push(`/quotes/${id}`);
+            router.refresh();
+          }
+          return;
+        }
+        if (!id) return;
+        const sent = await sendDocument(id);
+        if (!sent.ok) {
+          toast.error(sent.error);
+          return;
+        }
+      }
+
       skipLeavePrompt.current = true;
       discardDraft();
       toast.success(
         intent === "sent"
           ? mode === "new"
-            ? "Devis créé et marqué comme envoyé"
+            ? "Devis créé et envoyé"
             : "Devis envoyé"
           : mode === "new"
             ? "Brouillon enregistré"
@@ -404,6 +433,43 @@ export function QuoteForm({
       router.refresh();
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleSendEmail() {
+    if (!client?.email?.trim()) {
+      toast.error("Le client n’a pas d’adresse e-mail.");
+      return;
+    }
+    if (frozen && document?.id) {
+      setSaving(true);
+      try {
+        const sent = await sendDocument(document.id);
+        if (!sent.ok) {
+          toast.error(sent.error);
+          return;
+        }
+        toast.success("E-mail envoyé");
+        router.refresh();
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+    await persist("sent");
+  }
+
+  async function handleDownloadPdf() {
+    if (!document?.id) return;
+    setDownloading(true);
+    try {
+      await downloadPdfFromUrl(`/api/documents/${document.id}/pdf`);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Téléchargement impossible",
+      );
+    } finally {
+      setDownloading(false);
     }
   }
 
@@ -425,28 +491,18 @@ export function QuoteForm({
     router.push("/quotes");
   }
 
-  const remaining = dueDate ? daysBetween(todayIso(), dueDate) : null;
-  const validityHint =
-    dueDate && remaining !== null
-      ? remaining < 0
-        ? `Expiré depuis le ${formatDateFr(dueDate)}`
-        : remaining === 0
-          ? `Expire aujourd’hui (${formatDateFr(dueDate)})`
-          : `Expire le ${formatDateFr(dueDate)}, dans ${remaining} jour${remaining > 1 ? "s" : ""}`
-      : null;
-
   const actions = (
     <QuoteActions
       mode={mode}
-      status={document?.status}
+      frozen={frozen}
       saving={saving}
+      downloading={downloading}
       onDraft={() => void persist("draft")}
       onSend={() => {
         submitIntent.current = "sent";
       }}
-      onSave={() => {
-        submitIntent.current = "keep";
-      }}
+      onSendEmail={() => void handleSendEmail()}
+      onDownload={() => void handleDownloadPdf()}
       onCancel={requestLeave}
     />
   );
@@ -461,9 +517,11 @@ export function QuoteForm({
               : `Devis ${document?.number}`}
           </h1>
           <p className="mt-1 text-sm text-ink/60">
-            {mode === "new"
-              ? "Choisissez un client, ajoutez les prestations : l’aperçu se met à jour en direct."
-              : "Modifiez les prestations, la validité et les conditions."}
+            {frozen
+              ? "Ce devis est émis : il n’est plus modifiable."
+              : mode === "new"
+                ? "Choisissez un client, ajoutez les prestations : l’aperçu se met à jour en direct."
+                : "Modifiez les prestations, la validité et les conditions."}
           </p>
         </div>
         {mode === "edit" && document && (
@@ -498,7 +556,10 @@ export function QuoteForm({
       ) : null}
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <div className="space-y-6">
+        <fieldset
+          disabled={frozen}
+          className={`space-y-6 ${frozen ? "pointer-events-none opacity-60" : ""}`}
+        >
           <section className="space-y-4 rounded-2xl border border-line bg-card p-4">
             <h2 className="font-serif text-base font-semibold text-ink">
               Destinataire
@@ -612,7 +673,7 @@ export function QuoteForm({
               rows={4}
             />
           </section>
-        </div>
+        </fieldset>
 
         <div className="space-y-4 lg:sticky lg:top-6 lg:self-start">
           <DocumentPreview
@@ -659,56 +720,73 @@ export function QuoteForm({
 
 function QuoteActions({
   mode,
-  status,
+  frozen,
   saving,
+  downloading,
   onDraft,
   onSend,
-  onSave,
+  onSendEmail,
+  onDownload,
   onCancel,
 }: {
   mode: "new" | "edit";
-  status?: BusinessDocument["status"];
+  frozen: boolean;
   saving: boolean;
+  downloading: boolean;
   onDraft: () => void;
   onSend: () => void;
-  onSave: () => void;
+  onSendEmail: () => void;
+  onDownload: () => void;
   onCancel: () => void;
 }) {
-  const isDraft = !status || status === "draft";
-  const sendLabel =
-    mode === "new" ? "Créer et envoyer" : "Marquer comme envoyé";
+  const sendLabel = mode === "new" ? "Créer et envoyer" : "Émettre et envoyer";
 
-  return (
-    <div className="flex flex-wrap gap-2">
-      {mode === "new" || isDraft ? (
+  if (frozen) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        <Button
+          type="button"
+          className="bg-ledger text-paper hover:bg-ledger/90"
+          disabled={downloading}
+          onClick={onDownload}
+        >
+          <FileDown />
+          {downloading ? "Préparation du PDF…" : "Télécharger le PDF"}
+        </Button>
         <Button
           type="button"
           variant="outline"
           disabled={saving}
-          onClick={onDraft}
+          onClick={onSendEmail}
         >
-          {saving ? "Enregistrement…" : "Enregistrer en brouillon"}
+          <Mail />
+          {saving ? "Envoi…" : "Envoyer par e-mail"}
         </Button>
-      ) : (
-        <Button
-          type="submit"
-          className="bg-ledger text-paper hover:bg-ledger/90"
-          disabled={saving}
-          onClick={onSave}
-        >
-          {saving ? "Enregistrement…" : "Enregistrer"}
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Annuler
         </Button>
-      )}
-      {isDraft ? (
-        <Button
-          type="submit"
-          className="bg-ledger text-paper hover:bg-ledger/90"
-          disabled={saving}
-          onClick={onSend}
-        >
-          {saving ? "Enregistrement…" : sendLabel}
-        </Button>
-      ) : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      <Button
+        type="button"
+        variant="outline"
+        disabled={saving}
+        onClick={onDraft}
+      >
+        {saving ? "Enregistrement…" : "Enregistrer en brouillon"}
+      </Button>
+      <Button
+        type="submit"
+        className="bg-ledger text-paper hover:bg-ledger/90"
+        disabled={saving}
+        onClick={onSend}
+      >
+        {saving ? "Envoi…" : sendLabel}
+      </Button>
       <Button type="button" variant="outline" onClick={onCancel}>
         Annuler
       </Button>

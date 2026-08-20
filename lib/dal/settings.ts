@@ -16,6 +16,35 @@ import type {
 
 export type { OrgBranding, OrgSettingsExtras };
 
+const REMINDER_EVENT_TO_MILESTONE: Record<
+  string,
+  NonNullable<EmailTemplate["milestone"]>
+> = {
+  "J-3": "J-3",
+  "J+3": "J+3",
+  "J+7": "J+7",
+  "J+14": "J+14",
+  "reminder_J-3": "J-3",
+  "reminder_J+3": "J+3",
+  "reminder_J+7": "J+7",
+  "reminder_J+14": "J+14",
+};
+
+function reminderMilestoneFromEvent(
+  value: string,
+): EmailTemplate["milestone"] | undefined {
+  return REMINDER_EVENT_TO_MILESTONE[value];
+}
+
+type ApiEmailTemplate = {
+  id: string;
+  event?: string;
+  milestone?: string;
+  label: string;
+  subject: string;
+  body: string;
+};
+
 type ApiOrganizationResponse = {
   settings?: {
     reminders_enabled?: boolean;
@@ -35,14 +64,6 @@ type ApiOrganizationResponse = {
   subscription_invoices?: unknown[];
 };
 
-type ApiEmailTemplate = {
-  id: string;
-  milestone: EmailTemplate["milestone"];
-  label: string;
-  subject: string;
-  body: string;
-};
-
 type ApiBillingItem = {
   id: string;
   date: string;
@@ -60,7 +81,7 @@ export async function getOrgSettings(): Promise<OrgSettings> {
       token,
       organizationId: session.organizationId,
     });
-    return mapApiOrgSettings(org.settings);
+    return mapApiOrgSettings(org.settings ?? {});
   }
   const store = await tenantStore();
   return { ...store.orgSettings };
@@ -80,7 +101,7 @@ export async function getSettingsExtras(): Promise<OrgSettingsExtras> {
       reminderCadence: (settings.reminder_cadence ?? ["J-3", "J+3", "J+7", "J+14"]) as OrgSettingsExtras["reminderCadence"],
       payment: {
         connected: Boolean(settings.payment_connected),
-        provider: "stripe",
+        provider: "cinetpay",
         acceptedMethods: (settings.accepted_payment_methods ?? ["card", "mobile_money", "transfer"]) as OrgSettingsExtras["payment"]["acceptedMethods"],
         feeNote: "",
       },
@@ -98,13 +119,17 @@ export async function getEmailTemplates(): Promise<EmailTemplate[]> {
       token,
       organizationId: session.organizationId,
     });
-    return templates.map((t) => ({
-      id: t.id,
-      milestone: t.milestone,
-      label: t.label,
-      subject: t.subject,
-      body: t.body,
-    }));
+    return templates.map((t) => {
+      const event = t.event ?? String(t.milestone ?? t.id);
+      return {
+        id: t.id,
+        event,
+        milestone: reminderMilestoneFromEvent(event),
+        label: t.label,
+        subject: t.subject,
+        body: t.body,
+      };
+    });
   }
   const store = await tenantStore();
   return structuredClone(store.emailTemplates);

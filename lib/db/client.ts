@@ -1,6 +1,7 @@
 /**
- * Lazy DB client — only used if you opt into Postgres later.
- * Default app path uses mocks and never imports this at runtime.
+ * LEGACY — Drizzle / Postgres client used by the pre-Laravel Next data path.
+ * Production path: USE_LARAVEL_API=true → Laravel API (see docs/LARAVEL.md).
+ * This module throws if imported at runtime; do not use for new features.
  */
 import "server-only";
 
@@ -8,7 +9,7 @@ export type Database = never;
 
 export function getDb(): never {
   throw new Error(
-    "Postgres client disabled while NEXT_PUBLIC_USE_MOCK_DATA=true. See docs/LARAVEL.md",
+    "Drizzle/Postgres client is legacy. Enable USE_LARAVEL_API=true and use lib/laravel/*. See docs/LARAVEL.md",
   );
 }
 
@@ -18,7 +19,7 @@ export const db = new Proxy(
   {
     get() {
       throw new Error(
-        "Postgres client disabled while NEXT_PUBLIC_USE_MOCK_DATA=true. See docs/LARAVEL.md",
+        "Drizzle/Postgres client is legacy. Enable USE_LARAVEL_API=true and use lib/laravel/*. See docs/LARAVEL.md",
       );
     },
   },

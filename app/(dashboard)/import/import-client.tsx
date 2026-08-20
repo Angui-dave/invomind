@@ -61,9 +61,15 @@ export function ImportPageClient() {
         toast.error(result.error);
         return;
       }
-      toast.success(
-        `${result.count ?? mapped.length} ${entity === "clients" ? "clients" : entity === "expenses" ? "dépenses" : "éléments"} importés`,
-      );
+      const label =
+        entity === "clients"
+          ? "clients"
+          : entity === "expenses"
+            ? "dépenses"
+            : entity === "suppliers"
+              ? "fournisseurs"
+              : "éléments";
+      toast.success(`${result.count ?? mapped.length} ${label} importés`);
     })();
   }
 
@@ -74,7 +80,8 @@ export function ImportPageClient() {
           Importation de données
         </h1>
         <p className="mt-1 text-sm text-ink/60">
-          Importez un fichier CSV pour migrer clients, dépenses ou catalogue
+          Importez un fichier CSV pour migrer clients, fournisseurs, dépenses ou
+          catalogue
         </p>
       </header>
 
@@ -120,6 +127,7 @@ export function ImportPageClient() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="clients">Clients</SelectItem>
+                <SelectItem value="suppliers">Fournisseurs</SelectItem>
                 <SelectItem value="expenses">Dépenses</SelectItem>
                 <SelectItem value="catalog">Catalogue</SelectItem>
               </SelectContent>

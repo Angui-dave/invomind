@@ -10,8 +10,10 @@ import { cn } from "@/lib/utils";
 import {
   login,
   register,
+  resendVerificationEmail,
   type AuthFormState,
 } from "@/lib/actions/auth";
+import { toast } from "sonner";
 
 type AuthMode = "login" | "register";
 
@@ -23,7 +25,7 @@ const initialState: AuthFormState = {};
 
 function passwordStrength(value: string) {
   let score = 0;
-  if (value.length >= 8) score += 1;
+  if (value.length >= 10) score += 1;
   if (/[A-Z]/.test(value) && /[a-z]/.test(value)) score += 1;
   if (/\d/.test(value)) score += 1;
   if (/[^A-Za-z0-9]/.test(value)) score += 1;
@@ -37,7 +39,26 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [state, formAction, pending] = useActionState(action, initialState);
   const [showPassword, setShowPassword] = useState(false);
   const [password, setPassword] = useState("");
+  const [resending, setResending] = useState(false);
   const strength = useMemo(() => passwordStrength(password), [password]);
+
+  async function handleResend() {
+    const email =
+      state.email ||
+      (typeof document !== "undefined"
+        ? (document.getElementById("email") as HTMLInputElement | null)?.value
+        : "") ||
+      "";
+    if (!email) {
+      toast.error("Saisissez votre e-mail");
+      return;
+    }
+    setResending(true);
+    const result = await resendVerificationEmail(email);
+    setResending(false);
+    if (result.ok) toast.success(result.message);
+    else toast.error(result.error);
+  }
 
   return (
     <div>
@@ -160,11 +181,43 @@ export function AuthForm({ mode }: AuthFormProps) {
           )}
         </div>
 
+        {mode === "login" && (
+          <p className="-mt-2 text-right text-sm">
+            <Link
+              href="/forgot-password"
+              className="font-medium text-ledger underline-offset-2 hover:underline"
+            >
+              Mot de passe oublié ?
+            </Link>
+          </p>
+        )}
+
         {state.errors?.form && (
           <p className="rounded-xl border border-brick/30 bg-brick/10 px-3 py-2 text-xs text-brick">
             {state.errors.form[0]}
           </p>
         )}
+
+        {state.message && (
+          <p className="rounded-xl border border-brass/35 bg-brass/10 px-3 py-2 text-xs text-brass">
+            {state.message}
+          </p>
+        )}
+
+        {state.emailVerificationRequired ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={resending}
+            onClick={() => void handleResend()}
+            className="h-10 w-full rounded-full"
+          >
+            {resending ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+            ) : null}
+            Renvoyer l’e-mail de vérification
+          </Button>
+        ) : null}
 
         <Button
           type="submit"

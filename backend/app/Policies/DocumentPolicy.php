@@ -4,7 +4,6 @@ namespace App\Policies;
 
 use App\Models\Document;
 use App\Models\User;
-use Illuminate\Http\Request;
 
 class DocumentPolicy
 {
@@ -15,7 +14,24 @@ class DocumentPolicy
 
     public function update(User $user, Document $document): bool
     {
+        return $this->belongsToTenant($document) && ! $document->frozen;
+    }
+
+    public function issue(User $user, Document $document): bool
+    {
         return $this->belongsToTenant($document);
+    }
+
+    public function send(User $user, Document $document): bool
+    {
+        return $this->belongsToTenant($document);
+    }
+
+    public function updateStatus(User $user, Document $document): bool
+    {
+        return $this->belongsToTenant($document)
+            && $document->kind === 'quote'
+            && in_array($document->status, ['sent', 'accepted', 'refused', 'expired'], true);
     }
 
     public function delete(User $user, Document $document): bool

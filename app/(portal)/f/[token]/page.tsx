@@ -5,6 +5,7 @@ import { LedgerCard } from "@/components/ledger-card";
 import { PaymentFlow } from "@/components/portal/payment-flow";
 import { PaymentQrSection } from "@/components/invoices/payment-qr-section";
 import { PortalHeader } from "@/components/portal/portal-header";
+import { PortalPdfButton } from "@/components/portal/portal-pdf-button";
 import { getPortalInvoiceContext } from "@/lib/dal/documents";
 import { PAYMENT_METHOD_LABELS } from "@/lib/documents";
 import { formatDateFr } from "@/lib/formatters";
@@ -16,26 +17,41 @@ export const metadata: Metadata = {
 
 export default async function PortalInvoicePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ token: string }>;
+  searchParams: Promise<{ paid?: string }>;
 }) {
   const { token } = await params;
+  const { paid: paidParam } = await searchParams;
   const portalContext = await getPortalInvoiceContext(token);
   if (!portalContext) notFound();
 
-  const { invoice, payments, orgSettings, branding, client } = portalContext;
-  const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
-  const amountDue = Math.max(
-    0,
-    Math.round((invoice.total - paid) * 100) / 100,
-  );
+  const {
+    invoice,
+    payments,
+    orgSettings,
+    branding,
+    client,
+    outstandingBalance,
+    paymentStatus,
+  } = portalContext;
 
   const companyName =
     branding?.displayName || orgSettings.companyName || "InvoMind";
 
-  const isPaid = invoice.status === "paid" || Boolean(invoice.paidOnlineAt);
+  const isPaid = paymentStatus === "paid" || invoice.status === "paid";
+  const isPartial = paymentStatus === "partially_paid";
   const isOverdue = invoice.status === "overdue";
-  const due = isPaid ? 0 : amountDue;
+  const due = isPaid ? 0 : outstandingBalance;
+  const canCheckout =
+    invoice.kind === "invoice" &&
+    invoice.onlinePaymentEnabled &&
+    !isPaid;
+  const hasReceipt = payments.length > 0;
+  const returningFromPsp = paidParam === "1";
+
+  const latestPayment = payments[0];
 
   return (
     <div className="flex flex-1 flex-col gap-6">
@@ -53,6 +69,15 @@ export default async function PortalInvoicePage({
       {isPaid && (
         <p className="rounded-2xl border border-brass/30 bg-brass/10 px-4 py-3 text-sm text-brass">
           Facture payée
+        </p>
+      )}
+
+      {isPartial && due > 0 && (
+        <p className="rounded-2xl border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-ink">
+          Solde restant :{" "}
+          <span className="num font-medium">
+            {formatMoney(due, invoice.currency)}
+          </span>
         </p>
       )}
 
@@ -74,7 +99,9 @@ export default async function PortalInvoicePage({
                 {formatDateFr(invoice.dueDate)}
               </p>
             </div>
-            <InvoiceStatusBadge status={isPaid ? "paid" : invoice.status} />
+            <InvoiceStatusBadge
+              status={isPaid ? "paid" : isPartial ? "partially_paid" : invoice.status}
+            />
           </div>
 
           <ul className="space-y-2.5 border-t border-line pt-4">
@@ -109,29 +136,47 @@ export default async function PortalInvoicePage({
         </div>
       </LedgerCard>
 
-      <PaymentFlow
-        token={token}
-        amount={due > 0 ? due : invoice.total}
-        currency={invoice.currency}
-        alreadyPaid={isPaid}
-        paidAtLabel={
-          invoice.paidOnlineAt
-            ? `Payée en ligne le ${formatDateFr(invoice.paidOnlineAt)}${
-                invoice.paymentMethod
-                  ? ` via ${PAYMENT_METHOD_LABELS[invoice.paymentMethod]}`
-                  : ""
-              }`
-            : isPaid
-              ? `Payée le ${formatDateFr(invoice.dueDate)}`
-              : undefined
-        }
-      />
+      {(canCheckout || isPaid || returningFromPsp) && (
+        <PaymentFlow
+          token={token}
+          amount={due > 0 ? due : invoice.total}
+          currency={invoice.currency}
+          alreadyPaid={isPaid}
+          initialStatus={paymentStatus}
+          returningFromPsp={returningFromPsp && !isPaid}
+          paidAtLabel={
+            invoice.paidOnlineAt
+              ? `Payée en ligne le ${formatDateFr(invoice.paidOnlineAt)}${
+                  invoice.paymentMethod
+                    ? ` via ${PAYMENT_METHOD_LABELS[invoice.paymentMethod]}`
+                    : ""
+                }`
+              : latestPayment
+                ? `Payée le ${formatDateFr(latestPayment.paidAt)}`
+                : isPaid
+                  ? `Payée le ${formatDateFr(invoice.dueDate)}`
+                  : undefined
+          }
+        />
+      )}
 
       {!isPaid && invoice.kind === "invoice" && (
         <PaymentQrSection
           document={invoice}
           orgSettings={orgSettings}
           client={client}
+        />
+      )}
+
+      <PortalPdfButton
+        href={`/api/portal/${token}/pdf`}
+        label="Télécharger la facture"
+      />
+
+      {hasReceipt && !isPaid && (
+        <PortalPdfButton
+          href={`/api/portal/${token}/receipt`}
+          label="Télécharger le reçu"
         />
       )}
 

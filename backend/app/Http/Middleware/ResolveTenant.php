@@ -36,6 +36,10 @@ class ResolveTenant
             return response()->json(['message' => 'Not a member of this organization.'], 403);
         }
 
+        if ($membership->isDisabled()) {
+            return response()->json(['message' => 'Ce compte a été désactivé.'], 403);
+        }
+
         $request->attributes->set('organization_id', $organizationId);
         $request->attributes->set('membership', $membership);
         $request->attributes->set('membership_role', $membership->role);

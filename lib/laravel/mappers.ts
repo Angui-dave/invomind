@@ -7,6 +7,13 @@ import type { Payment } from "@/lib/data/payments";
 import type { OrgBranding, OrgSettings, Prospect } from "@/lib/data/settings";
 import type { Supplier } from "@/lib/data/suppliers";
 import type { BusinessDocument, DocumentLine } from "@/lib/documents";
+import type {
+  DeliveryAttempt,
+  DeliveryStatus,
+  InboundMessage,
+  MaskedWebhookConfig,
+} from "@/lib/webhooks/types";
+import type { ConversationChannel } from "@/lib/data/conversations";
 
 type ApiRecord = Record<string, unknown>;
 
@@ -65,7 +72,7 @@ export function mapDocument(input: unknown): BusinessDocument {
         return {
           milestone: str(r.milestone) as BusinessDocument["reminders"][number]["milestone"],
           state: str(r.state) as BusinessDocument["reminders"][number]["state"],
-          date: str(r.date),
+          date: str(r.date) || str(r.scheduled_for).slice(0, 10),
         };
       })
     : [];
@@ -92,6 +99,8 @@ export function mapDocument(input: unknown): BusinessDocument {
     portalToken: str(row.portal_token),
     sourceDocumentId: row.source_document_id ? str(row.source_document_id) : undefined,
     notes: row.notes ? str(row.notes) : undefined,
+    frozen: Boolean(row.frozen),
+    pdfReady: Boolean(row.pdf_ready),
   };
 }
 
@@ -235,15 +244,111 @@ export function mapOrgSettings(input: unknown): OrgSettings {
 
 export function mapBranding(input: unknown): OrgBranding {
   const row = asRecord(input);
+  const templateRaw = str(row.document_template, "classic");
+  const documentTemplate = (
+    templateRaw === "modern" || templateRaw === "minimal"
+      ? templateRaw
+      : "classic"
+  ) as OrgBranding["documentTemplate"];
   return {
     displayName: row.display_name ? str(row.display_name) : null,
     logoUrl: row.logo_url ? str(row.logo_url) : null,
-    primaryColor: str(row.primary_color),
-    accentColor: str(row.accent_color),
-    fontFamily: "Inter",
-    documentTemplate: "classic",
-    locale: "fr-SN",
-    currency: "XOF",
+    primaryColor: str(row.primary_color, "#2563eb") || "#2563eb",
+    accentColor: str(row.accent_color, "#10b981") || "#10b981",
+    fontFamily: str(row.font_family, "Inter") || "Inter",
+    documentTemplate,
+    locale: str(row.locale, "fr-SN") || "fr-SN",
+    currency: (str(row.currency, "XOF") || "XOF") as OrgBranding["currency"],
+  };
+}
+
+export function mapInboundMessage(input: unknown): InboundMessage {
+  const row = asRecord(input);
+  const channel = str(row.channel, "whatsapp") as ConversationChannel;
+  return {
+    id: str(row.id),
+    channel,
+    handle: str(row.handle),
+    contactName: row.contact_name ? str(row.contact_name) : row.contactName ? str(row.contactName) : undefined,
+    body: str(row.body),
+    sentAt: str(row.sent_at) || str(row.sentAt),
+    threadRef: row.thread_ref
+      ? str(row.thread_ref)
+      : row.threadRef
+        ? str(row.threadRef)
+        : undefined,
+  };
+}
+
+export function mapDeliveryAttempt(input: unknown): DeliveryAttempt {
+  const row = asRecord(input);
+  const statusRaw = str(row.status, "failed");
+  const status = (
+    statusRaw === "success" || statusRaw === "failed" || statusRaw === "skipped"
+      ? statusRaw
+      : "failed"
+  ) as DeliveryStatus;
+  return {
+    id: str(row.id),
+    conversationId: str(row.conversation_id) || str(row.conversationId),
+    channel: str(row.channel, "whatsapp") as ConversationChannel,
+    status,
+    httpStatus:
+      row.http_status != null
+        ? num(row.http_status)
+        : row.httpStatus != null
+          ? num(row.httpStatus)
+          : undefined,
+    error: row.error ? str(row.error) : undefined,
+    attemptedAt: str(row.attempted_at) || str(row.attemptedAt),
+    durationMs: num(row.duration_ms ?? row.durationMs),
+  };
+}
+
+export function mapWebhookConfigResponse(input: unknown): {
+  config: MaskedWebhookConfig;
+  deliveries: DeliveryAttempt[];
+} {
+  const root = asRecord(input);
+  const cfg = asRecord(root.config);
+  const url = str(cfg.url);
+  const hasSecret = Boolean(cfg.has_secret ?? cfg.hasSecret);
+  const deliveriesRaw = Array.isArray(root.deliveries) ? root.deliveries : [];
+
+  return {
+    config: {
+      url,
+      secretMasked: str(cfg.secret_masked) || str(cfg.secretMasked) || (hasSecret ? "••••••••" : ""),
+      hasSecret,
+      enabled: Boolean(cfg.enabled),
+      metaVerifyConfigured: Boolean(
+        cfg.meta_verify_configured ?? cfg.metaVerifyConfigured,
+      ),
+      metaAppSecretConfigured: Boolean(
+        cfg.meta_app_secret_configured ?? cfg.metaAppSecretConfigured,
+      ),
+      tiktokSecretConfigured: Boolean(
+        cfg.tiktok_secret_configured ?? cfg.tiktokSecretConfigured,
+      ),
+    },
+    deliveries: deliveriesRaw.map(mapDeliveryAttempt),
+  };
+}
+
+/** Normalize Laravel send response `{ message, delivery }` or mock `{ status }` to a status string. */
+export function mapConversationSendStatus(input: unknown): {
+  status: DeliveryStatus | string;
+  error?: string;
+} {
+  const row = asRecord(input);
+  if (typeof row.status === "string") {
+    return { status: row.status, error: row.error ? str(row.error) : undefined };
+  }
+  const delivery = asRecord(row.delivery);
+  const status = str(delivery.status, "failed");
+  return {
+    status,
+    error: delivery.error ? str(delivery.error) : row.error ? str(row.error) : undefined,
   };
 }
 

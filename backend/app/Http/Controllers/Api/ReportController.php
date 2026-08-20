@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Services\EntitlementService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -13,13 +14,15 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-    public function dashboard(Request $request): JsonResponse
+    public function dashboard(Request $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'reports');
+
         $orgId = $this->orgId($request);
-        $now = Carbon::now();
+        $monthStart = Carbon::now()->startOfMonth()->toDateString();
 
         $monthRevenue = Payment::where('organization_id', $orgId)
-            ->whereRaw("paid_at >= ?", [$now->startOfMonth()->toDateString()])
+            ->whereRaw('paid_at >= ?', [$monthStart])
             ->sum('amount');
 
         $overdueCount = Document::where('organization_id', $orgId)
@@ -55,8 +58,10 @@ class ReportController extends Controller
         ]);
     }
 
-    public function overview(Request $request): JsonResponse
+    public function overview(Request $request, EntitlementService $entitlements): JsonResponse
     {
+        $entitlements->assertModule($this->orgId($request), 'reports');
+
         $orgId = $this->orgId($request);
 
         $totalRevenue = Payment::where('organization_id', $orgId)->sum('amount');

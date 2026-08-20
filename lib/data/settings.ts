@@ -74,7 +74,10 @@ export interface BillingHistoryItem {
 
 export interface EmailTemplate {
   id: string;
-  milestone: "J-3" | "J+3" | "J+7" | "J+14";
+  /** Laravel event key (document_sent, reminder_J-3, …) or legacy milestone */
+  event: string;
+  /** Present for reminder templates only */
+  milestone?: "J-3" | "J+3" | "J+7" | "J+14";
   label: string;
   subject: string;
   body: string;
@@ -82,7 +85,7 @@ export interface EmailTemplate {
 
 export interface PaymentProviderState {
   connected: boolean;
-  provider: "stripe";
+  provider: "cinetpay";
   acceptedMethods: PaymentMethod[];
   feeNote: string;
 }
@@ -163,36 +166,38 @@ export const CURRENT_USER: CurrentUser = {
   plan: "pro",
 };
 
+/** Keep in sync with backend PlanSeeder + EntitlementService */
 export const PRICING_PLANS: PricingPlan[] = [
   {
     id: "free",
     name: "Gratuit",
     price: 0,
-    priceLabel: "0 F CFA",
-    description: "Pour démarrer et tester le registre.",
+    priceLabel: "0 XOF/mois",
+    description: "Pour démarrer",
     features: [
-      "3 factures par mois",
-      "Jusqu’à 5 clients",
+      "5 factures/mois",
+      "10 clients",
+      "Dépenses & catalogue",
+      "Rapports de base",
       "Portail client",
-      "Relances manuelles",
-      "Rapports TVA",
     ],
-    limitLabel: "3 factures/mois",
+    limitLabel: "5 factures/mois",
   },
   {
     id: "pro",
     name: "Pro",
-    price: 12_000,
-    priceLabel: "12 000 F CFA",
-    description: "Facturation illimitée, relances et paiement en ligne.",
+    price: 9_900,
+    priceLabel: "9 900 XOF/mois",
+    description: "Pour les professionnels",
     features: [
       "Factures et devis illimités",
       "Clients illimités",
       "Relances automatiques",
       "Paiement Mobile Money",
-      "Pipeline prospects",
-      "Inbox WhatsApp / Instagram / Messenger",
-      "Rapports TVA",
+      "Pipeline commercial",
+      "Inbox WhatsApp / Messenger / TikTok",
+      "Import CSV",
+      "3 membres d’équipe",
     ],
     highlighted: true,
   },
@@ -200,11 +205,11 @@ export const PRICING_PLANS: PricingPlan[] = [
     id: "business",
     name: "Business",
     price: 29_000,
-    priceLabel: "29 000 F CFA",
-    description: "Pour les équipes : tout Pro + import CSV et priorités support.",
+    priceLabel: "29 000 XOF/mois",
+    description: "Pour les équipes en croissance",
     features: [
       "Tout le plan Pro",
-      "Import CSV clients / catalogue",
+      "Jusqu’à 10 membres",
       "Modules personnalisables",
       "Support prioritaire",
     ],
@@ -311,7 +316,22 @@ export const BILLING_HISTORY: BillingHistoryItem[] = [
 
 export const EMAIL_TEMPLATES: EmailTemplate[] = [
   {
+    id: "tpl_document_sent",
+    event: "document_sent",
+    label: "Envoi de facture",
+    subject: "Votre facture {{numero}} — {{montant}}",
+    body: "Bonjour {{client}},\n\nVeuillez trouver votre facture {{numero}} d’un montant de {{montant}}.\nVous pouvez la consulter et la régler ici : {{lien_paiement}}\n\nCordialement,\n{{societe}}",
+  },
+  {
+    id: "tpl_quote_sent",
+    event: "quote_sent",
+    label: "Envoi de devis",
+    subject: "Votre devis {{numero}} — {{montant}}",
+    body: "Bonjour {{client}},\n\nVoici notre devis {{numero}} d’un montant de {{montant}}.\nConsultez-le ici : {{lien_paiement}}\n\nCordialement,\n{{societe}}",
+  },
+  {
     id: "tpl_j-3",
+    event: "reminder_J-3",
     milestone: "J-3",
     label: "Rappel avant échéance",
     subject: "Rappel : facture {{montant}} due bientôt",
@@ -319,6 +339,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
   },
   {
     id: "tpl_j+3",
+    event: "reminder_J+3",
     milestone: "J+3",
     label: "Première relance",
     subject: "Relance : facture {{montant}}",
@@ -326,6 +347,7 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
   },
   {
     id: "tpl_j+7",
+    event: "reminder_J+7",
     milestone: "J+7",
     label: "Deuxième relance",
     subject: "Deuxième relance — {{montant}}",
@@ -333,16 +355,24 @@ export const EMAIL_TEMPLATES: EmailTemplate[] = [
   },
   {
     id: "tpl_j+14",
+    event: "reminder_J+14",
     milestone: "J+14",
     label: "Dernière relance",
     subject: "Dernière relance — {{montant}}",
     body: "Bonjour {{client}},\n\nDernier rappel concernant {{montant}}. Paiement : {{lien_paiement}}\n\nCordialement",
   },
+  {
+    id: "tpl_payment_receipt",
+    event: "payment_receipt",
+    label: "Reçu de paiement",
+    subject: "Reçu — facture {{numero}} {{montant}}",
+    body: "Bonjour {{client}},\n\nNous confirmons la réception de {{montant}} pour la facture {{numero}}.\n\nCordialement,\n{{societe}}",
+  },
 ];
 
 export const PAYMENT_PROVIDER: PaymentProviderState = {
   connected: true,
-  provider: "stripe",
+  provider: "cinetpay",
   acceptedMethods: ["card", "mobile_money", "transfer"],
   feeNote:
     "Frais de transaction : variables selon le moyen (carte, Mobile Money). Déduits du montant encaissé.",
@@ -350,8 +380,10 @@ export const PAYMENT_PROVIDER: PaymentProviderState = {
 
 export const TEMPLATE_VARIABLES = [
   "{{client}}",
+  "{{numero}}",
   "{{montant}}",
   "{{lien_paiement}}",
+  "{{societe}}",
 ] as const;
 
 export function activeProspectsValue(prospects?: Prospect[]): {

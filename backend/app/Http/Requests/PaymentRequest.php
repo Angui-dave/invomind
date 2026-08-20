@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class PaymentRequest extends FormRequest
 {
@@ -13,8 +14,14 @@ class PaymentRequest extends FormRequest
 
     public function rules(): array
     {
+        $orgId = $this->attributes->get('organization_id');
+
         return [
-            'document_id' => ['required', 'uuid', 'exists:documents,id'],
+            'document_id' => [
+                'required',
+                'uuid',
+                Rule::exists('documents', 'id')->where(fn ($q) => $q->where('organization_id', $orgId)),
+            ],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'currency' => ['sometimes', 'string', 'max:3'],
             'method' => ['required', 'in:card,mobile_money,transfer,twint,cash,check'],
