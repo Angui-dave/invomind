@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import { assertCanCreateInvoice } from "@/lib/billing/entitlements";
 import { allocateDocumentNumber } from "@/lib/dal/documents";
 import { tenantStore } from "@/lib/mock/store";
@@ -52,6 +56,54 @@ export async function saveDocument(
   id: string | null,
   input: z.infer<typeof DocumentInputSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = DocumentInputSchema.safeParse(input);
+    if (!parsed.success) {
+      return { ok: false, error: "Document invalide" };
+    }
+    const data = parsed.data;
+    try {
+      const { token, organizationId } = await getApiContext();
+      const payload = {
+        kind: data.kind,
+        client_id: data.clientId,
+        status: data.status,
+        currency: data.currency,
+        tax_mode: data.taxMode,
+        issue_date: data.issueDate,
+        due_date: data.dueDate,
+        online_payment_enabled: data.onlinePaymentEnabled,
+        reminders_enabled: data.remindersEnabled,
+        notes: data.notes,
+        source_document_id: data.sourceDocumentId,
+        lines: data.lines.map((line) => ({
+          description: line.description,
+          quantity: line.quantity,
+          unit_price: line.unitPrice,
+          tax_rate: line.taxRate,
+          discount_percent: line.discountPercent,
+          catalog_item_id: line.catalogItemId,
+        })),
+      };
+      const doc = await laravelRequest<{ id: string }>(id ? `/documents/${id}` : "/documents", {
+        method: id ? "PUT" : "POST",
+        token,
+        organizationId,
+        body: payload,
+      });
+      revalidatePath("/invoices");
+      revalidatePath("/quotes");
+      revalidatePath("/dashboard");
+      revalidatePath(`/invoices/${doc.id}`);
+      revalidatePath(`/quotes/${doc.id}`);
+      return { ok: true, id: doc.id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Enregistrement impossible"),
+      };
+    }
+  }
   const session = await verifySession();
   const parsed = DocumentInputSchema.safeParse(input);
   if (!parsed.success) {

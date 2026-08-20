@@ -39,13 +39,9 @@ import {
   revenueByMonth,
   topClients,
 } from "@/lib/dal/reports";
-import { currentMonthKey, monthKey } from "@/lib/date";
-import {
-  formatDateFr,
-  formatMoney,
-  DEFAULT_CURRENCY,
-  TODAY,
-} from "@/lib/mock-data";
+import { TODAY, currentMonthKey, monthKey } from "@/lib/date";
+import { formatDateFr } from "@/lib/formatters";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 const SHOW_EMPTY_STATE = false;

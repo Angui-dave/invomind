@@ -2,7 +2,9 @@
 
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { createSession, deleteSession } from "@/lib/auth/session";
+import { createSession, deleteSession, readSessionCookie } from "@/lib/auth/session";
+import { isLaravelApiEnabled } from "@/lib/config";
+import { laravelRequest, LaravelApiError } from "@/lib/laravel/client";
 import {
   findUserByEmail,
   membershipsForUser,
@@ -65,6 +67,37 @@ export async function login(
   }
 
   const email = parsed.data.email.toLowerCase();
+
+  if (isLaravelApiEnabled()) {
+    try {
+      const res = await laravelRequest<{
+        user: { id: string; email: string; name: string };
+        organization_id: string;
+        role?: "owner" | "admin" | "member";
+        token: string;
+      }>("/auth/login", {
+        method: "POST",
+        body: { email, password: parsed.data.password },
+      });
+      await createSession(res.user.id, res.organization_id, res.token, res.role);
+      redirect("/dashboard");
+    } catch (error) {
+      if (error instanceof LaravelApiError) {
+        console.error("LOGIN_API_ERROR", {
+          message: error.message,
+          status: error.status,
+          payload: error.payload,
+        });
+      } else {
+        console.error("LOGIN_UNKNOWN_ERROR", error);
+      }
+      const message =
+        error instanceof LaravelApiError
+          ? error.message
+          : "E-mail ou mot de passe incorrect";
+      return { errors: { form: [message] } };
+    }
+  }
   const user = findUserByEmail(email);
 
   if (!user || !verifyMockPassword(parsed.data.password, user.passwordHash)) {
@@ -105,6 +138,46 @@ export async function register(
     return { errors: parsed.error.flatten().fieldErrors };
   }
 
+  if (isLaravelApiEnabled()) {
+    try {
+      const res = await laravelRequest<{
+        user: { id: string; email: string; name: string };
+        organization: { id: string };
+        token: string;
+      }>("/auth/register", {
+        method: "POST",
+        body: {
+          name: parsed.data.name,
+          email: parsed.data.email.toLowerCase(),
+          password: parsed.data.password,
+          company_name: parsed.data.company,
+        },
+      });
+
+      await createSession(res.user.id, res.organization.id, res.token, "owner");
+    } catch (error) {
+      if (error instanceof LaravelApiError) {
+        console.error("REGISTER_API_ERROR", {
+          message: error.message,
+          status: error.status,
+          payload: error.payload,
+        });
+      } else {
+        console.error("REGISTER_UNKNOWN_ERROR", error);
+      }
+      return {
+        errors: {
+          form: [
+            error instanceof LaravelApiError
+              ? error.message
+              : "Inscription impossible",
+          ],
+        },
+      };
+    }
+    redirect("/dashboard");
+  }
+
   try {
     const { tenant, user } = provisionTenant({
       companyName: parsed.data.company,
@@ -131,6 +204,20 @@ export async function register(
 }
 
 export async function logout() {
+  if (isLaravelApiEnabled()) {
+    try {
+      const payload = await readSessionCookie();
+      if (payload?.accessToken) {
+        await laravelRequest("/auth/logout", {
+          method: "POST",
+          token: payload.accessToken,
+          organizationId: payload.organizationId,
+        });
+      }
+    } catch {
+      // ignore remote logout failure and clear local session
+    }
+  }
   await deleteSession();
   redirect("/login");
 }

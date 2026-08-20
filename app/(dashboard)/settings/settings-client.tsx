@@ -30,26 +30,25 @@ import {
 } from "@/lib/actions/settings";
 import type {
   EnabledModules,
+  EmailTemplate,
   OrgBranding,
+  OrgSettings,
   OrgSettingsExtras,
+  PricingPlan,
+  CurrentUser,
 } from "@/lib/data/settings";
 import {
-  CURRENCY_OPTIONS,
-  getTaxPreset,
   PAYMENT_METHOD_LABELS,
   REMINDER_DEFAULTS,
   REMINDER_MILESTONE_LABELS,
-  TAX_PRESETS,
-  TEMPLATE_VARIABLES,
-  type CurrentUser,
-  type CurrencyCode,
-  type EmailTemplate,
-  type OrgSettings,
   type PaymentMethod,
-  type PricingPlan,
   type ReminderMilestone,
-  type TaxMode,
-} from "@/lib/mock-data";
+} from "@/lib/documents";
+import { TEMPLATE_VARIABLES } from "@/lib/data/settings";
+import { CURRENCY_OPTIONS } from "@/lib/money";
+import type { CurrencyCode } from "@/lib/money";
+import { getTaxPreset, TAX_PRESETS } from "@/lib/tax";
+import type { TaxMode } from "@/lib/tax";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { WebhookSettings } from "@/components/settings/webhook-settings";
@@ -212,7 +211,7 @@ export function SettingsPageClient({
       return;
     }
     if (currentTemplate) {
-      const tplResult = await updateEmailTemplate(currentTemplate.id, {
+      const tplResult = await updateEmailTemplate(currentTemplate.milestone, {
         subject: currentTemplate.subject,
         body: currentTemplate.body,
         label: currentTemplate.label,

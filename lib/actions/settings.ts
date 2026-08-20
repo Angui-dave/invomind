@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
 import { isAdminTenant } from "@/lib/rbac/policy";
 import { findTenant } from "@/lib/mock/central";
@@ -94,6 +98,34 @@ const EmailTemplateSchema = z.object({
 export async function updateCompanySettings(
   input: z.infer<typeof CompanySchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = CompanySchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Profil entreprise invalide" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/settings", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          company_name: parsed.data.companyName,
+          email: parsed.data.email,
+          phone: parsed.data.phone,
+          address: parsed.data.address,
+          city: parsed.data.city,
+          postal_code: parsed.data.postalCode,
+          country: parsed.data.country,
+          tax_id: parsed.data.taxId,
+          legal_mentions: parsed.data.legalMentions,
+        },
+      });
+      revalidatePath("/settings");
+      revalidatePath("/dashboard");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Profil entreprise invalide") };
+    }
+  }
   const session = await assertSettingsAdmin();
   const parsed = CompanySchema.safeParse(input);
   if (!parsed.success) {
@@ -114,6 +146,27 @@ export async function updateCompanySettings(
 export async function updateTaxSettings(
   input: z.infer<typeof TaxSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = TaxSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Paramètres fiscaux invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/tax", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          default_currency: parsed.data.defaultCurrency,
+          default_tax_mode: parsed.data.defaultTaxMode,
+          default_tax_rate: parsed.data.defaultTaxRate,
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Paramètres fiscaux invalides") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = TaxSchema.safeParse(input);
   if (!parsed.success) {
@@ -133,6 +186,31 @@ export async function updateTaxSettings(
 export async function updateBankingSettings(
   input: z.infer<typeof BankingSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = BankingSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Coordonnées bancaires invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/banking", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          bank_name: parsed.data.bankName,
+          iban: parsed.data.iban,
+          bic: parsed.data.bic,
+          qr_iban: parsed.data.qrIban,
+          twint_number: parsed.data.twintNumber,
+          mobile_money_provider: parsed.data.mobileMoneyProvider,
+          mobile_money_number: parsed.data.mobileMoneyNumber,
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Coordonnées bancaires invalides") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = BankingSchema.safeParse(input);
   if (!parsed.success) {
@@ -157,6 +235,26 @@ export async function updateBankingSettings(
 export async function updateRemindersSettings(
   input: z.infer<typeof RemindersSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = RemindersSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Paramètres de relance invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/reminders", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          reminders_enabled: parsed.data.remindersEnabled,
+          reminder_cadence: parsed.data.reminderCadence,
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Paramètres de relance invalides") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = RemindersSchema.safeParse(input);
   if (!parsed.success) {
@@ -175,6 +273,26 @@ export async function updateRemindersSettings(
 export async function updatePaymentSettings(
   input: z.infer<typeof PaymentSettingsSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = PaymentSettingsSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Paramètres de paiement invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/payments", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          payment_connected: parsed.data.paymentConnected,
+          accepted_payment_methods: parsed.data.acceptedPaymentMethods,
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Paramètres de paiement invalides") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = PaymentSettingsSchema.safeParse(input);
   if (!parsed.success) {
@@ -193,6 +311,29 @@ export async function updatePaymentSettings(
 export async function updateBranding(
   input: z.infer<typeof BrandingSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = BrandingSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Identité visuelle invalide" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/branding", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          display_name: parsed.data.displayName,
+          logo_url: parsed.data.logoUrl,
+          primary_color: parsed.data.primaryColor,
+          accent_color: parsed.data.accentColor,
+        },
+      });
+      revalidatePath("/settings");
+      revalidatePath("/dashboard");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Identité visuelle invalide") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = BrandingSchema.safeParse(input);
   if (!parsed.success) {
@@ -219,6 +360,31 @@ export async function updateBranding(
 export async function updateEnabledModules(
   input: z.infer<typeof ModulesSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = ModulesSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Modules invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization/modules", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          pipeline: parsed.data.pipeline,
+          conversations: parsed.data.conversations,
+          expenses: parsed.data.expenses,
+          catalog: parsed.data.catalog,
+          reports: parsed.data.reports,
+          import_tool: parsed.data.importTool,
+        },
+      });
+      revalidatePath("/settings");
+      revalidatePath("/dashboard");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Modules invalides") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = ModulesSchema.safeParse(input);
   if (!parsed.success) {
@@ -234,9 +400,29 @@ export async function updateEnabledModules(
 }
 
 export async function updateEmailTemplate(
-  id: string,
+  milestone: string,
   input: z.infer<typeof EmailTemplateSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = EmailTemplateSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Template invalide" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/email-templates/${milestone}`, {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          subject: parsed.data.subject,
+          body: parsed.data.body,
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true, id: milestone };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, "Template invalide") };
+    }
+  }
   await assertSettingsAdmin();
   const parsed = EmailTemplateSchema.safeParse(input);
   if (!parsed.success) {
@@ -244,7 +430,7 @@ export async function updateEmailTemplate(
   }
 
   const store = await tenantStore();
-  const idx = store.emailTemplates.findIndex((t) => t.id === id);
+  const idx = store.emailTemplates.findIndex((t) => t.id === milestone);
   if (idx < 0) return { ok: false, error: "Template introuvable" };
 
   store.emailTemplates[idx] = {
@@ -255,5 +441,5 @@ export async function updateEmailTemplate(
   };
 
   revalidatePath("/settings");
-  return { ok: true, id };
+  return { ok: true, id: milestone };
 }

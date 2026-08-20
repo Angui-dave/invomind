@@ -28,12 +28,12 @@ import {
   createCheckoutSession,
 } from "@/lib/actions/billing";
 import {
-  formatDateFr,
-  formatMoney,
   type BillingHistoryItem,
   type PlanId,
   type PricingPlan,
-} from "@/lib/mock-data";
+} from "@/lib/data/settings";
+import { formatDateFr } from "@/lib/formatters";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 

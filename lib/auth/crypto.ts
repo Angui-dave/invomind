@@ -7,6 +7,8 @@ export type SessionPayload = {
   sessionId: string;
   userId: string;
   organizationId: string;
+  role?: "owner" | "admin" | "member";
+  accessToken?: string;
   expiresAt: string;
 };
 

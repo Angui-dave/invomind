@@ -7,7 +7,6 @@ import {
   getOrgSettings,
   getSettingsExtras,
 } from "@/lib/dal/settings";
-import { PRICING_PLANS } from "@/lib/mock-data";
 import { SettingsPageClient } from "./settings-client";
 
 type SearchParams = Promise<{
@@ -32,10 +31,6 @@ export default async function SettingsPage({
       searchParams,
     ]);
 
-  const catalogPlan =
-    PRICING_PLANS.find((p) => p.id === session.organization.planId) ??
-    PRICING_PLANS[0];
-
   return (
     <SettingsPageClient
       user={{
@@ -45,7 +40,16 @@ export default async function SettingsPage({
         company: session.organization.name,
         plan: session.organization.planId,
       }}
-      plan={catalogPlan}
+      plan={{
+        id: plan.id,
+        name: plan.name,
+        price: plan.price,
+        priceLabel: plan.priceLabel,
+        description: plan.description,
+        features: plan.features,
+        ...(plan.limitLabel ? { limitLabel: plan.limitLabel } : {}),
+        ...(plan.highlighted ? { highlighted: plan.highlighted } : {}),
+      }}
       planLimits={plan}
       initialOrg={{
         ...org,

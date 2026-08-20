@@ -5,13 +5,10 @@ import { LedgerCard } from "@/components/ledger-card";
 import { PaymentFlow } from "@/components/portal/payment-flow";
 import { PaymentQrSection } from "@/components/invoices/payment-qr-section";
 import { PortalHeader } from "@/components/portal/portal-header";
-import { getInvoiceByToken } from "@/lib/dal/documents";
-import {
-  findTenantIdByPortalToken,
-  tenantStoreById,
-} from "@/lib/mock/store";
+import { getPortalInvoiceContext } from "@/lib/dal/documents";
 import { PAYMENT_METHOD_LABELS } from "@/lib/documents";
-import { formatDateFr, formatMoney } from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
+import { formatMoney } from "@/lib/money";
 
 export const metadata: Metadata = {
   title: "Facture",
@@ -23,26 +20,18 @@ export default async function PortalInvoicePage({
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const invoice = await getInvoiceByToken(token);
-  if (!invoice) notFound();
+  const portalContext = await getPortalInvoiceContext(token);
+  if (!portalContext) notFound();
 
-  const tenantId = findTenantIdByPortalToken(token);
-  if (!tenantId) notFound();
-  const store = tenantStoreById(tenantId);
-  const branding = store.branding;
-  const orgSettings = store.orgSettings;
-  const client = store.clients.find((c) => c.id === invoice.clientId) ?? null;
-
-  const paid = store.payments
-    .filter((p) => p.documentId === invoice.id)
-    .reduce((s, p) => s + p.amount, 0);
+  const { invoice, payments, orgSettings, branding, client } = portalContext;
+  const paid = payments.reduce((sum, payment) => sum + payment.amount, 0);
   const amountDue = Math.max(
     0,
     Math.round((invoice.total - paid) * 100) / 100,
   );
 
   const companyName =
-    branding.displayName || orgSettings.companyName || "InvoMind";
+    branding?.displayName || orgSettings.companyName || "InvoMind";
 
   const isPaid = invoice.status === "paid" || Boolean(invoice.paidOnlineAt);
   const isOverdue = invoice.status === "overdue";
@@ -52,7 +41,7 @@ export default async function PortalInvoicePage({
     <div className="flex flex-1 flex-col gap-6">
       <PortalHeader
         companyName={companyName}
-        logoUrl={branding.logoUrl}
+        logoUrl={branding?.logoUrl ?? null}
       />
 
       {isOverdue && !isPaid && (

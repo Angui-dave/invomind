@@ -88,8 +88,13 @@ export function FreeToolsBanner() {
     XOF: 655.957,
     XAF: 655.957,
     USD: 1.09,
+    GBP: 0.86,
     CHF: 0.95,
     MAD: 10.85,
+    NGN: 1765,
+    GHS: 13.7,
+    KES: 144.5,
+    CAD: 1.49,
   };
 
   const convertedValue = (toCode: CurrencyCode) => {
@@ -342,7 +347,12 @@ export function FreeToolsBanner() {
                   <div className="grid grid-cols-2 gap-1.5 pt-1 text-[11px]">
                     <div className="rounded-lg bg-paper p-1.5 border border-line/60 flex justify-between">
                       <span className="text-ink/50 font-medium">XOF / XAF</span>
-                      <span className="num font-bold text-ink">{Math.round(convertedValue("XOF")).toLocaleString()} F</span>
+                      <span className="num font-bold text-ink">
+                        {new Intl.NumberFormat("fr-FR").format(
+                          Math.round(convertedValue("XOF")),
+                        )}{" "}
+                        F
+                      </span>
                     </div>
                     <div className="rounded-lg bg-paper p-1.5 border border-line/60 flex justify-between">
                       <span className="text-ink/50 font-medium">USD</span>

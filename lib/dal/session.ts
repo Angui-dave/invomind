@@ -2,6 +2,9 @@ import "server-only";
 import { cache } from "react";
 import { redirect } from "next/navigation";
 import { readSessionCookie } from "@/lib/auth/session";
+import { isLaravelApiEnabled } from "@/lib/config";
+import { laravelRequest } from "@/lib/laravel/client";
+import { mapBranding as mapApiBranding, mapOrgSettings as mapApiOrgSettings } from "@/lib/laravel/mappers";
 import {
   findTenant,
   findUserById,
@@ -10,7 +13,50 @@ import {
   subscriptionForTenant,
 } from "@/lib/mock/central";
 import { tenantStoreById } from "@/lib/mock/store";
+import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
 import type { EnabledModules, PlanId } from "@/lib/data/settings";
+
+type ApiOrganizationResponse = {
+  id: string;
+  name: string;
+  slug: string;
+  plan_id?: PlanId;
+  settings?: unknown;
+  branding?: unknown;
+  features?: {
+    pipeline?: boolean;
+    conversations?: boolean;
+    expenses?: boolean;
+    catalog?: boolean;
+    reports?: boolean;
+    import_tool?: boolean;
+  };
+  subscription?: unknown;
+  plan?: {
+    id: PlanId;
+    name: string;
+    price?: number | string;
+    price_label: string;
+    description: string;
+    features?: string[];
+    limit_label?: string | null;
+    highlighted?: boolean;
+    max_invoices_per_month?: number | null;
+    max_clients?: number | null;
+    auto_reminders?: boolean;
+    online_payments?: boolean;
+    pipeline?: boolean;
+    conversations?: boolean;
+    reports?: boolean;
+    stripe_price_id?: string | null;
+  } | null;
+};
+
+type ApiEntitlementsResponse = {
+  pipeline?: boolean;
+  conversations?: boolean;
+  reports?: boolean;
+};
 
 export type VerifiedSession = {
   sessionId: string;
@@ -48,6 +94,35 @@ export const verifySession = cache(async (): Promise<VerifiedSession> => {
   const payload = await readSessionCookie();
   if (!payload?.userId || !payload?.organizationId) {
     redirect("/login?clear_session=1");
+  }
+
+  if (isLaravelApiEnabled()) {
+    try {
+      const me = await laravelRequest<{
+        user: { id: string; name: string; email: string };
+        organization_id: string;
+        role: "owner" | "admin" | "member";
+      }>("/auth/me", {
+        token: payload.accessToken,
+        organizationId: payload.organizationId,
+      });
+
+      return {
+        sessionId: payload.sessionId,
+        userId: me.user.id,
+        organizationId: me.organization_id,
+        user: me.user,
+        organization: {
+          id: me.organization_id,
+          name: "Organization",
+          slug: "organization",
+          planId: "free",
+        },
+        role: me.role ?? payload.role ?? "member",
+      };
+    } catch {
+      redirect("/login?clear_session=1");
+    }
   }
 
   const user = findUserById(payload.userId);
@@ -89,6 +164,103 @@ export const getOptionalSession = cache(async () => {
 
 export const getCurrentOrganization = cache(async () => {
   const session = await verifySession();
+  if (isLaravelApiEnabled()) {
+    const organization = await laravelRequest<ApiOrganizationResponse>("/organization", {
+      token: (await readSessionCookie())?.accessToken,
+      organizationId: session.organizationId,
+    });
+    const entitlements = await laravelRequest<ApiEntitlementsResponse>("/organization/entitlements", {
+      token: (await readSessionCookie())?.accessToken,
+      organizationId: session.organizationId,
+    });
+
+    return {
+      session: {
+        ...session,
+        organization: {
+          id: organization.id,
+          name: organization.name,
+          slug: organization.slug,
+          planId: (organization.plan_id ?? "free") as PlanId,
+        },
+      },
+      settings: organization.settings
+        ? mapApiOrgSettings(organization.settings)
+        : { ...DEFAULT_ORG_SETTINGS },
+      branding: organization.branding
+        ? mapApiBranding(organization.branding)
+        : {
+            displayName: null,
+            logoUrl: null,
+            primaryColor: "#2563eb",
+            accentColor: "#10b981",
+            fontFamily: "Inter",
+            documentTemplate: "classic",
+            locale: "fr-SN",
+            currency: "XOF",
+          },
+      enabledModules: {
+        pipeline: Boolean(organization.features?.pipeline),
+        conversations: Boolean(organization.features?.conversations),
+        expenses: Boolean(organization.features?.expenses),
+        catalog: Boolean(organization.features?.catalog),
+        reports: Boolean(organization.features?.reports),
+        importTool: Boolean(organization.features?.import_tool),
+      },
+      features: {
+        pipeline: Boolean(entitlements.pipeline),
+        conversations: Boolean(entitlements.conversations),
+        expenses: Boolean(organization.features?.expenses),
+        catalog: Boolean(organization.features?.catalog),
+        reports: Boolean(entitlements.reports),
+        importTool: Boolean(organization.features?.import_tool),
+      },
+      subscription: organization.subscription ?? null,
+      plan: organization.plan
+        ? {
+            id: organization.plan.id,
+            name: organization.plan.name,
+            price: Number(organization.plan.price ?? 0),
+            priceLabel: organization.plan.price_label,
+            description: organization.plan.description,
+            features: organization.plan.features ?? [],
+            limitLabel: organization.plan.limit_label ?? null,
+            highlighted: Boolean(organization.plan.highlighted),
+            maxInvoicesPerMonth: organization.plan.max_invoices_per_month ?? null,
+            maxClients: organization.plan.max_clients ?? null,
+            autoReminders: Boolean(organization.plan.auto_reminders),
+            onlinePayments: Boolean(organization.plan.online_payments),
+            pipeline: Boolean(organization.plan.pipeline),
+            conversations: Boolean(organization.plan.conversations),
+            reports: Boolean(organization.plan.reports),
+            expenses: Boolean(organization.features?.expenses),
+            catalog: Boolean(organization.features?.catalog),
+            importTool: Boolean(organization.features?.import_tool),
+            stripePriceId: organization.plan.stripe_price_id ?? null,
+          }
+        : {
+            id: "free" as PlanId,
+            name: "Free",
+            price: 0,
+            priceLabel: "0",
+            description: "",
+            features: [],
+            limitLabel: null,
+            highlighted: false,
+            maxInvoicesPerMonth: null,
+            maxClients: null,
+            autoReminders: false,
+            onlinePayments: false,
+            pipeline: false,
+            conversations: false,
+            reports: true,
+            expenses: false,
+            catalog: false,
+            importTool: false,
+            stripePriceId: null,
+          },
+    };
+  }
   const store = tenantStoreById(session.organizationId);
   const subscription = subscriptionForTenant(session.organizationId);
   const plan = planById(session.organization.planId);

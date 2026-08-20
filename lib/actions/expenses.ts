@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import { tenantStore } from "@/lib/mock/store";
 import type { Expense } from "@/lib/data/expenses";
 import type { CurrencyCode } from "@/lib/money";
@@ -38,6 +42,35 @@ async function resolveSupplierName(
 export async function createExpense(
   input: z.infer<typeof ExpenseSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = ExpenseSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Dépense invalide" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      const created = await laravelRequest<{ id: string }>("/expenses", {
+        method: "POST",
+        token,
+        organizationId,
+        body: {
+          date: parsed.data.date,
+          description: parsed.data.description,
+          amount: parsed.data.amount,
+          currency: parsed.data.currency,
+          category_id: parsed.data.categoryId,
+          supplier_id: parsed.data.supplierId,
+          tax_rate: parsed.data.taxRate,
+          tax_deductible: parsed.data.taxDeductible,
+          notes: parsed.data.notes,
+        },
+      });
+      revalidatePath("/expenses");
+      revalidatePath("/reports");
+      revalidatePath("/dashboard");
+      return { ok: true, id: created.id };
+    } catch (e) {
+      return { ok: false, error: actionErrorMessage(e, "Erreur dépense") };
+    }
+  }
   await verifySession();
   const parsed = ExpenseSchema.safeParse(input);
   if (!parsed.success) {
@@ -82,6 +115,34 @@ export async function updateExpense(
   id: string,
   input: z.infer<typeof ExpenseSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = ExpenseSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Dépense invalide" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/expenses/${id}`, {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          date: parsed.data.date,
+          description: parsed.data.description,
+          amount: parsed.data.amount,
+          currency: parsed.data.currency,
+          category_id: parsed.data.categoryId,
+          supplier_id: parsed.data.supplierId,
+          tax_rate: parsed.data.taxRate,
+          tax_deductible: parsed.data.taxDeductible,
+          notes: parsed.data.notes,
+        },
+      });
+      revalidatePath("/expenses");
+      revalidatePath("/reports");
+      return { ok: true, id };
+    } catch (e) {
+      return { ok: false, error: actionErrorMessage(e, "Erreur dépense") };
+    }
+  }
   await verifySession();
   const parsed = ExpenseSchema.safeParse(input);
   if (!parsed.success) {

@@ -2,6 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
 import {
   findTenantIdByPortalToken,
   tenantStoreById,
@@ -17,7 +20,7 @@ export type ActionResult =
 
 const PortalPaymentSchema = z.object({
   token: z.string().min(4),
-  method: z.string(),
+  method: z.enum(["card", "mobile_money", "transfer"]),
   amount: z.number().positive(),
 });
 
@@ -26,6 +29,25 @@ export async function recordPortalPayment(
 ): Promise<ActionResult> {
   const parsed = PortalPaymentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Paiement invalide" };
+
+  if (isLaravelApiEnabled()) {
+    try {
+      const payment = await laravelRequest<{ id: string }>(`/portal/${parsed.data.token}/pay`, {
+        method: "POST",
+        body: {
+          method: parsed.data.method,
+          amount: parsed.data.amount,
+        },
+      });
+      revalidatePath(`/f/${parsed.data.token}`);
+      return { ok: true, id: payment.id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Paiement invalide"),
+      };
+    }
+  }
 
   const tenantId = findTenantIdByPortalToken(parsed.data.token);
   if (!tenantId) return { ok: false, error: "Facture introuvable" };

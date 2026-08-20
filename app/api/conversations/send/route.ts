@@ -1,5 +1,8 @@
+import { readSessionCookie } from "@/lib/auth/session";
 import { isConversationChannel } from "@/lib/data/conversations";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
 import { signPayload } from "@/lib/webhooks/signature";
 import { getConfig, logDelivery } from "@/lib/webhooks/store";
 import type { DeliveryAttempt, SendMessagePayload } from "@/lib/webhooks/types";
@@ -33,6 +36,7 @@ function parseBody(data: unknown): SendMessagePayload | null {
 export async function POST(request: Request) {
   const session = await verifySession();
   const organizationId = session.organizationId;
+  const token = (await readSessionCookie())?.accessToken;
 
   let json: unknown;
   try {
@@ -50,6 +54,22 @@ export async function POST(request: Request) {
       },
       { status: 400 },
     );
+  }
+
+  if (isLaravelApiEnabled()) {
+    const response = await laravelRequest<unknown>("/conversations/send", {
+      method: "POST",
+      token,
+      organizationId,
+      body: {
+        conversation_id: payload.conversationId,
+        channel: payload.channel,
+        to: payload.to,
+        body: payload.body,
+        thread_ref: payload.threadRef,
+      },
+    });
+    return Response.json(response);
   }
 
   const config = await getConfig(organizationId);

@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import { tenantStore } from "@/lib/mock/store";
 import { todayIso } from "@/lib/date";
 import type { Payment } from "@/lib/data/payments";
@@ -25,6 +29,35 @@ const PaymentSchema = z.object({
 export async function createPayment(
   input: z.infer<typeof PaymentSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = PaymentSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Paiement invalide" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      const created = await laravelRequest<{ id: string }>("/payments", {
+        method: "POST",
+        token,
+        organizationId,
+        body: {
+          document_id: parsed.data.documentId,
+          amount: parsed.data.amount,
+          method: parsed.data.method,
+          paid_at: parsed.data.paidAt ?? todayIso(),
+          reference: parsed.data.reference,
+          notes: parsed.data.notes,
+        },
+      });
+      revalidatePath("/payments");
+      revalidatePath("/invoices");
+      revalidatePath("/dashboard");
+      return { ok: true, id: created.id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Paiement invalide"),
+      };
+    }
+  }
   await verifySession();
   const parsed = PaymentSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: "Paiement invalide" };

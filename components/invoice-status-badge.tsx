@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import { STATUS_LABELS } from "@/lib/mock-data";
+import { STATUS_LABELS } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 const statusStyles: Record<string, string> = {

@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import { actionErrorMessage } from "@/lib/laravel/action-errors";
+import { getApiContext } from "@/lib/laravel/context";
 import { assertCanCreateClient } from "@/lib/billing/entitlements";
 import { opaquePortalToken } from "@/lib/documents";
 import { tenantStore } from "@/lib/mock/store";
@@ -31,6 +35,40 @@ export type ActionResult =
 export async function createClient(
   input: z.infer<typeof ClientSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = ClientSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Données client invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      const created = await laravelRequest<{ id: string }>("/clients", {
+        method: "POST",
+        token,
+        organizationId,
+        body: {
+          name: parsed.data.name,
+          company: parsed.data.company,
+          email: parsed.data.email,
+          phone: parsed.data.phone,
+          address: parsed.data.address,
+          city: parsed.data.city,
+          postal_code: parsed.data.postalCode,
+          country: parsed.data.country,
+          tax_id: parsed.data.taxId,
+          currency: parsed.data.currency,
+          payment_term_days: parsed.data.paymentTermDays,
+          reminders_enabled: parsed.data.remindersEnabled,
+        },
+      });
+      revalidatePath("/clients");
+      revalidatePath("/dashboard");
+      return { ok: true, id: created.id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Création impossible"),
+      };
+    }
+  }
   const session = await verifySession();
   const parsed = ClientSchema.safeParse(input);
   if (!parsed.success) {
@@ -77,6 +115,39 @@ export async function updateClient(
   id: string,
   input: z.infer<typeof ClientSchema>,
 ): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    const parsed = ClientSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Données client invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/clients/${id}`, {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          name: parsed.data.name,
+          company: parsed.data.company,
+          email: parsed.data.email,
+          phone: parsed.data.phone,
+          address: parsed.data.address,
+          city: parsed.data.city,
+          postal_code: parsed.data.postalCode,
+          country: parsed.data.country,
+          tax_id: parsed.data.taxId,
+          currency: parsed.data.currency,
+          payment_term_days: parsed.data.paymentTermDays,
+          reminders_enabled: parsed.data.remindersEnabled,
+        },
+      });
+      revalidatePath("/clients");
+      return { ok: true, id };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Mise à jour impossible"),
+      };
+    }
+  }
   await verifySession();
   const parsed = ClientSchema.safeParse(input);
   if (!parsed.success) {
@@ -98,6 +169,23 @@ export async function updateClient(
 }
 
 export async function deleteClient(id: string): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/clients/${id}`, {
+        method: "DELETE",
+        token,
+        organizationId,
+      });
+      revalidatePath("/clients");
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Suppression impossible"),
+      };
+    }
+  }
   await verifySession();
   const store = await tenantStore();
   const linked = store.documents.some((d) => d.clientId === id);

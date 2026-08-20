@@ -39,12 +39,16 @@ export async function verifyPassword(
 export async function createSession(
   userId: string = MOCK_USER_ID,
   organizationId: string = MOCK_ORG_ID,
+  accessToken?: string,
+  role?: "owner" | "admin" | "member",
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const jwt = await encryptSession({
     sessionId: MOCK_SESSION_ID,
     userId,
     organizationId,
+    accessToken,
+    role,
     expiresAt: expiresAt.toISOString(),
   });
 

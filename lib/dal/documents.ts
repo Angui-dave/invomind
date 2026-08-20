@@ -1,5 +1,15 @@
 import "server-only";
+import { readSessionCookie } from "@/lib/auth/session";
+import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
+import { laravelRequest } from "@/lib/laravel/client";
+import {
+  mapBranding,
+  mapClient,
+  mapDocument,
+  mapOrgSettings,
+  mapPayment,
+} from "@/lib/laravel/mappers";
 import {
   findTenantIdByPortalToken,
   tenantStore,
@@ -7,7 +17,10 @@ import {
   type MockStore,
 } from "@/lib/mock/store";
 import type { Client } from "@/lib/data/clients";
+import type { OrgBranding, OrgSettings } from "@/lib/data/settings";
+import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
 import type { BusinessDocument } from "@/lib/documents";
+import type { Payment } from "@/lib/data/payments";
 import { applyDerivedStatus } from "@/lib/data/documents";
 import { TODAY } from "@/lib/date";
 
@@ -34,7 +47,15 @@ function withStatus(doc: BusinessDocument, store: MockStore): BusinessDocument {
 }
 
 export async function listClients(): Promise<Client[]> {
-  await verifySession();
+  const session = await verifySession();
+  if (isLaravelApiEnabled()) {
+    const token = (await readSessionCookie())?.accessToken;
+    const rows = await laravelRequest<unknown[]>("/clients", {
+      token,
+      organizationId: session.organizationId,
+    });
+    return rows.map(mapClient).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+  }
   const store = await tenantStore();
   return [...store.clients].sort((a, b) =>
     a.name.localeCompare(b.name, "fr"),
@@ -43,6 +64,10 @@ export async function listClients(): Promise<Client[]> {
 
 export async function getClientById(id: string): Promise<Client | null> {
   await verifySession();
+  if (isLaravelApiEnabled()) {
+    const clients = await listClients();
+    return clients.find((c) => c.id === id) ?? null;
+  }
   const store = await tenantStore();
   return store.clients.find((c) => c.id === id) ?? null;
 }
@@ -50,7 +75,18 @@ export async function getClientById(id: string): Promise<Client | null> {
 export async function listDocuments(
   kind?: BusinessDocument["kind"],
 ): Promise<BusinessDocument[]> {
-  await verifySession();
+  const session = await verifySession();
+  if (isLaravelApiEnabled()) {
+    const token = (await readSessionCookie())?.accessToken;
+    const query = kind ? `/documents?kind=${kind}` : "/documents";
+    const rows = await laravelRequest<unknown[]>(query, {
+      token,
+      organizationId: session.organizationId,
+    });
+    return rows
+      .map(mapDocument)
+      .sort((a, b) => b.issueDate.localeCompare(a.issueDate));
+  }
   const store = await tenantStore();
   const docs = store.documents.filter((d) =>
     kind ? d.kind === kind : true,
@@ -75,7 +111,19 @@ export async function getCreditNotes(): Promise<BusinessDocument[]> {
 export async function getDocumentById(
   id: string,
 ): Promise<BusinessDocument | null> {
-  await verifySession();
+  const session = await verifySession();
+  if (isLaravelApiEnabled()) {
+    const token = (await readSessionCookie())?.accessToken;
+    try {
+      const row = await laravelRequest<unknown>(`/documents/${id}`, {
+        token,
+        organizationId: session.organizationId,
+      });
+      return mapDocument(row);
+    } catch {
+      return null;
+    }
+  }
   const store = await tenantStore();
   const doc = store.documents.find((d) => d.id === id);
   return doc ? withStatus(doc, store) : null;
@@ -84,6 +132,14 @@ export async function getDocumentById(
 export async function getInvoiceByToken(
   token: string,
 ): Promise<BusinessDocument | null> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const payload = await laravelRequest<{ document: unknown }>(`/portal/${token}`);
+      return payload.document ? mapDocument(payload.document) : null;
+    } catch {
+      return null;
+    }
+  }
   const tenantId = findTenantIdByPortalToken(token);
   if (!tenantId) return null;
   const store = tenantStoreById(tenantId);
@@ -91,6 +147,64 @@ export async function getInvoiceByToken(
     (d) => d.portalToken === token && d.kind === "invoice",
   );
   return doc ? withStatus(doc, store) : null;
+}
+
+type PortalContext = {
+  invoice: BusinessDocument;
+  payments: Payment[];
+  client: Client | null;
+  orgSettings: OrgSettings;
+  branding: OrgBranding | null;
+};
+
+type ApiPortalPayload = {
+  document?: unknown;
+  payments?: unknown[];
+  client?: unknown;
+  organization?: {
+    settings?: unknown;
+    branding?: unknown;
+  } | null;
+};
+
+export async function getPortalInvoiceContext(
+  token: string,
+): Promise<PortalContext | null> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const payload = await laravelRequest<ApiPortalPayload>(`/portal/${token}`);
+      if (!payload.document) return null;
+      return {
+        invoice: mapDocument(payload.document),
+        payments: Array.isArray(payload.payments)
+          ? payload.payments.map(mapPayment)
+          : [],
+        client: payload.client ? mapClient(payload.client) : null,
+        orgSettings: mapOrgSettings(payload.organization?.settings),
+        branding: payload.organization?.branding
+          ? mapBranding(payload.organization.branding)
+          : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  const tenantId = findTenantIdByPortalToken(token);
+  if (!tenantId) return null;
+  const store = tenantStoreById(tenantId);
+  const doc = store.documents.find(
+    (item) => item.portalToken === token && item.kind === "invoice",
+  );
+  if (!doc) return null;
+
+  return {
+    invoice: withStatus(doc, store),
+    payments: store.payments.filter((payment) => payment.documentId === doc.id),
+    client: store.clients.find((item) => item.id === doc.clientId) ?? null,
+    orgSettings: store.orgSettings ?? DEFAULT_ORG_SETTINGS,
+    branding: store.branding ?? null,
+  };
 }
 
 export async function invoiceCountFor(clientId: string): Promise<number> {
@@ -132,6 +246,17 @@ export async function overdueInvoiceCount(): Promise<number> {
 export async function allocateDocumentNumber(
   kind: BusinessDocument["kind"],
 ): Promise<string> {
+  if (isLaravelApiEnabled()) {
+    const year = new Date().getFullYear();
+    const prefix = kind === "invoice" ? "FAC" : kind === "quote" ? "DEV" : "AV";
+    const docs = await listDocuments(kind);
+    const max = docs.reduce((acc, r) => {
+      if (!r.number.startsWith(`${prefix}-${year}-`)) return acc;
+      const n = Number(r.number.split("-").pop());
+      return Number.isFinite(n) ? Math.max(acc, n) : acc;
+    }, 0);
+    return `${prefix}-${year}-${String(max + 1).padStart(3, "0")}`;
+  }
   await verifySession();
   const store = await tenantStore();
   const year = new Date().getFullYear();
