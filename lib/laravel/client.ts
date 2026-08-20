@@ -17,6 +17,7 @@ function isPublicApiPath(path: string): boolean {
     path === "/auth/forgot-password" ||
     path === "/auth/reset-password" ||
     path === "/auth/invitations/accept" ||
+    path === "/auth/email/resend" ||
     path.startsWith("/portal/") ||
     path.startsWith("/webhooks/")
   );
@@ -101,8 +102,20 @@ export async function laravelRequest<T>(
   }
   if (timer) clearTimeout(timer);
 
-  const isJson = response.headers.get("content-type")?.includes("application/json");
-  const payload = isJson ? await response.json() : await response.text();
+  const raw = await response.text();
+  const isJson = response.headers
+    .get("content-type")
+    ?.includes("application/json");
+  let payload: unknown = raw;
+  if (response.status === 204 || response.status === 205 || raw === "") {
+    payload = null;
+  } else if (isJson) {
+    try {
+      payload = JSON.parse(raw) as unknown;
+    } catch {
+      payload = raw;
+    }
+  }
 
   if (!response.ok) {
     const detail =

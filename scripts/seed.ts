@@ -70,7 +70,6 @@ async function main() {
         pipeline: true,
         conversations: true,
         reports: true,
-        stripePriceId: null,
       },
     ])
     .onConflictDoNothing();

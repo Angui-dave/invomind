@@ -18,13 +18,12 @@ class PaymentController extends Controller
         private DocumentPaymentService $payments,
     ) {}
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
     {
-        $payments = Payment::where('organization_id', $this->orgId($request))
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = Payment::where('organization_id', $this->orgId($request))
+            ->orderBy('created_at', 'desc');
 
-        return PaymentResource::collection($payments);
+        return $this->paginated($request, $query, PaymentResource::class);
     }
 
     public function store(PaymentRequest $request): JsonResponse

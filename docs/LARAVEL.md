@@ -97,17 +97,21 @@ Préfixe : `/api`. Auth Bearer + `X-Organization-Id` sauf routes publiques.
 | Ressource | Paths |
 |-----------|-------|
 | Clients | `GET/POST /clients`, `GET/PUT/DELETE /clients/{id}` |
-| Documents | `GET/POST /documents`, `GET/PUT /documents/{id}`, `PUT …/status` (devis), `POST …/issue`, `…/send`, `GET …/pdf` |
+| Documents | `GET/POST /documents`, `GET/PUT /documents/{id}`, `PUT …/status` (devis accepted/refused/expired, facture cancelled, avoir applied), `POST …/issue`, `…/send`, `GET …/pdf` |
 | Prospects | `GET/POST /prospects`, `PUT /prospects/{id}/stage` |
 | Expenses | `GET/POST /expenses`, `PUT /expenses/{id}`, `GET /expense-categories` |
 | Payments | `GET/POST /payments` |
 | Suppliers | `GET/POST /suppliers`, `PUT /suppliers/{id}` |
 | Catalog | `GET/POST /catalog`, `PUT /catalog/{id}` |
 | Conversations | `GET /conversations`, `…/messages?conversation_id=`, `…/inbox`, `POST …/send` |
-| Reports | `GET /reports/dashboard`, `GET /reports/overview` |
+| Webhook outbound | `GET/PUT /conversations/webhook`, `POST /conversations/webhook/test` |
+| Canaux inbound | `GET/POST /conversations/channels`, `DELETE /conversations/channels/{id}` |
+| Reports | `GET /reports/dashboard`, `GET /reports/overview` (inclut `billed_ht`, `vat_collected`, `vat_by_rate`) |
 | Import | `POST /import/{entity}` — `clients` \| `suppliers` \| `catalog` \| `expenses` |
 | Email templates | `GET /email-templates`, `PUT /email-templates/{event}` |
 | Agents | `GET /agents`, `PUT /agents/{id}/enable\|disable` (`POST /agents` → 410) |
+
+Listes : sans `per_page`, collection (`{ data }` via Resource, ou tableau nu) ; avec `?page=&per_page=` (max 100) : `{ data, meta }`. Le BFF accepte les deux via `unwrapList()`.
 
 ### Portail (public)
 
@@ -154,7 +158,7 @@ Période prépayée **30 jours**. Scheduler `subscriptions:expire` repasse en Fr
 | `POST /webhooks/tiktok` | TikTok → conversations |
 | `GET/POST /webhooks/cinetpay` | Paiements factures **et** abonnement SaaS |
 
-Les routes Next `app/api/webhooks/{meta,tiktok}` proxifient vers Laravel. **CinetPay → Laravel direct** (pas de proxy Stripe — Stripe retiré du produit).
+Les routes Next `app/api/webhooks/{meta,tiktok}` proxifient vers Laravel. **CinetPay → Laravel direct** (factures portail et abonnement SaaS).
 
 ---
 

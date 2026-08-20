@@ -56,7 +56,7 @@ function paidSum(documentId: string): number {
 
 function creditSum(documentId: string, docs: BusinessDocument[]): number {
   return docs
-    .filter((d) => d.kind === "credit_note" && d.sourceDocumentId === documentId)
+    .filter((d) => d.kind === "credit_note" && d.sourceDocumentId === documentId && d.status === "applied")
     .reduce((s, d) => s + d.total, 0);
 }
 

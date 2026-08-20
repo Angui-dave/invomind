@@ -38,6 +38,7 @@ class OrganizationController extends Controller
 
     public function updateCompanySettings(CompanySettingsRequest $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $settings = OrganizationSettings::findOrFail($this->orgId($request));
         $settings->update($request->validated());
 
@@ -46,6 +47,7 @@ class OrganizationController extends Controller
 
     public function updateTaxSettings(TaxSettingsRequest $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $settings = OrganizationSettings::findOrFail($this->orgId($request));
         $settings->update($request->validated());
 
@@ -54,6 +56,7 @@ class OrganizationController extends Controller
 
     public function updateBankingSettings(BankingSettingsRequest $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $settings = OrganizationSettings::findOrFail($this->orgId($request));
         $settings->update($request->validated());
 
@@ -62,6 +65,7 @@ class OrganizationController extends Controller
 
     public function updateReminders(Request $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $data = $request->validate([
             'reminders_enabled' => ['required', 'boolean'],
             'reminder_cadence' => ['sometimes', 'array'],
@@ -75,6 +79,7 @@ class OrganizationController extends Controller
 
     public function updatePaymentSettings(Request $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $data = $request->validate([
             'payment_connected' => ['sometimes', 'boolean'],
             'accepted_payment_methods' => ['sometimes', 'array'],
@@ -88,6 +93,7 @@ class OrganizationController extends Controller
 
     public function updateBranding(Request $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $data = $request->validate([
             'display_name' => ['nullable', 'string'],
             'primary_color' => ['sometimes', 'string', 'regex:/^#[0-9A-Fa-f]{6}$/'],
@@ -113,6 +119,7 @@ class OrganizationController extends Controller
 
     public function updateModules(Request $request): JsonResponse
     {
+        $this->authorizeSettings($request);
         $data = $request->validate([
             'pipeline' => ['sometimes', 'boolean'],
             'conversations' => ['sometimes', 'boolean'],
@@ -126,5 +133,11 @@ class OrganizationController extends Controller
         $features->update($data);
 
         return response()->json($features);
+    }
+
+    private function authorizeSettings(Request $request): void
+    {
+        $org = Organization::findOrFail($this->orgId($request));
+        $this->authorize('manageSettings', $org);
     }
 }

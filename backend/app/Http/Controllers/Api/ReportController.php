@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Document;
 use App\Models\Expense;
 use App\Models\Payment;
+use App\Services\DocumentComputeService;
 use App\Services\EntitlementService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -14,6 +15,8 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
+    private const BILLABLE = ['sent', 'partially_paid', 'paid', 'overdue'];
+
     public function dashboard(Request $request, EntitlementService $entitlements): JsonResponse
     {
         $entitlements->assertModule($this->orgId($request), 'reports');
@@ -32,7 +35,7 @@ class ReportController extends Controller
 
         $pendingCount = Document::where('organization_id', $orgId)
             ->where('kind', 'invoice')
-            ->whereIn('status', ['draft', 'sent'])
+            ->whereIn('status', ['sent', 'partially_paid'])
             ->count();
 
         $revenueByMonth = Payment::where('organization_id', $orgId)
@@ -58,7 +61,7 @@ class ReportController extends Controller
         ]);
     }
 
-    public function overview(Request $request, EntitlementService $entitlements): JsonResponse
+    public function overview(Request $request, EntitlementService $entitlements, DocumentComputeService $compute): JsonResponse
     {
         $entitlements->assertModule($this->orgId($request), 'reports');
 
@@ -79,12 +82,64 @@ class ReportController extends Controller
             ->groupBy('expense_categories.name')
             ->get();
 
+        $invoices = Document::query()
+            ->where('organization_id', $orgId)
+            ->where('kind', 'invoice')
+            ->whereIn('status', self::BILLABLE)
+            ->with('lines')
+            ->get();
+
+        $creditNotes = Document::query()
+            ->where('organization_id', $orgId)
+            ->where('kind', 'credit_note')
+            ->whereIn('status', ['issued', 'applied'])
+            ->with('lines')
+            ->get();
+
+        $billedHt = $invoices->sum(fn (Document $d) => (float) $d->subtotal_ht);
+        $billedTtc = $invoices->sum(fn (Document $d) => (float) $d->total);
+        $vatCollected = $invoices->sum(fn (Document $d) => (float) $d->tax_total)
+            - $creditNotes->sum(fn (Document $d) => (float) $d->tax_total);
+
+        $vatByRate = [];
+        foreach ($invoices as $invoice) {
+            $lines = $invoice->lines->map(fn ($line) => [
+                'quantity' => $line->quantity,
+                'unit_price' => $line->unit_price,
+                'tax_rate' => $line->tax_rate,
+                'discount_percent' => $line->discount_percent,
+            ])->all();
+            $detailed = $compute->computeDetailed($lines, $invoice->tax_mode ?? 'exclusive');
+            foreach ($detailed['tax_by_rate'] as $rate => $amount) {
+                $key = (string) $rate;
+                $vatByRate[$key] = bcadd($vatByRate[$key] ?? '0.00', (string) $amount, 2);
+            }
+        }
+
+        ksort($vatByRate, SORT_NUMERIC);
+        $vatRows = [];
+        foreach ($vatByRate as $rate => $amount) {
+            $vatRows[] = [
+                'rate' => (float) $rate,
+                'amount' => (float) $amount,
+            ];
+        }
+
+        $statusCount = fn (string $status): int => (int) ($invoicesByStatus->firstWhere('status', $status)?->count ?? 0);
+
         return response()->json([
             'total_revenue' => $totalRevenue,
             'total_expenses' => $totalExpenses,
             'net_profit' => bcsub((string) $totalRevenue, (string) $totalExpenses, 2),
             'invoices_by_status' => $invoicesByStatus,
             'expenses_by_category' => $expensesByCategory,
+            'billed_ht' => round($billedHt, 2),
+            'billed_ttc' => round($billedTtc, 2),
+            'vat_collected' => round($vatCollected, 2),
+            'vat_by_rate' => $vatRows,
+            'paid_invoice_count' => $statusCount('paid'),
+            'pending_invoice_count' => $statusCount('sent') + $statusCount('partially_paid'),
+            'overdue_invoice_count' => $statusCount('overdue'),
         ]);
     }
 }

@@ -57,6 +57,13 @@ type ApiOverview = {
     total: number | string;
   }>;
   expenses_by_category: Array<{ category: string; total: number | string }>;
+  billed_ht?: number | string;
+  billed_ttc?: number | string;
+  vat_collected?: number | string;
+  vat_by_rate?: Array<{ rate: number | string; amount: number | string }>;
+  paid_invoice_count?: number;
+  pending_invoice_count?: number;
+  overdue_invoice_count?: number;
 };
 
 function num(value: number | string | undefined): number {
@@ -180,6 +187,10 @@ export async function totalCollected(): Promise<number> {
 }
 
 export async function billedRevenueHt(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    if (overview.billed_ht != null) return num(overview.billed_ht);
+  }
   const invoices = await getInvoices();
   return invoices
     .filter((d) => BILLABLE.includes(d.status as InvoiceStatus))
@@ -187,6 +198,10 @@ export async function billedRevenueHt(): Promise<number> {
 }
 
 export async function billedRevenueTtc(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    if (overview.billed_ttc != null) return num(overview.billed_ttc);
+  }
   const invoices = await getInvoices();
   return invoices
     .filter((d) => BILLABLE.includes(d.status as InvoiceStatus))
@@ -204,6 +219,10 @@ export async function expensesTotalHt(): Promise<number> {
 }
 
 export async function vatCollected(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    if (overview.vat_collected != null) return num(overview.vat_collected);
+  }
   const [invoices, creditNotes] = await Promise.all([
     getInvoices(),
     getCreditNotes(),
@@ -211,11 +230,22 @@ export async function vatCollected(): Promise<number> {
   const fromInvoices = invoices
     .filter((d) => BILLABLE.includes(d.status as InvoiceStatus))
     .reduce((s, d) => s + d.taxTotal, 0);
-  const fromCredits = creditNotes.reduce((s, d) => s + d.taxTotal, 0);
+  const fromCredits = creditNotes
+    .filter((d) => d.status === "issued" || d.status === "applied")
+    .reduce((s, d) => s + d.taxTotal, 0);
   return Math.round((fromInvoices - fromCredits) * 100) / 100;
 }
 
 export async function vatByRate(): Promise<{ rate: number; amount: number }[]> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    if (overview.vat_by_rate && overview.vat_by_rate.length > 0) {
+      return overview.vat_by_rate.map((row) => ({
+        rate: num(row.rate),
+        amount: Math.round(num(row.amount) * 100) / 100,
+      }));
+    }
+  }
   const invoices = await getInvoices();
   const map = new Map<number, number>();
   for (const inv of invoices) {

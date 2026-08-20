@@ -107,7 +107,6 @@ export const plans = pgTable("plans", {
   pipeline: boolean("pipeline").notNull().default(false),
   conversations: boolean("conversations").notNull().default(false),
   reports: boolean("reports").notNull().default(true),
-  stripePriceId: text("stripe_price_id"),
 });
 
 export const subscriptions = pgTable("subscriptions", {
@@ -121,8 +120,6 @@ export const subscriptions = pgTable("subscriptions", {
     .references(() => plans.id)
     .default("free"),
   status: subscriptionStatusEnum("status").notNull().default("active"),
-  stripeCustomerId: text("stripe_customer_id"),
-  stripeSubscriptionId: text("stripe_subscription_id"),
   currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
   currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true })
@@ -145,7 +142,6 @@ export const subscriptionInvoices = pgTable(
     amount: numeric("amount", { precision: 14, scale: 2 }).notNull(),
     currency: text("currency").notNull().default("XOF"),
     status: subscriptionInvoiceStatusEnum("status").notNull().default("paid"),
-    stripeInvoiceId: text("stripe_invoice_id"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

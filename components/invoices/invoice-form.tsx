@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FileDown, FileMinus2, Mail } from "lucide-react";
+import { Ban, FileDown, FileMinus2, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { CatalogPicker } from "@/components/documents/catalog-picker";
 import { ClientPicker } from "@/components/documents/client-picker";
@@ -25,7 +25,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@/components/ui/select";
-import { saveDocument, sendDocument } from "@/lib/actions/documents";
+import { saveDocument, sendDocument, updateDocumentStatus } from "@/lib/actions/documents";
 import { downloadPdfFromUrl } from "@/lib/pdf-download";
 import type { Client } from "@/lib/data/clients";
 import type { CatalogItem } from "@/lib/data/catalog";
@@ -385,6 +385,45 @@ export function InvoiceForm({
     }
   }
 
+  async function handleCancelInvoice() {
+    if (!document?.id) return;
+    if (
+      !window.confirm(
+        "Annuler cette facture ? Elle ne pourra plus être payée en ligne.",
+      )
+    ) {
+      return;
+    }
+    setSaving(true);
+    try {
+      const result = await updateDocumentStatus(document.id, "cancelled");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Facture annulée");
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleApplyCredit() {
+    if (!document?.id) return;
+    setSaving(true);
+    try {
+      const result = await updateDocumentStatus(document.id, "applied");
+      if (!result.ok) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success("Avoir appliqué");
+      router.refresh();
+    } finally {
+      setSaving(false);
+    }
+  }
+
   async function handleDownloadPdf() {
     if (!document?.id) return;
     setDownloading(true);
@@ -682,6 +721,31 @@ export function InvoiceForm({
                   >
                     <FileMinus2 />
                     Créer un avoir
+                  </Button>
+                ) : null}
+                {kind === "invoice" &&
+                document &&
+                ["sent", "partially_paid", "overdue"].includes(
+                  document.status,
+                ) ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={saving}
+                    onClick={() => void handleCancelInvoice()}
+                  >
+                    <Ban />
+                    Annuler la facture
+                  </Button>
+                ) : null}
+                {kind === "credit_note" && document?.status === "issued" ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={saving}
+                    onClick={() => void handleApplyCredit()}
+                  >
+                    Appliquer l’avoir
                   </Button>
                 ) : null}
               </>

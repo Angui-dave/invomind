@@ -33,7 +33,7 @@ class DocumentController extends Controller
         private EntitlementService $entitlements,
     ) {}
 
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
     {
         $query = Document::where('organization_id', $this->orgId($request))
             ->with(['lines', 'reminders'])
@@ -47,7 +47,7 @@ class DocumentController extends Controller
             $query->where('status', $status);
         }
 
-        return DocumentResource::collection($query->get());
+        return $this->paginated($request, $query, DocumentResource::class);
     }
 
     public function show(Request $request, string $id): DocumentResource
@@ -180,27 +180,55 @@ class DocumentController extends Controller
     }
 
     /**
-     * Transition a sent quote to accepted / refused / expired.
+     * Transition quote (accepted/refused/expired), invoice (cancelled), or credit note (applied).
      */
     public function updateStatus(Request $request, string $id): DocumentResource
     {
         $data = $request->validate([
-            'status' => ['required', 'in:accepted,refused,expired'],
+            'status' => ['required', 'in:accepted,refused,expired,cancelled,applied'],
         ]);
 
         $doc = Document::where('organization_id', $this->orgId($request))->findOrFail($id);
 
         $this->authorize('updateStatus', $doc);
 
-        if ($doc->kind !== 'quote') {
-            throw new HttpException(422, 'Seuls les devis acceptent cette transition.');
+        $target = $data['status'];
+
+        if ($doc->kind === 'quote') {
+            if (! in_array($target, ['accepted', 'refused', 'expired'], true)) {
+                throw new HttpException(422, 'Statut de devis invalide.');
+            }
+            if (! in_array($doc->status, ['sent', 'accepted', 'refused', 'expired'], true)) {
+                throw new HttpException(422, 'Le devis doit être émis avant de changer de statut.');
+            }
+        } elseif ($doc->kind === 'invoice') {
+            if ($target !== 'cancelled') {
+                throw new HttpException(422, 'Seule l’annulation est autorisée sur une facture.');
+            }
+            if (! in_array($doc->status, ['sent', 'partially_paid', 'overdue'], true)) {
+                throw new HttpException(422, 'Cette facture ne peut pas être annulée.');
+            }
+        } elseif ($doc->kind === 'credit_note') {
+            if ($target !== 'applied') {
+                throw new HttpException(422, 'Seul le statut applied est autorisé sur un avoir.');
+            }
+            if ($doc->status !== 'issued') {
+                throw new HttpException(422, 'L’avoir doit être émis avant d’être appliqué.');
+            }
+        } else {
+            throw new HttpException(422, 'Transition de statut non supportée.');
         }
 
-        if (! in_array($doc->status, ['sent', 'accepted', 'refused', 'expired'], true)) {
-            throw new HttpException(422, 'Le devis doit être émis avant de changer de statut.');
-        }
+        $doc->update(['status' => $target]);
 
-        $doc->update(['status' => $data['status']]);
+        if ($doc->kind === 'credit_note' && $target === 'applied' && $doc->source_document_id) {
+            $source = Document::query()
+                ->where('organization_id', $doc->organization_id)
+                ->find($doc->source_document_id);
+            if ($source && $source->kind === 'invoice' && $source->status !== 'cancelled') {
+                app(\App\Services\DocumentPaymentService::class)->syncDocumentStatus($source);
+            }
+        }
 
         return new DocumentResource($doc->fresh(['lines', 'reminders']));
     }

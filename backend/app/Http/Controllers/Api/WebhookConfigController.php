@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\DeliveryAttempt;
 use App\Models\WebhookConfig;
 use App\Support\SafeOutboundUrl;
+use App\Services\WebhookService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -75,6 +76,23 @@ class WebhookConfigController extends Controller
                 ->orderBy('attempted_at', 'desc')
                 ->limit(20)
                 ->get(),
+        ]);
+    }
+
+    public function test(Request $request, WebhookService $webhook): JsonResponse
+    {
+        $result = $webhook->send($this->orgId($request), [
+            'event' => 'webhook.test',
+            'conversationId' => 'webhook-test',
+            'channel' => 'whatsapp',
+            'to' => '+221770000000',
+            'body' => 'Message de test InvoMind',
+        ]);
+
+        return response()->json([
+            'status' => $result['status'] ?? 'failed',
+            'delivery' => $result,
+            'error' => $result['error'] ?? null,
         ]);
     }
 

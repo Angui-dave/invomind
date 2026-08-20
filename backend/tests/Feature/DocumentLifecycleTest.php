@@ -202,4 +202,45 @@ class DocumentLifecycleTest extends TestCase
         $this->assertSame('FAC-2026-00001', $issued->number);
         $this->assertTrue($issued->frozen);
     }
+
+    public function test_invoice_can_be_cancelled(): void
+    {
+        $id = $this->createAndIssueDocument()['id'];
+
+        $this->withHeaders($this->tenantHeaders())
+            ->putJson('/api/documents/'.$id.'/status', ['status' => 'cancelled'])
+            ->assertOk()
+            ->assertJsonPath('status', 'cancelled');
+    }
+
+    public function test_credit_note_can_be_applied(): void
+    {
+        $invoiceId = $this->createAndIssueDocument()['id'];
+
+        $draft = $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/documents', $this->documentPayload([
+                'kind' => 'credit_note',
+                'source_document_id' => $invoiceId,
+            ]))
+            ->assertCreated()
+            ->json();
+
+        $this->withHeaders($this->tenantHeaders())
+            ->postJson('/api/documents/'.$draft['id'].'/issue')
+            ->assertOk()
+            ->assertJsonPath('status', 'issued');
+
+        $this->withHeaders($this->tenantHeaders())
+            ->putJson('/api/documents/'.$draft['id'].'/status', ['status' => 'applied'])
+            ->assertOk()
+            ->assertJsonPath('status', 'applied');
+    }
+
+    public function test_clients_pagination_envelope(): void
+    {
+        $this->withHeaders($this->tenantHeaders())
+            ->getJson('/api/clients?per_page=1&page=1')
+            ->assertOk()
+            ->assertJsonStructure(['data', 'meta' => ['current_page', 'last_page', 'per_page', 'total']]);
+    }
 }

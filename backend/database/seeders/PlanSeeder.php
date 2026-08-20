@@ -58,7 +58,6 @@ class PlanSeeder extends Seeder
             'expenses' => true,
             'catalog' => true,
             'import_tool' => true,
-            // stripe_price_id removed — CinetPay only
         ]);
 
         Plan::updateOrCreate(['id' => 'business'], [

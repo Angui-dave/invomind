@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\AgentController;
 use App\Http\Controllers\Api\AuthController;
 use App\Http\Controllers\Api\BillingController;
 use App\Http\Controllers\Api\CatalogController;
+use App\Http\Controllers\Api\ChannelConnectionController;
 use App\Http\Controllers\Api\ClientController;
 use App\Http\Controllers\Api\ConversationController;
 use App\Http\Controllers\Api\DocumentController;
@@ -118,6 +119,11 @@ Route::middleware(['auth:sanctum'])->group(function () {
             // Webhook config
             Route::get('/conversations/webhook', [WebhookConfigController::class, 'show']);
             Route::put('/conversations/webhook', [WebhookConfigController::class, 'update']);
+            Route::post('/conversations/webhook/test', [WebhookConfigController::class, 'test']);
+
+            Route::get('/conversations/channels', [ChannelConnectionController::class, 'index']);
+            Route::post('/conversations/channels', [ChannelConnectionController::class, 'store']);
+            Route::delete('/conversations/channels/{id}', [ChannelConnectionController::class, 'destroy']);
 
             // Email templates (admin only)
             Route::get('/email-templates', [EmailTemplateController::class, 'index']);

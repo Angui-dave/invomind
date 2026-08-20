@@ -16,15 +16,14 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ConversationController extends Controller
 {
-    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection
+    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
     {
         $entitlements->assertModule($this->orgId($request), 'conversations');
 
-        $conversations = Conversation::where('organization_id', $this->orgId($request))
-            ->orderBy('last_message_at', 'desc')
-            ->get();
+        $query = Conversation::where('organization_id', $this->orgId($request))
+            ->orderBy('last_message_at', 'desc');
 
-        return ConversationResource::collection($conversations);
+        return $this->paginated($request, $query, ConversationResource::class);
     }
 
     public function messages(Request $request, EntitlementService $entitlements): JsonResponse
@@ -88,9 +87,9 @@ class ConversationController extends Controller
         $query = InboundMessage::where('organization_id', $orgId);
 
         if ($since) {
-            $query->where('created_at', '>', $since);
+            $query->where('sent_at', '>', $since);
         }
 
-        return response()->json(['messages' => $query->orderBy('created_at')->get()]);
+        return response()->json(['messages' => $query->orderBy('sent_at')->get()]);
     }
 }

@@ -63,6 +63,16 @@ export default async function ReportsPage() {
   const vatDeductible = expenses
     .filter((e) => e.taxDeductible)
     .reduce((s, e) => s + e.taxAmount, 0);
+  const paidInvoiceCount = overview?.paid_invoice_count
+    ?? invoices.filter((i) => i.status === "paid").length;
+  const pendingInvoiceCount =
+    overview?.pending_invoice_count ??
+    invoices.filter(
+      (i) => i.status === "sent" || i.status === "partially_paid",
+    ).length;
+  const overdueInvoiceCount =
+    overview?.overdue_invoice_count ??
+    invoices.filter((i) => i.status === "overdue").length;
   const vatBalance = vatCollectedAmount - vatDeductible;
 
   const expensesByCategory =
@@ -99,15 +109,9 @@ export default async function ReportsPage() {
         expensesHt={expensesHt}
         expensesTtc={expensesTtc}
         profit={profit}
-        paidInvoiceCount={invoices.filter((i) => i.status === "paid").length}
-        pendingInvoiceCount={
-          invoices.filter(
-            (i) => i.status === "sent" || i.status === "partially_paid",
-          ).length
-        }
-        overdueInvoiceCount={
-          invoices.filter((i) => i.status === "overdue").length
-        }
+        paidInvoiceCount={paidInvoiceCount}
+        pendingInvoiceCount={pendingInvoiceCount}
+        overdueInvoiceCount={overdueInvoiceCount}
         revenueSeries={revenueSeries}
         expensesByCategory={expensesByCategory}
         vatCollectedAmount={vatCollectedAmount}

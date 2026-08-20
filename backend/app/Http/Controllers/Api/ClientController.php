@@ -14,19 +14,20 @@ use Illuminate\Support\Str;
 
 class ClientController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
     {
-        $clients = Client::where('organization_id', $this->orgId($request))
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = Client::where('organization_id', $this->orgId($request))
+            ->orderBy('created_at', 'desc');
 
-        return ClientResource::collection($clients);
+        return $this->paginated($request, $query, ClientResource::class);
     }
 
     public function show(Request $request, string $id): ClientResource
     {
         $client = Client::where('organization_id', $this->orgId($request))
             ->findOrFail($id);
+
+        $this->authorize('view', $client);
 
         return new ClientResource($client);
     }
@@ -51,6 +52,8 @@ class ClientController extends Controller
         $client = Client::where('organization_id', $this->orgId($request))
             ->findOrFail($id);
 
+        $this->authorize('update', $client);
+
         $client->update($request->validated());
 
         return new ClientResource($client->fresh());
@@ -60,6 +63,8 @@ class ClientController extends Controller
     {
         $client = Client::where('organization_id', $this->orgId($request))
             ->findOrFail($id);
+
+        $this->authorize('delete', $client);
 
         $client->delete();
 

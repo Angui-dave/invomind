@@ -15,11 +15,10 @@ class ProspectController extends Controller
     {
         $entitlements->assertModule($this->orgId($request), 'pipeline');
 
-        $prospects = Prospect::where('organization_id', $this->orgId($request))
-            ->orderBy('created_at', 'desc')
-            ->get();
+        $query = Prospect::where('organization_id', $this->orgId($request))
+            ->orderBy('created_at', 'desc');
 
-        return response()->json($prospects);
+        return $this->paginated($request, $query);
     }
 
     public function store(ProspectRequest $request, EntitlementService $entitlements): JsonResponse

@@ -3,6 +3,7 @@ import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
+import { unwrapList } from "@/lib/laravel/pagination";
 import { mapConversation, mapConversationMessage } from "@/lib/laravel/mappers";
 import { tenantStore } from "@/lib/mock/store";
 import type {
@@ -15,10 +16,12 @@ export async function listConversations(): Promise<Conversation[]> {
   const session = await verifySession();
   if (isLaravelApiEnabled()) {
     const token = (await readSessionCookie())?.accessToken;
-    const rows = await laravelRequest<unknown[]>("/conversations", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const rows = unwrapList(
+      await laravelRequest<unknown>("/conversations", {
+        token,
+        organizationId: session.organizationId,
+      }),
+    );
     return rows
       .map(mapConversation)
       .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
@@ -38,10 +41,12 @@ export async function getMessages(
     const qs = conversationId
       ? `/conversations/messages?conversation_id=${encodeURIComponent(conversationId)}`
       : "/conversations/messages";
-    const rows = await laravelRequest<unknown[]>(qs, {
-      token,
-      organizationId: session.organizationId,
-    });
+    const rows = unwrapList(
+      await laravelRequest<unknown>(qs, {
+        token,
+        organizationId: session.organizationId,
+      }),
+    );
     return rows.map(mapConversationMessage);
   }
   const store = await tenantStore();

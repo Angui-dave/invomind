@@ -6,6 +6,7 @@ import {
   mapInboundMessage,
   mapWebhookConfigResponse,
 } from "@/lib/laravel/mappers";
+import { unwrapList } from "@/lib/laravel/pagination";
 
 describe("laravel mappers", () => {
   it("maps client snake_case", () => {
@@ -107,5 +108,15 @@ describe("laravel mappers", () => {
     expect(mapConversationSendStatus({ status: "skipped" }).status).toBe(
       "skipped",
     );
+  });
+});
+
+describe("unwrapList", () => {
+  it("accepts a bare array or a paginated envelope", () => {
+    expect(unwrapList([{ id: "1" }])).toHaveLength(1);
+    expect(unwrapList({ data: [{ id: "2" }], meta: { total: 1 } })).toEqual([
+      { id: "2" },
+    ]);
+    expect(unwrapList(null)).toEqual([]);
   });
 });

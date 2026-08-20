@@ -252,6 +252,13 @@ export async function updateQuoteStatus(
   id: string,
   status: "accepted" | "refused" | "expired",
 ): Promise<ActionResult> {
+  return updateDocumentStatus(id, status);
+}
+
+export async function updateDocumentStatus(
+  id: string,
+  status: "accepted" | "refused" | "expired" | "cancelled" | "applied",
+): Promise<ActionResult> {
   if (isLaravelApiEnabled()) {
     try {
       const { token, organizationId } = await getApiContext();
@@ -266,19 +273,34 @@ export async function updateQuoteStatus(
     } catch (error) {
       return {
         ok: false,
-        error: actionErrorMessage(error, "Mise à jour du devis impossible"),
+        error: actionErrorMessage(error, "Mise à jour du statut impossible"),
       };
     }
   }
 
   await verifySession();
   const store = await tenantStore();
-  const idx = store.documents.findIndex((d) => d.id === id && d.kind === "quote");
-  if (idx < 0) return { ok: false, error: "Devis introuvable" };
+  const idx = store.documents.findIndex((d) => d.id === id);
+  if (idx < 0) return { ok: false, error: "Document introuvable" };
   const doc = store.documents[idx];
-  if (!["sent", "accepted", "refused", "expired"].includes(doc.status)) {
-    return { ok: false, error: "Le devis doit être émis avant de changer de statut" };
+
+  if (status === "cancelled") {
+    if (doc.kind !== "invoice") return { ok: false, error: "Seules les factures peuvent être annulées" };
+    if (!["sent", "partially_paid", "overdue"].includes(doc.status)) {
+      return { ok: false, error: "Cette facture ne peut pas être annulée" };
+    }
+  } else if (status === "applied") {
+    if (doc.kind !== "credit_note") return { ok: false, error: "Seuls les avoirs peuvent être appliqués" };
+    if (doc.status !== "issued") {
+      return { ok: false, error: "L’avoir doit être émis avant d’être appliqué" };
+    }
+  } else {
+    if (doc.kind !== "quote") return { ok: false, error: "Devis introuvable" };
+    if (!["sent", "accepted", "refused", "expired"].includes(doc.status)) {
+      return { ok: false, error: "Le devis doit être émis avant de changer de statut" };
+    }
   }
+
   store.documents[idx] = { ...doc, status };
   revalidateDocumentPaths(id);
   return { ok: true, id };

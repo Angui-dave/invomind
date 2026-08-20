@@ -62,7 +62,7 @@ export function amountPaid(documentId: string): number {
 
 export function creditedAmount(documentId: string): number {
   return DOCUMENTS.filter(
-    (d) => d.kind === "credit_note" && d.sourceDocumentId === documentId,
+    (d) => d.kind === "credit_note" && d.sourceDocumentId === documentId && d.status === "applied",
   ).reduce((s, d) => s + d.total, 0);
 }
 

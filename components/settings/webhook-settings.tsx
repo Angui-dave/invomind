@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Copy, Loader2, Send } from "lucide-react";
+import { Copy, Loader2, Send, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,20 @@ import type {
   MaskedWebhookConfig,
 } from "@/lib/webhooks/types";
 import { cn } from "@/lib/utils";
+
+type ChannelConnection = {
+  id: string;
+  channel: string;
+  external_id: string;
+  display_name: string | null;
+};
+
+const CHANNEL_OPTIONS = [
+  { id: "whatsapp", label: "WhatsApp" },
+  { id: "messenger", label: "Messenger" },
+  { id: "instagram", label: "Instagram" },
+  { id: "tiktok", label: "TikTok" },
+] as const;
 
 type WebhookResponse = {
   config: MaskedWebhookConfig;
@@ -51,6 +65,11 @@ export function WebhookSettings() {
   const [deliveries, setDeliveries] = useState<DeliveryAttempt[]>([]);
   const [metaUrl, setMetaUrl] = useState("");
   const [tiktokUrl, setTiktokUrl] = useState("");
+  const [connections, setConnections] = useState<ChannelConnection[]>([]);
+  const [channel, setChannel] = useState<string>("whatsapp");
+  const [externalId, setExternalId] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [savingChannel, setSavingChannel] = useState(false);
 
   const applyResponse = useCallback((data: WebhookResponse) => {
     setConfig(data.config);
@@ -66,6 +85,15 @@ export function WebhookSettings() {
       if (!res.ok) throw new Error("Chargement impossible");
       const data = (await res.json()) as WebhookResponse;
       applyResponse(data);
+      try {
+        const channelsRes = await fetch("/api/conversations/channels");
+        if (channelsRes.ok) {
+          const rows = (await channelsRes.json()) as ChannelConnection[];
+          setConnections(Array.isArray(rows) ? rows : []);
+        }
+      } catch {
+        setConnections([]);
+      }
     } catch {
       toast.error("Impossible de charger la configuration webhook");
     } finally {
@@ -121,15 +149,8 @@ export function WebhookSettings() {
   async function handleTest() {
     setTesting(true);
     try {
-      const res = await fetch("/api/conversations/send", {
+      const res = await fetch("/api/conversations/webhook/test", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          conversationId: "conv_test",
-          channel: "whatsapp",
-          to: "+221770000000",
-          body: "Message de test InvoMind",
-        }),
       });
       const data = await res.json();
       await load();
@@ -154,6 +175,58 @@ export function WebhookSettings() {
       toast.error("Échec du test d’envoi");
     } finally {
       setTesting(false);
+    }
+  }
+
+  async function handleAddChannel() {
+    if (!externalId.trim()) {
+      toast.error("Identifiant externe requis (page Meta ou compte TikTok)");
+      return;
+    }
+    setSavingChannel(true);
+    try {
+      const res = await fetch("/api/conversations/channels", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channel,
+          external_id: externalId.trim(),
+          display_name: displayName.trim() || null,
+        }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(
+          typeof data.error === "string"
+            ? data.error
+            : "Enregistrement du canal impossible",
+        );
+        return;
+      }
+      setExternalId("");
+      setDisplayName("");
+      toast.success("Canal lié à cette organisation");
+      await load();
+    } catch {
+      toast.error("Enregistrement du canal impossible");
+    } finally {
+      setSavingChannel(false);
+    }
+  }
+
+  async function handleDeleteChannel(id: string) {
+    try {
+      const res = await fetch(`/api/conversations/channels/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok && res.status !== 204) {
+        toast.error("Suppression impossible");
+        return;
+      }
+      toast.success("Canal retiré");
+      await load();
+    } catch {
+      toast.error("Suppression impossible");
     }
   }
 
@@ -364,6 +437,95 @@ export function WebhookSettings() {
             {config?.tiktokSecretConfigured ? "configuré" : "manquant"}
           </Badge>
         </div>
+      </section>
+
+      <section className="space-y-4 rounded-sm border border-line bg-paper p-4">
+        <div>
+          <h3 className="font-serif text-base font-semibold text-ink">
+            Lier les comptes inbound
+          </h3>
+          <p className="text-xs text-ink/55">
+            Identifiant de la page Meta (<code className="num">entry.id</code>)
+            ou du compte TikTok. Sans cette liaison, les webhooks inbound ne
+            sont routés vers aucune organisation.
+          </p>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="space-y-1.5">
+            <Label htmlFor="channel-kind">Canal</Label>
+            <select
+              id="channel-kind"
+              className="h-9 w-full rounded-md border border-line bg-background px-3 text-sm"
+              value={channel}
+              onChange={(e) => setChannel(e.target.value)}
+            >
+              {CHANNEL_OPTIONS.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="channel-external">Identifiant externe</Label>
+            <Input
+              id="channel-external"
+              value={externalId}
+              onChange={(e) => setExternalId(e.target.value)}
+              placeholder="ID page / compte"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="channel-name">Libellé (optionnel)</Label>
+            <Input
+              id="channel-name"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Atelier Diallo WhatsApp"
+            />
+          </div>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          disabled={savingChannel}
+          onClick={() => void handleAddChannel()}
+        >
+          {savingChannel && (
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+          )}
+          Lier le canal
+        </Button>
+        {connections.length > 0 ? (
+          <ul className="divide-y divide-line rounded-md border border-line">
+            {connections.map((row) => (
+              <li
+                key={row.id}
+                className="flex items-center justify-between gap-3 px-3 py-2 text-sm"
+              >
+                <div>
+                  <p className="font-medium text-ink">
+                    {CHANNEL_LABELS[row.channel as keyof typeof CHANNEL_LABELS] ??
+                      row.channel}
+                    {row.display_name ? ` · ${row.display_name}` : ""}
+                  </p>
+                  <p className="num text-xs text-ink/55">{row.external_id}</p>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void handleDeleteChannel(row.id)}
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                  Retirer
+                </Button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-xs text-ink/50">Aucun compte lié pour le moment.</p>
+        )}
       </section>
 
       <section className="space-y-3">

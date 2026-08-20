@@ -12,11 +12,10 @@ class SupplierController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        return response()->json(
-            Supplier::where('organization_id', $this->orgId($request))
-                ->orderBy('created_at', 'desc')
-                ->get()
-        );
+        $query = Supplier::where('organization_id', $this->orgId($request))
+            ->orderBy('created_at', 'desc');
+
+        return $this->paginated($request, $query);
     }
 
     public function store(SupplierRequest $request): JsonResponse

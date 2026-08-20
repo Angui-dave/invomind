@@ -3,6 +3,8 @@ import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
+import { getApiContext } from "@/lib/laravel/context";
+import { unwrapList } from "@/lib/laravel/pagination";
 import {
   mapBranding,
   mapClient,
@@ -32,7 +34,12 @@ function withStatus(doc: BusinessDocument, store: MockStore): BusinessDocument {
     .filter((p) => p.documentId === doc.id)
     .reduce((s, p) => s + p.amount, 0);
   const credited = store.documents
-    .filter((d) => d.kind === "credit_note" && d.sourceDocumentId === doc.id)
+    .filter(
+      (d) =>
+        d.kind === "credit_note" &&
+        d.sourceDocumentId === doc.id &&
+        d.status === "applied",
+    )
     .reduce((s, d) => s + d.total, 0);
   const settled = paid + credited;
   const today = TODAY;
@@ -50,11 +57,13 @@ export async function listClients(): Promise<Client[]> {
   const session = await verifySession();
   if (isLaravelApiEnabled()) {
     const token = (await readSessionCookie())?.accessToken;
-    const rows = await laravelRequest<unknown[]>("/clients", {
-      token,
-      organizationId: session.organizationId,
-    });
-    return rows.map(mapClient).sort((a, b) => a.name.localeCompare(b.name, "fr"));
+        const rows = unwrapList(
+          await laravelRequest<unknown>("/clients", {
+            token,
+            organizationId: session.organizationId,
+          }),
+        );
+        return rows.map(mapClient).sort((a, b) => a.name.localeCompare(b.name, "fr"));
   }
   const store = await tenantStore();
   return [...store.clients].sort((a, b) =>
@@ -87,10 +96,12 @@ export async function listDocuments(
   if (isLaravelApiEnabled()) {
     const token = (await readSessionCookie())?.accessToken;
     const query = kind ? `/documents?kind=${kind}` : "/documents";
-    const rows = await laravelRequest<unknown[]>(query, {
-      token,
-      organizationId: session.organizationId,
-    });
+    const rows = unwrapList(
+      await laravelRequest<unknown>(query, {
+        token,
+        organizationId: session.organizationId,
+      }),
+    );
     return rows
       .map(mapDocument)
       .sort((a, b) => b.issueDate.localeCompare(a.issueDate));
@@ -284,16 +295,29 @@ export async function latestOpenInvoiceToken(
 }
 
 export async function pendingInvoiceCount(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const { token, organizationId } = await getApiContext();
+    const dashboard = await laravelRequest<{ pending_invoice_count?: number }>(
+      "/reports/dashboard",
+      { token, organizationId },
+    );
+    return Number(dashboard.pending_invoice_count ?? 0);
+  }
   const invoices = await getInvoices();
   return invoices.filter(
-    (i) =>
-      i.status === "sent" ||
-      i.status === "partially_paid" ||
-      i.status === "overdue",
+    (i) => i.status === "sent" || i.status === "partially_paid",
   ).length;
 }
 
 export async function overdueInvoiceCount(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const { token, organizationId } = await getApiContext();
+    const dashboard = await laravelRequest<{ overdue_invoice_count?: number }>(
+      "/reports/dashboard",
+      { token, organizationId },
+    );
+    return Number(dashboard.overdue_invoice_count ?? 0);
+  }
   const invoices = await getInvoices();
   return invoices.filter((i) => i.status === "overdue").length;
 }

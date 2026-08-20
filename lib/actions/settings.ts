@@ -327,6 +327,10 @@ export async function updateBranding(
           logo_url: parsed.data.logoUrl,
           primary_color: parsed.data.primaryColor,
           accent_color: parsed.data.accentColor,
+          font_family: parsed.data.fontFamily,
+          document_template: parsed.data.documentTemplate,
+          locale: parsed.data.locale,
+          currency: parsed.data.currency,
         },
       });
       revalidatePath("/settings");

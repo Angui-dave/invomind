@@ -17,7 +17,17 @@ class DocumentPaymentService
             ->where('document_id', $document->id)
             ->sum('amount');
 
-        $remaining = bcsub((string) $document->total, (string) $paid, 2);
+        $credited = Document::query()
+            ->where('source_document_id', $document->id)
+            ->where('kind', 'credit_note')
+            ->where('status', 'applied')
+            ->sum('total');
+
+        $remaining = bcsub(
+            bcsub((string) $document->total, (string) $paid, 2),
+            (string) $credited,
+            2,
+        );
 
         return bccomp($remaining, '0', 2) > 0 ? $remaining : '0.00';
     }
@@ -118,6 +128,10 @@ class DocumentPaymentService
 
     public function syncDocumentStatus(Document $document): void
     {
+        if (in_array($document->status, ['draft', 'cancelled'], true) || $document->kind !== 'invoice') {
+            return;
+        }
+
         $outstanding = $this->outstandingBalance($document->fresh());
 
         if (bccomp($outstanding, '0', 2) === 0) {

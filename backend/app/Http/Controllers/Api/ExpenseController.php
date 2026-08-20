@@ -15,16 +15,15 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class ExpenseController extends Controller
 {
-    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection
+    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
     {
         $entitlements->assertModule($this->orgId($request), 'expenses');
 
-        $expenses = Expense::where('organization_id', $this->orgId($request))
+        $query = Expense::where('organization_id', $this->orgId($request))
             ->with(['category', 'supplier'])
-            ->orderBy('created_at', 'desc')
-            ->get();
+            ->orderBy('created_at', 'desc');
 
-        return ExpenseResource::collection($expenses);
+        return $this->paginated($request, $query, ExpenseResource::class);
     }
 
     public function store(ExpenseRequest $request, EntitlementService $entitlements): JsonResponse

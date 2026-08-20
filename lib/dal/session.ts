@@ -15,44 +15,7 @@ import {
 import { tenantStoreById } from "@/lib/mock/store";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
 import type { EnabledModules, PlanId } from "@/lib/data/settings";
-
-type ApiOrganizationResponse = {
-  id: string;
-  name: string;
-  slug: string;
-  plan_id?: PlanId;
-  settings?: unknown;
-  branding?: unknown;
-  features?: {
-    pipeline?: boolean;
-    conversations?: boolean;
-    expenses?: boolean;
-    catalog?: boolean;
-    reports?: boolean;
-    import_tool?: boolean;
-  };
-  subscription?: unknown;
-  plan?: {
-    id: PlanId;
-    name: string;
-    price?: number | string;
-    price_label: string;
-    description: string;
-    features?: string[];
-    limit_label?: string | null;
-    highlighted?: boolean;
-    max_invoices_per_month?: number | null;
-    max_clients?: number | null;
-    auto_reminders?: boolean;
-    online_payments?: boolean;
-    pipeline?: boolean;
-    conversations?: boolean;
-    reports?: boolean;
-    expenses?: boolean;
-    catalog?: boolean;
-    import_tool?: boolean;
-  } | null;
-};
+import type { ApiOrganizationResponse } from "@/lib/laravel/types";
 
 type ApiEntitlementsResponse = {
   pipeline?: boolean;
@@ -177,14 +140,20 @@ export const getOptionalSession = cache(async () => {
   }
 });
 
+export const fetchOrganization = cache(async (): Promise<ApiOrganizationResponse> => {
+  const session = await verifySession();
+  const token = (await readSessionCookie())?.accessToken;
+  return laravelRequest<ApiOrganizationResponse>("/organization", {
+    token,
+    organizationId: session.organizationId,
+  });
+});
+
 export const getCurrentOrganization = cache(async () => {
   const session = await verifySession();
   if (isLaravelApiEnabled()) {
     const token = (await readSessionCookie())?.accessToken;
-    const organization = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const organization = await fetchOrganization();
     const entitlements = await laravelRequest<ApiEntitlementsResponse>("/organization/entitlements", {
       token,
       organizationId: session.organizationId,

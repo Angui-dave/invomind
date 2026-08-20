@@ -13,15 +13,14 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CatalogController extends Controller
 {
-    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection
+    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
     {
         $entitlements->assertModule($this->orgId($request), 'catalog');
 
-        return CatalogItemResource::collection(
-            CatalogItem::where('organization_id', $this->orgId($request))
-                ->orderBy('created_at', 'desc')
-                ->get()
-        );
+        $query = CatalogItem::where('organization_id', $this->orgId($request))
+            ->orderBy('created_at', 'desc');
+
+        return $this->paginated($request, $query, CatalogItemResource::class);
     }
 
     public function store(CatalogItemRequest $request, EntitlementService $entitlements): JsonResponse

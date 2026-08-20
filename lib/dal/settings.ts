@@ -1,7 +1,7 @@
 import "server-only";
 import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
-import { verifySession } from "@/lib/dal/session";
+import { fetchOrganization, verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
 import { mapBranding as mapApiBranding, mapOrgSettings as mapApiOrgSettings } from "@/lib/laravel/mappers";
 import { tenantStore } from "@/lib/mock/store";
@@ -45,25 +45,6 @@ type ApiEmailTemplate = {
   body: string;
 };
 
-type ApiOrganizationResponse = {
-  settings?: {
-    reminders_enabled?: boolean;
-    reminder_cadence?: string[];
-    payment_connected?: boolean;
-    accepted_payment_methods?: string[];
-  } & Record<string, unknown>;
-  branding?: unknown;
-  features?: {
-    pipeline?: boolean;
-    conversations?: boolean;
-    expenses?: boolean;
-    catalog?: boolean;
-    reports?: boolean;
-    import_tool?: boolean;
-  };
-  subscription_invoices?: unknown[];
-};
-
 type ApiBillingItem = {
   id: string;
   date: string;
@@ -74,13 +55,9 @@ type ApiBillingItem = {
 };
 
 export async function getOrgSettings(): Promise<OrgSettings> {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const org = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const org = await fetchOrganization();
     return mapApiOrgSettings(org.settings ?? {});
   }
   const store = await tenantStore();
@@ -88,13 +65,9 @@ export async function getOrgSettings(): Promise<OrgSettings> {
 }
 
 export async function getSettingsExtras(): Promise<OrgSettingsExtras> {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const org = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const org = await fetchOrganization();
     const settings = org.settings ?? {};
     return {
       remindersEnabled: Boolean(settings.reminders_enabled),
@@ -136,13 +109,9 @@ export async function getEmailTemplates(): Promise<EmailTemplate[]> {
 }
 
 export async function getBillingHistory(): Promise<BillingHistoryItem[]> {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const org = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const org = await fetchOrganization();
     const rows = (org.subscription_invoices ?? []) as ApiBillingItem[];
     return rows.map((item) => ({
       id: item.id,
@@ -158,13 +127,9 @@ export async function getBillingHistory(): Promise<BillingHistoryItem[]> {
 }
 
 export async function getBranding(): Promise<OrgBranding | null> {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const org = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const org = await fetchOrganization();
     return org.branding ? mapApiBranding(org.branding) : null;
   }
   const store = await tenantStore();
@@ -174,13 +139,9 @@ export async function getBranding(): Promise<OrgBranding | null> {
 export async function getEnabledModules(): Promise<
   import("@/lib/data/settings").EnabledModules
 > {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const org = await laravelRequest<ApiOrganizationResponse>("/organization", {
-      token,
-      organizationId: session.organizationId,
-    });
+    const org = await fetchOrganization();
     return {
       pipeline: Boolean(org.features?.pipeline),
       conversations: Boolean(org.features?.conversations),

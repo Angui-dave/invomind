@@ -29,9 +29,16 @@ class DocumentPolicy
 
     public function updateStatus(User $user, Document $document): bool
     {
-        return $this->belongsToTenant($document)
-            && $document->kind === 'quote'
-            && in_array($document->status, ['sent', 'accepted', 'refused', 'expired'], true);
+        if (! $this->belongsToTenant($document)) {
+            return false;
+        }
+
+        return match ($document->kind) {
+            'quote' => in_array($document->status, ['sent', 'accepted', 'refused', 'expired'], true),
+            'invoice' => in_array($document->status, ['sent', 'partially_paid', 'overdue'], true),
+            'credit_note' => $document->status === 'issued',
+            default => false,
+        };
     }
 
     public function delete(User $user, Document $document): bool
