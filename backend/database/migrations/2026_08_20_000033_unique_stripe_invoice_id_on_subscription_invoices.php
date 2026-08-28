@@ -48,6 +48,18 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (! Schema::hasColumn('subscription_invoices', 'stripe_invoice_id')) {
+            return;
+        }
+
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'pgsql') {
+            DB::statement('ALTER TABLE subscription_invoices DROP CONSTRAINT IF EXISTS subscription_invoices_stripe_invoice_id_unique');
+            DB::statement('DROP INDEX IF EXISTS subscription_invoices_stripe_invoice_id_unique');
+
+            return;
+        }
+
         Schema::table('subscription_invoices', function (Blueprint $table) {
             $table->dropUnique(['stripe_invoice_id']);
         });

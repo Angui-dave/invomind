@@ -66,10 +66,25 @@ return new class extends Migration
             $table->text('stripe_subscription_id')->nullable();
         });
 
+        if (! Schema::hasColumn('subscription_invoices', 'stripe_invoice_id')) {
+            Schema::table('subscription_invoices', function (Blueprint $table) {
+                $table->text('stripe_invoice_id')->nullable();
+            });
+        }
+
         Schema::table('subscription_invoices', function (Blueprint $table) {
-            $table->text('stripe_invoice_id')->nullable();
             $table->dropColumn(['payment_intent_id', 'provider', 'provider_transaction_id']);
         });
+
+        // Restore the unique added by 000033 so that migration can roll back cleanly.
+        $driver = Schema::getConnection()->getDriverName();
+        if ($driver === 'pgsql') {
+            DB::statement('CREATE UNIQUE INDEX IF NOT EXISTS subscription_invoices_stripe_invoice_id_unique ON subscription_invoices (stripe_invoice_id)');
+        } else {
+            Schema::table('subscription_invoices', function (Blueprint $table) {
+                $table->unique('stripe_invoice_id');
+            });
+        }
 
         Schema::table('payment_intents', function (Blueprint $table) {
             $table->dropIndex('payment_intents_purpose_status_idx');

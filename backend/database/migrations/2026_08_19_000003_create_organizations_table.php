@@ -9,13 +9,14 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('organizations', function (Blueprint $table) {
-            $table->uuid('id')->primary()->default(DB::raw('gen_random_uuid()'));
-            $table->text('name');
-            $table->text('slug')->unique();
-            $table->string('plan_id')->default('free');
+            $table->id(); // Clé primaire auto-incrémentée
+            $table->uuid('uuid')->unique()->default(DB::raw('gen_random_uuid()')); // Unique, mais pas primaire
+            $table->string('name');
+            $table->string('slug')->unique();
+            $table->foreignId('plan_id')->constrained('plans');
             $table->timestampsTz();
 
-            $table->foreign('plan_id')->references('id')->on('plans');
+            $table->foreign('plan_id')->references('id')->on('plans')->onDelete('restrict');
         });
     }
 
