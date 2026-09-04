@@ -11,7 +11,7 @@ Le front Next.js (BFF + Server Actions) parle à une **API Laravel** (Sanctum). 
 - **Portail client** : liens token (`/f/[token]`) pour consulter et payer (CinetPay).
 - **CRM & pipeline** : clients et prospection Kanban.
 - **Dépenses & fournisseurs** : frais, catalogue, grand livre.
-- **Messagerie omnicanal** : conversations + webhooks Meta / TikTok (Laravel).
+- **Messagerie omnicanal** : conversations en **temps réel** (Laravel Reverb + Echo) + webhooks Meta / TikTok (Laravel).
 - **Abonnements** : plans Free / Pro / Business (entitlements Laravel ; paiement prépayé 30 jours via **CinetPay**).
 - **Import CSV** : clients, fournisseurs, catalogue, dépenses via l’API.
 - **Agents (équipe)** : invitations et activation/désactivation des membres.
@@ -22,8 +22,9 @@ Le front Next.js (BFF + Server Actions) parle à une **API Laravel** (Sanctum). 
 
 | Couche | Techno |
 |--------|--------|
-| Front | Next.js 16.3 (App Router, Server Actions), React 19, Tailwind v4, shadcn |
-| API | Laravel 13 + Sanctum (`backend/`) |
+| Front | Next.js 16.3.1 (App Router, Server Actions), React 19.2.8, Tailwind v4, shadcn |
+| API | Laravel ^13.17 + Sanctum ^4.3 (`backend/`) ; DomPDF (PDF) ; bacon/bacon-qr-code (QR) ; Resend (mail prod) |
+| Temps réel | Laravel Reverb + laravel-echo + pusher-js (conversations) |
 | Auth | Cookies HttpOnly séparés : JWT session (`invomind_session`) + Bearer Sanctum (`invomind_access`) |
 | Paiements | **CinetPay uniquement** (factures portail + abonnement SaaS) |
 | Validation | Zod (front), Form Requests (Laravel) |
@@ -39,6 +40,12 @@ invomind/
 │   ├── actions/         # Mutations Server Actions
 │   ├── laravel/         # Client HTTP + mappers snake_case → camelCase
 │   ├── auth/            # Cookie de session
+│   ├── billing/         # Entitlements côté front
+│   ├── rbac/            # Guards et politiques de rôle
+│   ├── qr/              # Génération QR (EMV / Swiss)
+│   ├── security/        # Rate-limit, redirects sûrs
+│   ├── services/        # Services front (ex. agent)
+│   ├── webhooks/        # Proxy / payloads Meta & TikTok
 │   └── mock/            # Fallback démo (si Laravel désactivé)
 ├── docs/                # Contrat API et notes backend
 ├── backend/             # API Laravel (source de vérité)
@@ -66,12 +73,13 @@ php artisan migrate --seed   # plans gratuit/pro/business + règles de relance +
 php artisan serve      # http://localhost:8000
 ```
 
-Dans un second terminal (jobs PDF / mails / relances) :
+Dans un second terminal (jobs PDF / mails / relances + websockets) :
 
 ```bash
 cd backend
 php artisan queue:work
 php artisan schedule:work
+php artisan reverb:start   # temps réel conversations (port 8080 par défaut)
 ```
 
 ### 2. Front
@@ -90,6 +98,12 @@ LARAVEL_API_URL=http://localhost:8000/api
 NEXT_PUBLIC_USE_MOCK_DATA=false
 SESSION_SECRET=dev-session-secret-change-in-production-32chars
 NEXT_PUBLIC_APP_URL=http://localhost:3000
+
+# Laravel Reverb (temps réel conversations)
+NEXT_PUBLIC_REVERB_APP_KEY=invomind-key
+NEXT_PUBLIC_REVERB_HOST=localhost
+NEXT_PUBLIC_REVERB_PORT=8080
+NEXT_PUBLIC_REVERB_SCHEME=http
 ```
 
 ### Mode mock (sans Laravel)
@@ -104,6 +118,7 @@ Compte démo mock : `lea@atelier-diallo.sn` / `password123`.
 ## Scripts npm
 
 - `npm run dev` / `build` / `start` / `lint` — Next.js
+- `npm run test` / `test:watch` — Vitest
 - Scripts `db:*` (Drizzle) — **legacy** (voir [drizzle/LEGACY.md](drizzle/LEGACY.md)), non requis en mode Laravel
 
 ## Variables d’environnement (front)
@@ -112,10 +127,18 @@ Compte démo mock : `lea@atelier-diallo.sn` / `password123`.
 |---|---|
 | `USE_LARAVEL_API` | `true` = source de vérité Laravel (recommandé) |
 | `LARAVEL_API_URL` | Base API, ex. `http://localhost:8000/api` |
+| `NEXT_PUBLIC_LARAVEL_API_URL` | URL publique Laravel (affichage webhooks inbound dans Settings) |
 | `LARAVEL_TIMEOUT_MS` | Timeout fetch vers Laravel |
 | `NEXT_PUBLIC_USE_MOCK_DATA` | `true` seulement si Laravel est désactivé |
 | `SESSION_SECRET` | Signature du cookie JWT |
 | `NEXT_PUBLIC_APP_URL` | URL publique du front |
+| `META_VERIFY_TOKEN` / `META_APP_SECRET` | Proxy Next Meta → Laravel (secrets métier côté `backend/.env`) |
+| `TIKTOK_CLIENT_KEY` / `TIKTOK_CLIENT_SECRET` | Proxy Next TikTok → Laravel |
+| `CONVERSATIONS_WEBHOOK_URL` / `CONVERSATIONS_WEBHOOK_SECRET` | Outbound webhook **legacy** Next — préférer Laravel |
+| `NEXT_PUBLIC_REVERB_APP_KEY` | Clé app Reverb (Echo côté navigateur) |
+| `NEXT_PUBLIC_REVERB_HOST` | Hôte Reverb (ex. `localhost`) |
+| `NEXT_PUBLIC_REVERB_PORT` | Port Reverb (ex. `8080`) |
+| `NEXT_PUBLIC_REVERB_SCHEME` | Schéma ws (`http` ou `https`) |
 
 Les secrets Meta / TikTok / CinetPay se configurent côté **Laravel** (`backend/.env`). Les webhooks inbound doivent pointer vers `https://api…/api/webhooks/{meta|tiktok|cinetpay}` (CinetPay direct Laravel ; Meta/TikTok peuvent passer par le proxy Next).
 
@@ -129,3 +152,5 @@ Les secrets Meta / TikTok / CinetPay se configurent côté **Laravel** (`backend
 
 - **CinetPay** : checkout portail factures + checkout abonnement SaaS (prépayé 30 j) + webhook Laravel.
 - **Meta / TikTok** : messages entrants → Laravel (`InboundConversationService`).
+- **Laravel Reverb** : websockets pour les conversations en temps réel (Echo / pusher-js côté front).
+- **Resend** : envoi d’e-mails en production (`MAIL_MAILER=resend` côté Laravel).
