@@ -3,6 +3,7 @@
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createSession, deleteSession, readSessionCookie } from "@/lib/auth/session";
+import { rethrowNextNavigation } from "@/lib/auth/navigation";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { laravelRequest, LaravelApiError } from "@/lib/laravel/client";
 import {
@@ -27,8 +28,32 @@ export type AuthFormState = {
   email?: string;
 };
 
-function redirectAfterAuth(role?: "owner" | "admin" | "member"): never {
-  redirect(role === "member" ? AGENT_DEFAULT_ROUTE : "/dashboard");
+function redirectAfterAuth(role?: string): never {
+  redirect(role === "member" || role === "agent" ? AGENT_DEFAULT_ROUTE : "/dashboard");
+}
+
+function laravelFieldErrors(error: unknown): AuthFormState["errors"] | null {
+  if (!(error instanceof LaravelApiError) || error.status !== 422) return null;
+  const payload = error.payload as
+    | { errors?: Record<string, string[]>; message?: string }
+    | undefined;
+  if (!payload?.errors || typeof payload.errors !== "object") return null;
+
+  const map: AuthFormState["errors"] = {};
+  if (payload.errors.email) map.email = payload.errors.email;
+  if (payload.errors.password) map.password = payload.errors.password;
+  if (payload.errors.name) map.name = payload.errors.name;
+  if (payload.errors.company_name) map.company = payload.errors.company_name;
+  if (payload.errors.company) map.company = payload.errors.company;
+  return Object.keys(map).length > 0 ? map : null;
+}
+
+function authErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof LaravelApiError)) return fallback;
+  // Prefer a clean message without the "[METHOD /path]" suffix from the client.
+  const payload = error.payload as { message?: string } | undefined;
+  if (payload?.message) return payload.message;
+  return error.message.replace(/\s*\[[A-Z]+ \/[^\]]+\]\s*$/, "") || fallback;
 }
 
 const passwordSchema = z
@@ -103,12 +128,13 @@ export async function login(
   const email = parsed.data.email.toLowerCase();
 
   if (isLaravelApiEnabled()) {
+    let sessionRole: string | undefined;
     try {
       const res = await laravelRequest<{
-        user: { id: string; email: string; name: string };
-        organization_id: string;
-        organization?: { id: string };
-        role?: "owner" | "admin" | "member";
+        user: { id: string | number; email: string; name?: string };
+        organization_id: string | number;
+        organization?: { id: string | number };
+        role?: string;
         token: string;
       }>("/auth/login", {
         method: "POST",
@@ -118,9 +144,15 @@ export async function login(
       if (!organizationId) {
         return { errors: { form: ["Aucune organisation associée"] } };
       }
-      await createSession(res.user.id, organizationId, res.token, res.role);
-      redirectAfterAuth(res.role);
+      await createSession(
+        String(res.user.id),
+        String(organizationId),
+        res.token,
+        res.role as "owner" | "admin" | "member" | "agent" | undefined,
+      );
+      sessionRole = res.role;
     } catch (error) {
+      rethrowNextNavigation(error);
       if (error instanceof LaravelApiError) {
         console.error("LOGIN_API_ERROR", {
           message: error.message,
@@ -145,12 +177,13 @@ export async function login(
       } else {
         console.error("LOGIN_UNKNOWN_ERROR", error);
       }
-      const message =
-        error instanceof LaravelApiError
-          ? error.message
-          : "E-mail ou mot de passe incorrect";
-      return { errors: { form: [message] } };
+      return {
+        errors: {
+          form: [authErrorMessage(error, "E-mail ou mot de passe incorrect")],
+        },
+      };
     }
+    redirectAfterAuth(sessionRole);
   }
   const user = findUserByEmail(email);
 
@@ -209,14 +242,15 @@ export async function register(
   }
 
   if (isLaravelApiEnabled()) {
+    let sessionRole = "admin";
     try {
       const res = await laravelRequest<{
         message?: string;
         email_verification_required?: boolean;
-        user?: { id: string; email: string; name: string };
-        organization_id?: string;
-        organization?: { id: string };
-        role?: "owner" | "admin" | "member";
+        user?: { id: string | number; email: string; full_name?: string; name?: string };
+        organization_id?: string | number;
+        organization?: { id: string | number };
+        role?: string;
         token?: string;
       }>("/auth/register", {
         method: "POST",
@@ -228,47 +262,47 @@ export async function register(
         },
       });
 
-      if (res.email_verification_required || !res.token) {
+      if (!res.token || !res.user) {
         return {
-          emailVerificationRequired: true,
-          email: parsed.data.email.toLowerCase(),
-          message:
-            res.message ??
-            "Compte créé. Vérifiez votre e-mail avant de vous connecter.",
+          errors: {
+            form: [res.message ?? "Inscription impossible"],
+          },
         };
       }
 
       const organizationId = res.organization_id ?? res.organization?.id;
-      if (!organizationId || !res.user) {
+      if (!organizationId) {
         return { errors: { form: ["Inscription impossible"] } };
       }
       await createSession(
-        res.user.id,
-        organizationId,
+        String(res.user.id),
+        String(organizationId),
         res.token,
-        res.role ?? "owner",
+        (res.role as "owner" | "admin" | "member" | "agent" | undefined) ?? "admin",
       );
+      sessionRole = res.role ?? "admin";
     } catch (error) {
+      rethrowNextNavigation(error);
       if (error instanceof LaravelApiError) {
         console.error("REGISTER_API_ERROR", {
           message: error.message,
           status: error.status,
           payload: error.payload,
         });
+        const fields = laravelFieldErrors(error);
+        if (fields) {
+          return { errors: fields };
+        }
       } else {
         console.error("REGISTER_UNKNOWN_ERROR", error);
       }
       return {
         errors: {
-          form: [
-            error instanceof LaravelApiError
-              ? error.message
-              : "Inscription impossible",
-          ],
+          form: [authErrorMessage(error, "Inscription impossible")],
         },
       };
     }
-    redirectAfterAuth("owner");
+    redirectAfterAuth(sessionRole);
   }
 
   try {
@@ -439,6 +473,7 @@ export async function acceptInvitation(
     };
   }
 
+  let sessionRole: string | undefined;
   try {
     const res = await laravelRequest<{
       user: { id: string; email: string; name: string };
@@ -459,18 +494,20 @@ export async function acceptInvitation(
       res.token,
       res.role,
     );
-    redirectAfterAuth(res.role);
+    sessionRole = res.role;
   } catch (error) {
+    rethrowNextNavigation(error);
     return {
       errors: {
         form: [
           error instanceof LaravelApiError
-            ? error.message
+            ? authErrorMessage(error, "Invitation invalide ou expirée")
             : "Invitation invalide ou expirée",
         ],
       },
     };
   }
+  redirectAfterAuth(sessionRole);
 }
 
 export async function resendVerificationEmail(

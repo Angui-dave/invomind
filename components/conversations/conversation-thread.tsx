@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Link2, Send, UserRound } from "lucide-react";
+import { ArrowLeft, ImagePlus, Link2, Send, UserRound, X } from "lucide-react";
 import { toast } from "sonner";
 import { ChannelBadge } from "@/components/conversations/channel-badge";
 import { MessageBubble } from "@/components/conversations/message-bubble";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   formatDateFr,
@@ -18,13 +19,21 @@ import {
 import { todayIso } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
+export type SendPayload = {
+  body: string;
+  contentType?: "texte" | "image" | "fichier" | "audio" | "video" | "modele";
+  mediaUrl?: string;
+};
+
 type ConversationThreadProps = {
   conversation: Conversation | null;
   messages: ConversationMessage[];
   invoices?: BusinessDocument[];
-  onSend: (body: string) => void | Promise<void>;
+  onSend: (payload: SendPayload | string) => void | Promise<void>;
   onBack?: () => void;
   onOpenContact?: () => void;
+  /** Optional slot for template picker (WhatsApp). */
+  composeExtra?: React.ReactNode;
   className?: string;
 };
 
@@ -41,6 +50,16 @@ function dayLabel(isoDate: string): string {
   return formatDateFr(isoDate);
 }
 
+function detectContentType(
+  url: string,
+): "image" | "audio" | "video" | "fichier" {
+  const lower = url.toLowerCase();
+  if (/\.(png|jpe?g|gif|webp|bmp)(\?|$)/.test(lower)) return "image";
+  if (/\.(mp3|ogg|opus|wav|m4a)(\?|$)/.test(lower)) return "audio";
+  if (/\.(mp4|webm|mov)(\?|$)/.test(lower)) return "video";
+  return "fichier";
+}
+
 export function ConversationThread({
   conversation,
   messages,
@@ -48,9 +67,12 @@ export function ConversationThread({
   onSend,
   onBack,
   onOpenContact,
+  composeExtra,
   className,
 }: ConversationThreadProps) {
   const [draft, setDraft] = useState("");
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [showMediaInput, setShowMediaInput] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const conversationId = conversation?.id;
 
@@ -73,12 +95,23 @@ export function ConversationThread({
 
   function handleSend() {
     const body = draft.trim();
-    if (!body) {
+    const media = mediaUrl.trim();
+    if (!body && !media) {
       toast.error("Le message ne peut pas être vide");
       return;
     }
-    onSend(body);
+    if (media) {
+      void onSend({
+        body: body || "[média]",
+        contentType: detectContentType(media),
+        mediaUrl: media,
+      });
+    } else {
+      void onSend({ body, contentType: "texte" });
+    }
     setDraft("");
+    setMediaUrl("");
+    setShowMediaInput(false);
   }
 
   function insertPaymentLink() {
@@ -194,7 +227,38 @@ export function ConversationThread({
             <Link2 className="size-3.5" aria-hidden />
             Insérer le lien de paiement
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setShowMediaInput((v) => !v)}
+          >
+            <ImagePlus className="size-3.5" aria-hidden />
+            Média
+          </Button>
+          {composeExtra}
         </div>
+        {showMediaInput && (
+          <div className="mb-2 flex items-center gap-2">
+            <Input
+              value={mediaUrl}
+              onChange={(e) => setMediaUrl(e.target.value)}
+              placeholder="URL publique du média (https://…)"
+              className="h-9"
+            />
+            {mediaUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setMediaUrl("")}
+                aria-label="Retirer le média"
+              >
+                <X className="size-3.5" aria-hidden />
+              </Button>
+            )}
+          </div>
+        )}
         <div className="flex items-end gap-2">
           <Textarea
             value={draft}
@@ -220,6 +284,7 @@ export function ConversationThread({
         </div>
         <p className="mt-1.5 text-[11px] text-ink/40">
           Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne
+          {mediaUrl ? " · média joint" : ""}
         </p>
       </div>
     </div>

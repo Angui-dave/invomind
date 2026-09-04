@@ -20,34 +20,30 @@ Flux dashboard :
 
 ### Backend (Laravel)
 
-- Une **seule base** ; isolation par colonne `organization_id`
+- Une **seule base** PostgreSQL ; isolation par colonne `orga_id`
+- Tables métier en **français** (`factures`, `devis`, `clients`, …)
+- Chemins HTTP en **anglais** (`/invoices`, `/quotes`, …)
+- Champs JSON en **snake_case français** (`montant_total`, `date_echeance`, `categorie_client`)
 - Auth : **Sanctum** personal access tokens
-- Middleware `auth:sanctum` + `tenant` (`ResolveTenant`) : lit `X-Organization-Id` (sinon première membership)
-- Admin : middleware `admin` (rôles `owner` | `admin`)
+- Middleware `auth:sanctum` + `tenant` (`ResolveTenant`) : lit `X-Organization-Id` (doit correspondre à `user.orga_id`)
+- Admin : middleware `admin` (rôle `admin` uniquement ; agents exclus)
 
 ```mermaid
 flowchart TB
   App["Next.js URL unique"] --> API["Laravel /api Sanctum"]
   API --> Mid["ResolveTenant X-Organization-Id"]
-  Mid --> DB["PostgreSQL unique org_id"]
+  Mid --> DB["PostgreSQL orga_id"]
 ```
 
 ## Flags front
 
 ```env
-USE_LARAVEL_API=true                 # source de vérité (recommandé)
+USE_LARAVEL_API=true
 LARAVEL_API_URL=http://localhost:8000/api
-NEXT_PUBLIC_USE_MOCK_DATA=false      # désactiver les mocks en mode Laravel
+LARAVEL_TIMEOUT_MS=10000
 ```
 
 Si `USE_LARAVEL_API=false`, le front retombe sur `lib/mock/*` (démo locale uniquement).
-
-## Entitlements & modules
-
-- `GET /organization/entitlements` est la source des quotas et flags plan ∩ org (pipeline, conversations, reports, expenses, catalog, import_tool).
-- Front : `lib/billing/entitlements.ts` + `getCurrentOrganization().features`.
-- Sidebar / FeatureGate utilisent `features` (intersection), pas seulement les toggles org.
-- Plans Free / Pro / Business : 5 factures & 10 clients (Free), Pro 9 900 XOF, import CSV dès Pro.
 
 ## Couches front → Laravel
 
@@ -55,11 +51,12 @@ Si `USE_LARAVEL_API=false`, le front retombe sur `lib/mock/*` (démo locale uniq
 |-------|---------|
 | `lib/dal/*` | `GET` JSON |
 | `lib/actions/*` | `POST` / `PUT` / `DELETE` |
-| `lib/laravel/mappers.ts` | snake_case → camelCase (y compris BFF conversations) |
-| `lib/billing/entitlements.ts` | `GET /organization/entitlements` (+ garde-fous UI) |
-| Cookies session | JWT session + Bearer Sanctum séparé |
+| `lib/laravel/enums.ts` | Maps FR ↔ EN (statuts, paiements, catégories) |
+| `lib/laravel/payloads.ts` | Bodies snake_case FR pour les écritures |
+| `lib/laravel/mappers.ts` | Réponses FR → types UI camelCase |
+| `lib/billing/entitlements.ts` | `GET /organization/entitlements` |
 
-## Contrat API (réel)
+## Contrat API (réel — `backend/routes/api.php`)
 
 Préfixe : `/api`. Auth Bearer + `X-Organization-Id` sauf routes publiques.
 
@@ -67,11 +64,10 @@ Préfixe : `/api`. Auth Bearer + `X-Organization-Id` sauf routes publiques.
 
 | Méthode | Path |
 |---------|------|
-| POST | `/auth/register` — 201 + `email_verification_required` (pas de token) |
+| POST | `/auth/register` — crée org + user `admin` + abonnement `gratuit` |
 | POST | `/auth/login` |
 | POST | `/auth/forgot-password` |
 | POST | `/auth/reset-password` |
-| POST | `/auth/invitations/accept` |
 | GET | `/auth/email/verify/{id}/{hash}` (signed) |
 | POST | `/auth/email/resend` |
 
@@ -82,85 +78,101 @@ Préfixe : `/api`. Auth Bearer + `X-Organization-Id` sauf routes publiques.
 | POST | `/auth/logout` |
 | GET | `/auth/me` |
 
-### Organisation (tenant)
+### Organisation & billing (tenant)
 
-| Méthode | Path | Notes |
+| Méthode | Path | Accès |
 |---------|------|-------|
-| GET | `/organization` | |
-| GET | `/organization/entitlements` | |
-| PUT | `/organization/settings\|tax\|banking\|reminders\|payments\|branding\|modules` | admin |
-| GET/POST | `/organization/invitations` | admin |
-| DELETE | `/organization/invitations/{id}` | admin — révoquer |
+| GET | `/organization` | membre |
+| GET | `/organization/entitlements` | membre |
+| PUT | `/organization` | **admin** — `name_company`, `adresse`, `ville`, `pays`, `devise_defaut`, `logo_url`, … |
+| POST | `/billing/change-plan` | **admin** (plans gratuits) |
+| POST | `/billing/checkout` | **admin** (501 tant que CinetPay SaaS non branché) |
+| POST | `/billing/cancel` | **admin** |
 
 ### Métier
 
 | Ressource | Paths |
 |-----------|-------|
-| Clients | `GET/POST /clients`, `GET/PUT/DELETE /clients/{id}` |
-| Documents | `GET/POST /documents`, `GET/PUT /documents/{id}`, `PUT …/status` (devis accepted/refused/expired, facture cancelled, avoir applied), `POST …/issue`, `…/send`, `GET …/pdf` |
-| Prospects | `GET/POST /prospects`, `PUT /prospects/{id}/stage` |
-| Expenses | `GET/POST /expenses`, `PUT /expenses/{id}`, `GET /expense-categories` |
-| Payments | `GET/POST /payments` |
-| Suppliers | `GET/POST /suppliers`, `PUT /suppliers/{id}` |
-| Catalog | `GET/POST /catalog`, `PUT /catalog/{id}` |
-| Conversations | `GET /conversations`, `…/messages?conversation_id=`, `…/inbox`, `POST …/send` |
-| Webhook outbound | `GET/PUT /conversations/webhook`, `POST /conversations/webhook/test` |
-| Canaux inbound | `GET/POST /conversations/channels`, `DELETE /conversations/channels/{id}` |
-| Reports | `GET /reports/dashboard`, `GET /reports/overview` (inclut `billed_ht`, `vat_collected`, `vat_by_rate`) |
-| Import | `POST /import/{entity}` — `clients` \| `suppliers` \| `catalog` \| `expenses` |
-| Email templates | `GET /email-templates`, `PUT /email-templates/{event}` |
-| Agents | `GET /agents`, `PUT /agents/{id}/enable\|disable` (`POST /agents` → 410) |
+| Clients | `GET/POST /clients`, `GET/PUT/DELETE /clients/{id}` — champ `categorie_client` |
+| Devis | `GET/POST /quotes`, `GET/PUT /quotes/{id}`, `PUT …/status`, `POST …/convert` |
+| Factures | `GET/POST /invoices`, `GET/PUT /invoices/{id}`, `PUT …/status` |
+| Paiements | `GET/POST /payments` — body `facture_id`, `montant`, `mode_paiement` |
+| Dépenses | `GET/POST /expenses`, `PUT /expenses/{id}`, `GET /expense-categories` |
+| Catalogue | `GET/POST /catalog`, `PUT /catalog/{id}` — `prix_unitaire`, `type` (`produit`\|`service`) |
+| Agents | `GET/POST /agents`, `PUT /agents/{id}/enable\|disable` — **admin** |
+| Reports | `GET /reports/dashboard`, `GET /reports/overview` — **admin** |
 
-Listes : sans `per_page`, collection (`{ data }` via Resource, ou tableau nu) ; avec `?page=&per_page=` (max 100) : `{ data, meta }`. Le BFF accepte les deux via `unwrapList()`.
+Listes : sans `per_page` → tableau nu (ou Resource collection) ; avec `?page=&per_page=` (max 100) → `{ data, meta }`. Le BFF accepte les deux via `unwrapList()`.
 
-### Portail (public)
+### Portail (public, token = `factures.uuid`)
 
-| Méthode | Path |
-|---------|------|
-| GET | `/portal/{token}` |
-| POST | `/portal/{token}/checkout` |
-| GET | `/portal/{token}/pdf`, `/portal/{token}/receipt.pdf` |
-| POST | `/portal/{token}/pay` → **410** (utiliser checkout) |
+| Méthode | Path | Notes |
+|---------|------|-------|
+| GET | `/portal/{token}` | `InvoiceResource` nu |
+| POST | `/portal/{token}/checkout` | CinetPay |
+| GET | `/portal/{token}/pdf` | **501** (pas encore reconnecté) |
+| GET | `/portal/{token}/receipt.pdf` | **501** |
+| POST | `/portal/{token}/pay` | **410** — utiliser checkout |
 
-### Auth (réponse unifiée login / me / acceptInvitation)
+### Webhooks
+
+| Path | Usage |
+|------|-------|
+| `GET/POST /webhooks/cinetpay` | Paiements factures (direct Laravel) |
+
+### Non exposé (UI « Bientôt disponible »)
+
+Pas de routes pour : avoirs, import CSV, PDF dashboard (`/documents/{id}/pdf`), sous-routes `/organization/settings|tax|banking|…`, invitations, email-templates, prospects séparés.
+
+### Messagerie omnicanale
+
+Voir [MESSAGERIE.md](./MESSAGERIE.md). Routes : `/conversations`, `/inboxes`, `/labels`, `/webhooks/meta`, `/webhooks/tiktok`. Entitlement `conversations` : **true** (tous plans, surchargable via `plans.fonctionnalites`).
+
+Le Kanban clients utilise `clients.categorie_client` (`prospect`, `qualifie`, `negociation`, `client`, `inactif`) — ce n’est **pas** un module entitlements.
+
+## Enums PostgreSQL (valeurs API)
+
+| Domaine | Valeurs |
+|---------|---------|
+| `devis_statut` | `brouillon`, `envoye`, `accepte`, `refuse`, `expire`, `converti` |
+| `facture_statut` | `brouillon`, `envoyee`, `payee`, `partiellement_payee`, `impayee`, `en_retard`, `annulee` |
+| `mode_paiement_enum` | `cash`, `virement`, `carte`, `orange_money`, `mtn_money`, `moov_money`, `wave`, `cheque`, `autre` |
+| `client_categorie` | `prospect`, `qualifie`, `negociation`, `client`, `inactif` |
+| `produit_type` | `produit`, `service` |
+| `user_role` | `admin`, `agent` |
+| Plans | `gratuit`, `pro`, `business` (`plan_id` auth peut mapper `gratuit` → `free` côté session) |
+
+## Auth (réponse login / me)
 
 ```json
 {
-  "user": { "id": "...", "name": "...", "email": "..." },
-  "organization_id": "uuid",
-  "organization": { "id": "...", "name": "...", "slug": "...", "plan_id": "free" },
-  "role": "owner|admin|member",
+  "user": { "id": "1", "uuid": "…", "email": "…", "full_name": "…", "name": "…", "role": "admin", "is_active": true },
+  "organization_id": "1",
+  "organization": {
+    "id": "1",
+    "uuid": "…",
+    "name": "…",
+    "name_company": "…",
+    "plan_id": "free",
+    "plan_code": "gratuit",
+    "devise_defaut": "XOF"
+  },
+  "role": "admin",
   "token": "…"
 }
 ```
 
-`token` est omis sur `GET /auth/me`.  
-`register` renvoie `email_verification_required: true` **sans** token.
+`token` est omis sur `GET /auth/me`. Rôles Laravel : **`admin` | `agent`** (plus de `owner` / `member` en production).
 
-`GET /organization` inclut `subscription_invoices` (historique billing).  
-Les documents passent par `DocumentResource`. Clients / payments / expenses / catalog / conversations ont des Resources dédiées.
+## Entitlements
 
-### Billing SaaS (CinetPay uniquement)
+`GET /organization/entitlements` :
 
-| Méthode | Path |
-|---------|------|
-| POST | `/billing/checkout` — body `{ plan_id: pro\|business, customer_phone? }` → `{ checkout_url }` |
-| POST | `/billing/change-plan` — `free` uniquement ; plans payants → **402** (utiliser checkout) |
-| POST | `/billing/cancel` |
-
-Période prépayée **30 jours**. Scheduler `subscriptions:expire` repasse en Free à échéance. Pas d’auto-renouvellement.
-
-### Webhooks inbound (public — pointer les providers ici)
-
-| Path | Usage |
-|------|-------|
-| `GET/POST /webhooks/meta` | Meta verify + messages → conversations |
-| `POST /webhooks/tiktok` | TikTok → conversations |
-| `GET/POST /webhooks/cinetpay` | Paiements factures **et** abonnement SaaS |
-
-Les routes Next `app/api/webhooks/{meta,tiktok}` proxifient vers Laravel. **CinetPay → Laravel direct** (factures portail et abonnement SaaS).
-
----
+- Quotas factures / clients / agents selon le plan
+- `pipeline` : toujours `false` (module absent)
+- `conversations` : `true` (module messagerie omnicanale — voir [MESSAGERIE.md](./MESSAGERIE.md))
+- `expenses`, `catalog`, `reports` : `true`
+- `import_tool` : `true` si plan ≠ `gratuit` (mais **aucune route** `/import` pour l’instant)
 
 ## Queue, scheduler, mail
 
@@ -171,48 +183,25 @@ php artisan queue:work
 php artisan schedule:work
 ```
 
-- Toutes les 15 min : `documents:mark-overdue`, `documents:dispatch-reminders`, `subscriptions:expire`
-- Jobs : `TenantAwareJob` (`tries=3`, backoff, `organization_id`)
-
 Mail : `MAIL_MAILER=log` en local ; `resend` en prod (`RESEND_API_KEY`).
-
-```bash
-php artisan mail:test toi@example.com
-```
-
-## PDF
-
-`GenerateDocumentPdfJob` → `storage/app/documents/{organization_id}/{document_id}.pdf`
-
-```
-POST /documents/{id}/issue
-POST /documents/{id}/send
-GET  /documents/{id}/pdf
-GET  /portal/{token}/pdf
-```
-
-Next proxifie : `/api/documents/{id}/pdf`, `/api/portal/{token}/pdf`.
 
 ## CinetPay
 
 ```
-POST /portal/{token}/checkout          # facture client
-POST /billing/checkout                 # abonnement SaaS
+POST /portal/{uuid}/checkout
 GET|POST /api/webhooks/cinetpay
+POST /billing/checkout   # SaaS — 501 si non branché
 ```
 
 Env Laravel : `CINETPAY_*`, `PSP_DRIVER=fake` pour tests.
 
-## Auth équipe
+## Mapping BFF (référence)
 
-```
-POST /auth/forgot-password
-POST /auth/reset-password
-POST /organization/invitations
-DELETE /organization/invitations/{id}
-POST /auth/invitations/accept
-GET  /agents
-PUT  /agents/{id}/enable|disable
-```
-
-Pages Next : `/forgot-password`, `/reset-password`, `/accept-invitation`.
+| UI | API |
+|----|-----|
+| `draft` / `sent` / `paid` | `brouillon` / `envoyee` / `payee` |
+| `card` / `transfer` / `check` | `carte` / `virement` / `cheque` |
+| `product` / `service` | `produit` / `service` |
+| Pipeline stages | = `categorie_client` |
+| `portalToken` | `uuid` de la facture |
+| Conversion devis | `POST /quotes/{id}/convert` |

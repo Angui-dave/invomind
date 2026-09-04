@@ -52,6 +52,7 @@ import type { TaxMode } from "@/lib/tax";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { WebhookSettings } from "@/components/settings/webhook-settings";
+import { InboxSettings } from "@/components/settings/inbox-settings";
 
 type InitialOrg = OrgSettings & OrgSettingsExtras;
 
@@ -90,6 +91,8 @@ type SettingsPageClientProps = {
   branding: OrgBranding | null;
   enabledModules: EnabledModules;
   initialTab?: string;
+  /** When true, hide legacy outbound webhook UI (Laravel InboxSettings only). */
+  laravelApiEnabled?: boolean;
 };
 
 export function SettingsPageClient({
@@ -100,6 +103,7 @@ export function SettingsPageClient({
   branding: initialBranding,
   enabledModules: initialModules,
   initialTab,
+  laravelApiEnabled = false,
 }: SettingsPageClientProps) {
   const settingsTab = parseSettingsTab(initialTab ?? null);
   const [remindersOn, setRemindersOn] = useState(initialOrg.remindersEnabled);
@@ -938,8 +942,9 @@ export function SettingsPageClient({
           </Button>
         </TabsContent>
 
-        <TabsContent value="channels" className="mt-6">
-          <WebhookSettings />
+        <TabsContent value="channels" className="mt-6 space-y-8">
+          <InboxSettings />
+          {!laravelApiEnabled ? <WebhookSettings /> : null}
         </TabsContent>
       </Tabs>
     </div>

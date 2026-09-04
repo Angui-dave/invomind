@@ -1,25 +1,38 @@
 import "server-only";
-import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
-import { laravelRequest } from "@/lib/laravel/client";
-import { unwrapList } from "@/lib/laravel/pagination";
-import { mapProspect } from "@/lib/laravel/mappers";
+import { listClients, getInvoices, getQuotes } from "@/lib/dal/documents";
+import { clientToProspect } from "@/lib/laravel/mappers";
 import { tenantStore } from "@/lib/mock/store";
 import type { Prospect } from "@/lib/data/settings";
 import { activeProspectsValue as calc } from "@/lib/data/settings";
 
+/**
+ * Pipeline cards are clients grouped by `categorie_client`.
+ * Estimated value ≈ open quotes + unpaid invoices for that client.
+ */
 export async function listProspects(): Promise<Prospect[]> {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const rows = unwrapList(
-      await laravelRequest<unknown>("/prospects", {
-        token,
-        organizationId: session.organizationId,
-      }),
-    );
-    return rows.map(mapProspect);
+    const [clients, invoices, quotes] = await Promise.all([
+      listClients(),
+      getInvoices(),
+      getQuotes(),
+    ]);
+
+    return clients.map((client) => {
+      const openDocs = [...quotes, ...invoices].filter(
+        (d) =>
+          d.clientId === client.id &&
+          d.status !== "cancelled" &&
+          d.status !== "refused" &&
+          d.status !== "expired" &&
+          d.status !== "paid" &&
+          d.status !== "converted",
+      );
+      const estimatedValue = openDocs.reduce((sum, d) => sum + d.total, 0);
+      return clientToProspect(client, estimatedValue);
+    });
   }
   const store = await tenantStore();
   return [...store.prospects];

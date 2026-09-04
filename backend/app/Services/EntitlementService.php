@@ -2,66 +2,77 @@
 
 namespace App\Services;
 
+use App\Enums\AbonnementStatut;
 use App\Models\Client;
-use App\Models\Document;
-use App\Models\Membership;
+use App\Models\Invoice;
 use App\Models\Organization;
-use App\Models\OrganizationInvitation;
 use App\Models\Plan;
+use App\Models\Subscription;
+use App\Models\User;
 use Carbon\Carbon;
 
 class EntitlementService
 {
-    public function check(string $organizationId): array
+    public function check(int|string $organizationId): array
     {
-        $org = Organization::with(['plan', 'subscription', 'features'])->findOrFail($organizationId);
-        $plan = $org->plan ?? Plan::find('free');
-        $features = $org->features;
+        $org = Organization::findOrFail($organizationId);
+        $subscription = Subscription::query()
+            ->where('orga_id', $organizationId)
+            ->whereIn('statut', [AbonnementStatut::EnCours, AbonnementStatut::Essai])
+            ->latest('id')
+            ->first();
 
-        $invoicesThisMonth = Document::where('organization_id', $organizationId)
-            ->where('kind', 'invoice')
+        $plan = $subscription?->plan
+            ?? Plan::query()->where('code', 'gratuit')->firstOrFail();
+
+        $invoicesThisMonth = Invoice::query()
+            ->where('orga_id', $organizationId)
             ->where('created_at', '>=', Carbon::now()->startOfMonth())
             ->count();
 
-        $clientCount = Client::where('organization_id', $organizationId)->count();
+        $clientCount = Client::query()->where('orga_id', $organizationId)->count();
+        $userCount = User::query()->where('orga_id', $organizationId)->where('is_active', true)->count();
 
-        $pipeline = (bool) $plan->pipeline && ($features?->pipeline ?? true);
-        $conversations = (bool) $plan->conversations && ($features?->conversations ?? true);
-        $reports = (bool) $plan->reports && ($features?->reports ?? true);
-        $expenses = (bool) ($plan->expenses ?? true) && ($features?->expenses ?? true);
-        $catalog = (bool) ($plan->catalog ?? true) && ($features?->catalog ?? true);
-        $importTool = (bool) ($plan->import_tool ?? false) && ($features?->import_tool ?? true);
+        $fonctionnalites = is_array($plan->fonctionnalites) ? $plan->fonctionnalites : [];
 
         return [
-            'plan_id' => $plan->id,
-            'can_create_invoice' => $plan->max_invoices_per_month === null
-                || $invoicesThisMonth < $plan->max_invoices_per_month,
+            'plan_id' => $plan->code,
+            'plan_code' => $plan->code,
+            'can_create_invoice' => $plan->limite_factures_mois === null
+                || $invoicesThisMonth < $plan->limite_factures_mois,
             'invoices_used' => $invoicesThisMonth,
-            'invoices_limit' => $plan->max_invoices_per_month,
-            'can_create_client' => $plan->max_clients === null
-                || $clientCount < $plan->max_clients,
+            'invoices_limit' => $plan->limite_factures_mois,
+            'can_create_client' => $plan->limite_clients === null
+                || $clientCount < $plan->limite_clients,
             'clients_used' => $clientCount,
-            'clients_limit' => $plan->max_clients,
-            'max_agents' => $plan->max_agents,
-            'agents_used' => $this->agentSeatsUsed($organizationId),
-            'can_invite_agent' => $this->canInviteAgent($organizationId, $plan),
-            'auto_reminders' => (bool) $plan->auto_reminders,
-            'online_payments' => (bool) $plan->online_payments,
-            'pipeline' => $pipeline,
-            'conversations' => $conversations,
-            'reports' => $reports,
-            'expenses' => $expenses,
-            'catalog' => $catalog,
-            'import_tool' => $importTool,
+            'clients_limit' => $plan->limite_clients,
+            'max_agents' => $plan->limite_utilisateurs,
+            'agents_used' => $userCount,
+            'can_invite_agent' => $plan->limite_utilisateurs === null
+                || $userCount < $plan->limite_utilisateurs,
+            'auto_reminders' => (bool) ($fonctionnalites['auto_reminders'] ?? $plan->code !== 'gratuit'),
+            'online_payments' => (bool) ($fonctionnalites['online_payments'] ?? $plan->code !== 'gratuit'),
+            'pipeline' => false,
+            // Conversations available on all plans (including free) once the module is shipped.
+            'conversations' => (bool) ($fonctionnalites['conversations'] ?? true),
+            'reports' => true,
+            'expenses' => true,
+            'catalog' => true,
+            'import_tool' => $plan->code !== 'gratuit',
+            'organization' => [
+                'id' => $org->id,
+                'uuid' => $org->uuid,
+                'name_company' => $org->name_company,
+            ],
         ];
     }
 
-    public function canAutoRemind(string $organizationId): bool
+    public function canAutoRemind(int|string $organizationId): bool
     {
         return (bool) $this->check($organizationId)['auto_reminders'];
     }
 
-    public function assertCanCreateInvoice(string $organizationId): void
+    public function assertCanCreateInvoice(int|string $organizationId): void
     {
         $ent = $this->check($organizationId);
         if (! $ent['can_create_invoice']) {
@@ -69,7 +80,7 @@ class EntitlementService
         }
     }
 
-    public function assertCanCreateClient(string $organizationId): void
+    public function assertCanCreateClient(int|string $organizationId): void
     {
         $ent = $this->check($organizationId);
         if (! $ent['can_create_client']) {
@@ -77,15 +88,15 @@ class EntitlementService
         }
     }
 
-    public function assertCanInviteAgent(string $organizationId): void
+    public function assertCanInviteAgent(int|string $organizationId): void
     {
         $ent = $this->check($organizationId);
         if (! $ent['can_invite_agent']) {
-            abort(403, 'Les invitations d’équipe sont réservées au plan Pro (3 membres).');
+            abort(403, 'Limite d’utilisateurs atteinte pour votre plan.');
         }
     }
 
-    public function assertOnlinePayments(string $organizationId): void
+    public function assertOnlinePayments(int|string $organizationId): void
     {
         $ent = $this->check($organizationId);
         if (! $ent['online_payments']) {
@@ -93,7 +104,7 @@ class EntitlementService
         }
     }
 
-    public function assertModule(string $organizationId, string $module): void
+    public function assertModule(int|string $organizationId, string $module): void
     {
         $ent = $this->check($organizationId);
         $key = match ($module) {
@@ -102,36 +113,7 @@ class EntitlementService
         };
 
         if (! ($ent[$key] ?? false)) {
-            abort(403, 'Cette fonctionnalité n’est pas incluse dans votre plan ou a été désactivée.');
+            abort(403, 'Cette fonctionnalité n’est pas incluse dans votre plan.');
         }
-    }
-
-    private function canInviteAgent(string $organizationId, Plan $plan): bool
-    {
-        if ($plan->max_agents === 0) {
-            return false;
-        }
-
-        if ($plan->max_agents === null) {
-            return true;
-        }
-
-        return $this->agentSeatsUsed($organizationId) < $plan->max_agents;
-    }
-
-    private function agentSeatsUsed(string $organizationId): int
-    {
-        $members = Membership::query()
-            ->where('organization_id', $organizationId)
-            ->where('role', 'member')
-            ->count();
-
-        $pending = OrganizationInvitation::query()
-            ->where('organization_id', $organizationId)
-            ->whereNull('accepted_at')
-            ->where('expires_at', '>', now())
-            ->count();
-
-        return $members + $pending;
     }
 }

@@ -13,7 +13,7 @@ abstract class Controller
 {
     use AuthorizesRequests;
 
-    protected function orgId(Request $request): string
+    protected function orgId(Request $request): int|string
     {
         return $request->attributes->get('organization_id');
     }

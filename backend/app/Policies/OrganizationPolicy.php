@@ -2,15 +2,15 @@
 
 namespace App\Policies;
 
+use App\Enums\UserRole;
 use App\Models\Organization;
 use App\Models\User;
 
 class OrganizationPolicy
 {
-    public function manageSettings(User $user, Organization $org): bool
+    public function update(User $user, Organization $organization): bool
     {
-        $role = request()->attributes->get('membership_role');
-        return in_array($role, ['owner', 'admin'])
-            && $org->id === request()->attributes->get('organization_id');
+        return $user->orga_id === $organization->id
+            && $user->role === UserRole::Admin;
     }
 }

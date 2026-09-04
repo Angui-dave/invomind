@@ -10,7 +10,7 @@ import type { ConversationChannel } from "@/lib/data/conversations";
  * Tenants each get an isolated store via lib/mock/store.ts.
  */
 
-export type TenantRole = "owner" | "admin" | "member";
+export type TenantRole = "owner" | "admin" | "member" | "agent";
 
 export type CentralTenant = {
   id: string;

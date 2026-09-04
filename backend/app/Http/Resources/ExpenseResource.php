@@ -10,25 +10,35 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class ExpenseResource extends JsonResource
 {
-    /**
-     * @return array<string, mixed>
-     */
     public function toArray(Request $request): array
     {
         return [
             'id' => $this->id,
-            'organization_id' => $this->organization_id,
-            'date' => $this->date,
+            'orga_id' => $this->orga_id,
+            'user_id' => $this->user_id,
+            'categorie_id' => $this->categorie_id,
+            'fournisseur_id' => $this->fournisseur_id,
+            'libelle' => $this->libelle,
             'description' => $this->description,
-            'amount' => $this->amount,
-            'currency' => $this->currency,
-            'category_id' => $this->category_id,
-            'supplier_id' => $this->supplier_id,
-            'supplier_name' => $this->supplier_name ?? $this->whenLoaded('supplier', fn () => $this->supplier?->name),
-            'tax_rate' => $this->tax_rate,
-            'tax_deductible' => $this->tax_deductible,
-            'tax_amount' => $this->tax_amount,
-            'notes' => $this->notes,
+            'fournisseur' => $this->fournisseur,
+            'reference' => $this->reference,
+            'montant_ht' => $this->montant_ht,
+            'taux_tva' => $this->taux_tva,
+            'montant_tva' => $this->montant_tva,
+            'montant_ttc' => $this->montant_ttc,
+            'devise' => $this->devise,
+            'date_depense' => $this->date_depense,
+            'mode_paiement' => $this->mode_paiement?->value ?? $this->mode_paiement,
+            'piece_jointe_url' => $this->piece_jointe_url,
+            'recurrente' => $this->recurrente,
+            'frequence_recurrence' => $this->frequence_recurrence?->value ?? $this->frequence_recurrence,
+            'statut' => $this->statut?->value ?? $this->statut,
+            'category' => $this->whenLoaded('category', fn () => $this->category
+                ? new ExpenseCategoryResource($this->category)
+                : null),
+            'supplier' => $this->whenLoaded('supplier', fn () => $this->supplier
+                ? new SupplierResource($this->supplier)
+                : null),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

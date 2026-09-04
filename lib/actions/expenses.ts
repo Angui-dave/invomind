@@ -7,9 +7,11 @@ import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
 import { actionErrorMessage } from "@/lib/laravel/action-errors";
 import { getApiContext } from "@/lib/laravel/context";
+import { toLaravelExpenseBody } from "@/lib/laravel/payloads";
 import { tenantStore } from "@/lib/mock/store";
 import type { Expense } from "@/lib/data/expenses";
 import type { CurrencyCode } from "@/lib/money";
+import { calculateVat } from "@/lib/tax";
 
 export type ActionResult =
   | { ok: true; id?: string }
@@ -18,6 +20,7 @@ export type ActionResult =
 const ExpenseSchema = z.object({
   date: z.string().min(1),
   description: z.string().min(1),
+  /** Montant TTC saisi dans l'UI. */
   amount: z.number().positive(),
   currency: z.string().default("XOF"),
   categoryId: z.string().min(1),
@@ -27,6 +30,7 @@ const ExpenseSchema = z.object({
   taxDeductible: z.boolean().default(true),
   taxAmount: z.number().min(0).default(0),
   notes: z.string().optional().nullable(),
+  paymentMethod: z.string().optional().nullable(),
 });
 
 async function resolveSupplierName(
@@ -35,8 +39,13 @@ async function resolveSupplierName(
 ): Promise<string | undefined> {
   if (supplierName) return supplierName;
   if (!supplierId) return undefined;
+  if (isLaravelApiEnabled()) return undefined;
   const sup = (await tenantStore()).suppliers.find((s) => s.id === supplierId);
   return sup?.company || sup?.name || undefined;
+}
+
+function toHtAmount(ttc: number, taxRate: number): number {
+  return calculateVat(ttc, taxRate, "inclusive").ht;
 }
 
 export async function createExpense(
@@ -47,26 +56,27 @@ export async function createExpense(
     if (!parsed.success) return { ok: false, error: "Dépense invalide" };
     try {
       const { token, organizationId } = await getApiContext();
-      const created = await laravelRequest<{ id: string }>("/expenses", {
+      const created = await laravelRequest<{ id: string | number }>("/expenses", {
         method: "POST",
         token,
         organizationId,
-        body: {
+        body: toLaravelExpenseBody({
           date: parsed.data.date,
           description: parsed.data.description,
-          amount: parsed.data.amount,
+          amount: toHtAmount(parsed.data.amount, parsed.data.taxRate),
           currency: parsed.data.currency,
-          category_id: parsed.data.categoryId,
-          supplier_id: parsed.data.supplierId,
-          tax_rate: parsed.data.taxRate,
-          tax_deductible: parsed.data.taxDeductible,
+          categoryId: parsed.data.categoryId,
+          supplierId: parsed.data.supplierId,
+          supplierName: parsed.data.supplierName,
+          taxRate: parsed.data.taxRate,
           notes: parsed.data.notes,
-        },
+          paymentMethod: parsed.data.paymentMethod,
+        }),
       });
       revalidatePath("/expenses");
       revalidatePath("/reports");
       revalidatePath("/dashboard");
-      return { ok: true, id: created.id };
+      return { ok: true, id: String(created.id) };
     } catch (e) {
       return { ok: false, error: actionErrorMessage(e, "Erreur dépense") };
     }
@@ -95,6 +105,7 @@ export async function createExpense(
       taxDeductible: parsed.data.taxDeductible,
       taxAmount: parsed.data.taxAmount,
       notes: parsed.data.notes ?? undefined,
+      paymentMethod: parsed.data.paymentMethod ?? undefined,
     };
 
     (await tenantStore()).expenses.unshift(expense);
@@ -124,17 +135,18 @@ export async function updateExpense(
         method: "PUT",
         token,
         organizationId,
-        body: {
+        body: toLaravelExpenseBody({
           date: parsed.data.date,
           description: parsed.data.description,
-          amount: parsed.data.amount,
+          amount: toHtAmount(parsed.data.amount, parsed.data.taxRate),
           currency: parsed.data.currency,
-          category_id: parsed.data.categoryId,
-          supplier_id: parsed.data.supplierId,
-          tax_rate: parsed.data.taxRate,
-          tax_deductible: parsed.data.taxDeductible,
+          categoryId: parsed.data.categoryId,
+          supplierId: parsed.data.supplierId,
+          supplierName: parsed.data.supplierName,
+          taxRate: parsed.data.taxRate,
           notes: parsed.data.notes,
-        },
+          paymentMethod: parsed.data.paymentMethod,
+        }),
       });
       revalidatePath("/expenses");
       revalidatePath("/reports");
@@ -170,6 +182,7 @@ export async function updateExpense(
       taxDeductible: parsed.data.taxDeductible,
       taxAmount: parsed.data.taxAmount,
       notes: parsed.data.notes ?? undefined,
+      paymentMethod: parsed.data.paymentMethod ?? undefined,
     };
 
     revalidatePath("/expenses");
@@ -181,4 +194,33 @@ export async function updateExpense(
       error: e instanceof Error ? e.message : "Erreur dépense",
     };
   }
+}
+
+export async function deleteExpense(id: string): Promise<ActionResult> {
+  if (isLaravelApiEnabled()) {
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest(`/expenses/${id}`, {
+        method: "DELETE",
+        token,
+        organizationId,
+      });
+      revalidatePath("/expenses");
+      revalidatePath("/reports");
+      revalidatePath("/dashboard");
+      return { ok: true, id };
+    } catch (e) {
+      return { ok: false, error: actionErrorMessage(e, "Erreur dépense") };
+    }
+  }
+
+  await verifySession();
+  const store = await tenantStore();
+  const idx = store.expenses.findIndex((e) => e.id === id);
+  if (idx < 0) return { ok: false, error: "Dépense introuvable" };
+  store.expenses.splice(idx, 1);
+  revalidatePath("/expenses");
+  revalidatePath("/reports");
+  revalidatePath("/dashboard");
+  return { ok: true, id };
 }

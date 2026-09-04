@@ -52,6 +52,8 @@ return [
         'notify_url' => env('CINETPAY_NOTIFY_URL'),
         'return_url' => env('CINETPAY_RETURN_URL'),
         'env' => env('CINETPAY_ENV', 'sandbox'),
+        // When true (or local without API key), billing checkout activates the plan without PSP.
+        'simulate' => env('CINETPAY_SIMULATE', env('APP_ENV') === 'local'),
     ],
 
     'psp' => [

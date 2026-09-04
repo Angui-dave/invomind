@@ -4,6 +4,8 @@ export interface ExpenseCategory {
   id: string;
   name: string;
   color: string;
+  isGlobal?: boolean;
+  actif?: boolean;
 }
 
 export interface Expense {
@@ -19,6 +21,8 @@ export interface Expense {
   taxDeductible: boolean;
   taxAmount: number;
   notes?: string;
+  statut?: string;
+  paymentMethod?: string;
 }
 
 export const EXPENSE_CATEGORIES: ExpenseCategory[] = [

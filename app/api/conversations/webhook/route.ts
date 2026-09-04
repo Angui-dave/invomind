@@ -1,8 +1,5 @@
-import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
-import { laravelRequest } from "@/lib/laravel/client";
-import { mapWebhookConfigResponse } from "@/lib/laravel/mappers";
 import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
 import { isAdminTenant } from "@/lib/rbac/policy";
 import {
@@ -15,7 +12,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isValidWebhookUrl(url: string): boolean {
-  if (!url) return true; // empty allowed when disabling
+  if (!url) return true;
   let parsed: URL;
   try {
     parsed = new URL(url);
@@ -32,16 +29,21 @@ function isValidWebhookUrl(url: string): boolean {
   return false;
 }
 
+/**
+ * Legacy mock outbound webhook config.
+ * Laravel mode uses Inbox adapters — this endpoint is not available.
+ */
 export async function GET() {
-  const session = await verifySession();
-  const token = (await readSessionCookie())?.accessToken;
   if (isLaravelApiEnabled()) {
-    const response = await laravelRequest("/conversations/webhook", {
-      token,
-      organizationId: session.organizationId,
-    });
-    return Response.json(mapWebhookConfigResponse(response));
+    return Response.json(
+      {
+        error:
+          "Webhook sortant legacy indisponible. Configurez les boîtes de réception (Inbox).",
+      },
+      { status: 501 },
+    );
   }
+  const session = await verifySession();
   if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
     return Response.json({ error: "Non autorisé" }, { status: 403 });
   }
@@ -53,12 +55,19 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  if (isLaravelApiEnabled()) {
+    return Response.json(
+      {
+        error:
+          "Webhook sortant legacy indisponible. Configurez les boîtes de réception (Inbox).",
+      },
+      { status: 501 },
+    );
+  }
   const session = await verifySession();
-  const token = (await readSessionCookie())?.accessToken;
   if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
     return Response.json({ error: "Non autorisé" }, { status: 403 });
   }
-  const organizationId = session.organizationId;
 
   let json: unknown;
   try {
@@ -66,51 +75,14 @@ export async function PUT(request: Request) {
   } catch {
     return Response.json({ error: "JSON invalide" }, { status: 400 });
   }
-
-  if (typeof json !== "object" || json === null) {
-    return Response.json({ error: "Corps invalide" }, { status: 400 });
+  const obj = json as Record<string, unknown>;
+  const url = typeof obj.url === "string" ? obj.url.trim() : "";
+  const secret = typeof obj.secret === "string" ? obj.secret : "";
+  if (!isValidWebhookUrl(url)) {
+    return Response.json({ error: "URL webhook invalide" }, { status: 422 });
   }
-
-  const body = json as Record<string, unknown>;
-  const url = typeof body.url === "string" ? body.url.trim() : undefined;
-  const secret =
-    typeof body.secret === "string" ? body.secret : undefined;
-  const enabled =
-    typeof body.enabled === "boolean" ? body.enabled : undefined;
-
-  if (isLaravelApiEnabled()) {
-    const payload: Record<string, unknown> = {};
-    if (url !== undefined) payload.url = url;
-    if (secret !== undefined) payload.secret = secret;
-    if (enabled !== undefined) payload.enabled = enabled;
-
-    const response = await laravelRequest("/conversations/webhook", {
-      method: "PUT",
-      token,
-      organizationId: session.organizationId,
-      body: payload,
-    });
-    return Response.json(mapWebhookConfigResponse(response));
-  }
-
-  if (url !== undefined && !isValidWebhookUrl(url)) {
-    return Response.json(
-      {
-        error:
-          "URL invalide : HTTPS requis (HTTP autorisé uniquement pour localhost)",
-      },
-      { status: 400 },
-    );
-  }
-
-  await setConfig(organizationId, {
-    ...(url !== undefined ? { url } : {}),
-    ...(secret !== undefined ? { secret } : {}),
-    ...(enabled !== undefined ? { enabled } : {}),
-  });
-
+  await setConfig(session.organizationId, { url, secret });
   return Response.json({
-    config: await getMaskedConfig(organizationId),
-    deliveries: await recentDeliveries(organizationId),
+    config: await getMaskedConfig(session.organizationId),
   });
 }

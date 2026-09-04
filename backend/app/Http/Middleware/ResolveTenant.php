@@ -2,7 +2,6 @@
 
 namespace App\Http\Middleware;
 
-use App\Models\Membership;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -17,32 +16,22 @@ class ResolveTenant
             return response()->json(['message' => 'Unauthenticated.'], 401);
         }
 
-        $organizationId = $request->header('X-Organization-Id');
-
-        if (! $organizationId) {
-            $membership = Membership::where('user_id', $user->id)->first();
-            $organizationId = $membership?->organization_id;
-        }
-
-        if (! $organizationId) {
-            return response()->json(['message' => 'No organization context.'], 403);
-        }
-
-        $membership = Membership::where('user_id', $user->id)
-            ->where('organization_id', $organizationId)
-            ->first();
-
-        if (! $membership) {
-            return response()->json(['message' => 'Not a member of this organization.'], 403);
-        }
-
-        if ($membership->isDisabled()) {
+        if (! $user->is_active) {
             return response()->json(['message' => 'Ce compte a été désactivé.'], 403);
         }
 
-        $request->attributes->set('organization_id', $organizationId);
-        $request->attributes->set('membership', $membership);
-        $request->attributes->set('membership_role', $membership->role);
+        if (! $user->orga_id) {
+            return response()->json(['message' => 'No organization context.'], 403);
+        }
+
+        $headerOrgId = $request->header('X-Organization-Id');
+
+        if ($headerOrgId !== null && $headerOrgId !== '' && (string) $headerOrgId !== (string) $user->orga_id) {
+            return response()->json(['message' => 'Not a member of this organization.'], 403);
+        }
+
+        $request->attributes->set('organization_id', $user->orga_id);
+        $request->attributes->set('membership_role', $user->role?->value ?? $user->role);
 
         return $next($request);
     }

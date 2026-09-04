@@ -2,45 +2,54 @@
 
 namespace App\Models;
 
+use App\Enums\ClientCategorie;
 use App\Models\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Client extends Model
 {
-    use HasUuids, BelongsToOrganization;
+    use BelongsToOrganization, HasPublicUuid, SoftDeletes;
 
-    protected $keyType = 'string';
-    public $incrementing = false;
+    protected $table = 'clients';
 
     protected $fillable = [
-        'organization_id', 'name', 'company', 'email', 'phone', 'address',
-        'city', 'postal_code', 'country', 'tax_id', 'currency',
-        'payment_term_days', 'reminders_enabled', 'portal_token',
-    ];
-
-    protected $hidden = [
-        'portal_token',
+        'orga_id',
+        'user_id',
+        'name_company',
+        'email',
+        'phone',
+        'adresse',
+        'ville',
+        'code_postal',
+        'country',
+        'devise',
+        'categorie_client',
+        'notes',
     ];
 
     protected function casts(): array
     {
-        return ['reminders_enabled' => 'boolean'];
+        return [
+            'categorie_client' => ClientCategorie::class,
+        ];
     }
 
-    public function documents(): HasMany
+    public function commercial(): BelongsTo
     {
-        return $this->hasMany(Document::class);
+        return $this->belongsTo(User::class, 'user_id');
     }
 
-    public function payments(): HasMany
+    public function quotes(): HasMany
     {
-        return $this->hasMany(Payment::class);
+        return $this->hasMany(Quote::class, 'client_id');
     }
 
-    public function conversations(): HasMany
+    public function invoices(): HasMany
     {
-        return $this->hasMany(Conversation::class);
+        return $this->hasMany(Invoice::class, 'client_id');
     }
 }

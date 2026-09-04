@@ -13,6 +13,7 @@ import { listExpenses } from "@/lib/dal/expenses";
 import { laravelRequest } from "@/lib/laravel/client";
 import { getApiContext } from "@/lib/laravel/context";
 import { computeTotals } from "@/lib/tax";
+import { invoiceStatusFromApi } from "@/lib/laravel/enums";
 import type { InvoiceStatus } from "@/lib/documents";
 
 export type { RevenuePoint, TopClientRevenue };
@@ -84,19 +85,81 @@ function monthsBack(count: number): string[] {
 }
 
 const fetchDashboard = cache(async (): Promise<ApiDashboard> => {
-  const { token, organizationId } = await getApiContext();
-  return laravelRequest<ApiDashboard>("/reports/dashboard", {
-    token,
-    organizationId,
-  });
+  try {
+    const { token, organizationId } = await getApiContext();
+    const row = await laravelRequest<Partial<ApiDashboard>>("/reports/dashboard", {
+      token,
+      organizationId,
+    });
+    return {
+      month_revenue: num(row.month_revenue),
+      overdue_invoice_count: Number(row.overdue_invoice_count ?? 0),
+      pending_invoice_count: Number(row.pending_invoice_count ?? 0),
+      revenue_by_month: Array.isArray(row.revenue_by_month)
+        ? row.revenue_by_month.map((item) => ({
+            month: String(item.month ?? ""),
+            total: num(item.total),
+          }))
+        : [],
+      top_clients: Array.isArray(row.top_clients)
+        ? row.top_clients.map((item) => ({
+            client_name: String(item.client_name ?? ""),
+            total: num(item.total),
+          }))
+        : [],
+    };
+  } catch (error) {
+    console.error("fetchDashboard failed", error);
+    return {
+      month_revenue: 0,
+      overdue_invoice_count: 0,
+      pending_invoice_count: 0,
+      revenue_by_month: [],
+      top_clients: [],
+    };
+  }
 });
 
 const fetchOverview = cache(async (): Promise<ApiOverview> => {
-  const { token, organizationId } = await getApiContext();
-  return laravelRequest<ApiOverview>("/reports/overview", {
-    token,
-    organizationId,
-  });
+  try {
+    const { token, organizationId } = await getApiContext();
+    const row = await laravelRequest<Partial<ApiOverview>>("/reports/overview", {
+      token,
+      organizationId,
+    });
+    return {
+      total_revenue: num(row.total_revenue),
+      total_expenses: num(row.total_expenses),
+      net_profit: num(row.net_profit),
+      invoices_by_status: Array.isArray(row.invoices_by_status)
+        ? row.invoices_by_status.map((item) => ({
+            status: invoiceStatusFromApi(String(item.status ?? "")),
+            count: Number(item.count ?? 0),
+            total: num(item.total),
+          }))
+        : [],
+      expenses_by_category: Array.isArray(row.expenses_by_category)
+        ? row.expenses_by_category
+        : [],
+      billed_ht: row.billed_ht,
+      billed_ttc: row.billed_ttc,
+      vat_collected: row.vat_collected,
+      vat_by_rate: Array.isArray(row.vat_by_rate) ? row.vat_by_rate : [],
+      paid_invoice_count: row.paid_invoice_count,
+      pending_invoice_count: row.pending_invoice_count,
+      overdue_invoice_count: row.overdue_invoice_count,
+    };
+  } catch (error) {
+    console.error("fetchOverview failed", error);
+    return {
+      total_revenue: 0,
+      total_expenses: 0,
+      net_profit: 0,
+      invoices_by_status: [],
+      expenses_by_category: [],
+      vat_by_rate: [],
+    };
+  }
 });
 
 export async function monthRevenue(): Promise<number> {
@@ -118,7 +181,10 @@ export async function revenueByMonth(
     const dashboard = await fetchDashboard();
     const keys = monthsBack(months);
     const byMonth = new Map(
-      dashboard.revenue_by_month.map((row) => [row.month, num(row.total)]),
+      (dashboard.revenue_by_month ?? []).map((row) => [
+        row.month,
+        num(row.total),
+      ]),
     );
     return keys.map((key) => {
       const [, mm] = key.split("-");
@@ -152,7 +218,7 @@ export async function revenueByMonth(
 export async function topClients(n = 5): Promise<TopClientRevenue[]> {
   if (isLaravelApiEnabled()) {
     const dashboard = await fetchDashboard();
-    return dashboard.top_clients.slice(0, n).map((row) => ({
+    return (dashboard.top_clients ?? []).slice(0, n).map((row) => ({
       clientId: `name:${row.client_name}`,
       clientName: row.client_name,
       amount: num(row.total),

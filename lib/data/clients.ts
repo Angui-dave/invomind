@@ -1,4 +1,5 @@
 import type { CurrencyCode } from "@/lib/money";
+import type { PipelineStage } from "@/lib/data/settings";
 
 export interface Client {
   id: string;
@@ -15,6 +16,9 @@ export interface Client {
   paymentTermDays?: number;
   remindersEnabled: boolean;
   portalToken: string;
+  /** Maps to Laravel `categorie_client` / Kanban column */
+  categorieClient?: PipelineStage;
+  notes?: string;
 }
 
 export const CLIENTS: Client[] = [

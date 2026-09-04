@@ -7,6 +7,14 @@ import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
 import { actionErrorMessage } from "@/lib/laravel/action-errors";
 import { getApiContext } from "@/lib/laravel/context";
+import {
+  invoiceStatusToApi,
+  quoteStatusToApi,
+} from "@/lib/laravel/enums";
+import {
+  toLaravelInvoiceBody,
+  toLaravelQuoteBody,
+} from "@/lib/laravel/payloads";
 import { assertCanCreateInvoice } from "@/lib/billing/entitlements";
 import { allocateDocumentNumber } from "@/lib/dal/documents";
 import { tenantStore } from "@/lib/mock/store";
@@ -28,29 +36,39 @@ export type ActionResult =
 const LineSchema = z.object({
   id: z.string().optional(),
   description: z.string().min(1),
-  quantity: z.number(),
-  unitPrice: z.number(),
-  taxRate: z.number(),
-  discountPercent: z.number().optional(),
-  catalogItemId: z.string().optional(),
+  quantity: z.coerce.number(),
+  unitPrice: z.coerce.number(),
+  taxRate: z.coerce.number(),
+  discountPercent: z.coerce.number().optional(),
+  catalogItemId: z.union([z.string(), z.number()]).optional(),
   unit: z.string().optional(),
 });
 
 const DocumentInputSchema = z.object({
   kind: z.enum(["quote", "invoice", "credit_note"]),
-  clientId: z.string().min(1),
+  clientId: z.union([z.string(), z.number()]).transform(String),
   status: z.string(),
-  currency: z.string(),
-  taxMode: z.enum(["inclusive", "exclusive"]),
+  currency: z.string().min(1).default("XOF"),
+  taxMode: z
+    .enum(["inclusive", "exclusive"])
+    .catch("exclusive")
+    .default("exclusive"),
   issueDate: z.string(),
-  dueDate: z.string(),
+  dueDate: z.string().optional().default(""),
   lines: z.array(LineSchema).min(1),
   onlinePaymentEnabled: z.boolean().default(false),
   remindersEnabled: z.boolean().default(true),
   notes: z.string().optional(),
-  sourceDocumentId: z.string().optional(),
+  sourceDocumentId: z.union([z.string(), z.number()]).optional(),
   paymentMethod: z.string().nullable().optional(),
 });
+
+function formatZodError(error: z.ZodError): string {
+  const first = error.issues[0];
+  if (!first) return "Document invalide";
+  const path = first.path.join(".") || "document";
+  return `Document invalide (${path}: ${first.message})`;
+}
 
 export async function saveDocument(
   id: string | null,
@@ -59,44 +77,54 @@ export async function saveDocument(
   if (isLaravelApiEnabled()) {
     const parsed = DocumentInputSchema.safeParse(input);
     if (!parsed.success) {
-      return { ok: false, error: "Document invalide" };
+      return { ok: false, error: formatZodError(parsed.error) };
     }
     const data = parsed.data;
+
+    if (data.kind === "credit_note") {
+      return {
+        ok: false,
+        error: "Les avoirs ne sont pas encore supportés par l’API.",
+      };
+    }
+
     try {
       const { token, organizationId } = await getApiContext();
-      const payload = {
-        kind: data.kind,
-        client_id: data.clientId,
-        status: "draft",
-        currency: data.currency,
-        tax_mode: data.taxMode,
-        issue_date: data.issueDate,
-        due_date: data.dueDate,
-        online_payment_enabled: data.onlinePaymentEnabled,
-        reminders_enabled: data.remindersEnabled,
-        notes: data.notes,
-        source_document_id: data.sourceDocumentId,
-        lines: data.lines.map((line) => ({
-          description: line.description,
-          quantity: line.quantity,
-          unit_price: line.unitPrice,
-          tax_rate: line.taxRate,
-          discount_percent: line.discountPercent,
-          catalog_item_id: line.catalogItemId,
-        })),
-      };
-      const doc = await laravelRequest<{ id: string }>(id ? `/documents/${id}` : "/documents", {
-        method: id ? "PUT" : "POST",
-        token,
-        organizationId,
-        body: payload,
-      });
+      const resource = data.kind === "quote" ? "quotes" : "invoices";
+      const body =
+        data.kind === "quote"
+          ? toLaravelQuoteBody({
+              clientId: data.clientId,
+              dueDate: data.dueDate,
+              currency: data.currency,
+              notes: data.notes,
+              lines: data.lines,
+            })
+          : toLaravelInvoiceBody({
+              clientId: data.clientId,
+              sourceDocumentId: data.sourceDocumentId,
+              dueDate: data.dueDate,
+              currency: data.currency,
+              notes: data.notes,
+              lines: data.lines,
+            });
+
+      const doc = await laravelRequest<{ id: string | number }>(
+        id ? `/${resource}/${id}` : `/${resource}`,
+        {
+          method: id ? "PUT" : "POST",
+          token,
+          organizationId,
+          body,
+        },
+      );
+      const docId = String(doc.id);
       revalidatePath("/invoices");
       revalidatePath("/quotes");
       revalidatePath("/dashboard");
-      revalidatePath(`/invoices/${doc.id}`);
-      revalidatePath(`/quotes/${doc.id}`);
-      return { ok: true, id: doc.id };
+      revalidatePath(`/invoices/${docId}`);
+      revalidatePath(`/quotes/${docId}`);
+      return { ok: true, id: docId };
     } catch (error) {
       return {
         ok: false,
@@ -107,7 +135,7 @@ export async function saveDocument(
   const session = await verifySession();
   const parsed = DocumentInputSchema.safeParse(input);
   if (!parsed.success) {
-    return { ok: false, error: "Document invalide" };
+    return { ok: false, error: formatZodError(parsed.error) };
   }
 
   const data = parsed.data;
@@ -136,7 +164,7 @@ export async function saveDocument(
     unitPrice: l.unitPrice,
     taxRate: l.taxRate,
     discountPercent: l.discountPercent,
-    catalogItemId: l.catalogItemId,
+    catalogItemId: l.catalogItemId != null ? String(l.catalogItemId) : undefined,
     unit: l.unit,
   }));
 
@@ -172,7 +200,10 @@ export async function saveDocument(
       reminders,
       notes: data.notes,
       paymentMethod: (data.paymentMethod as PaymentMethod | null) ?? null,
-      sourceDocumentId: data.sourceDocumentId,
+      sourceDocumentId:
+        data.sourceDocumentId != null
+          ? String(data.sourceDocumentId)
+          : undefined,
     };
   } else {
     const number = await allocateDocumentNumber(data.kind);
@@ -196,7 +227,10 @@ export async function saveDocument(
       remindersEnabled: data.remindersEnabled,
       reminders,
       portalToken: opaquePortalToken(),
-      sourceDocumentId: data.sourceDocumentId,
+      sourceDocumentId:
+        data.sourceDocumentId != null
+          ? String(data.sourceDocumentId)
+          : undefined,
       notes: data.notes,
     });
     id = docId;
@@ -212,32 +246,94 @@ export async function saveDocument(
   return { ok: true, id };
 }
 
-export async function issueDocument(id: string): Promise<ActionResult> {
+async function resolveDocumentKind(
+  id: string,
+  hint?: "quote" | "invoice",
+): Promise<"quote" | "invoice" | null> {
+  const { token, organizationId } = await getApiContext();
+  const order =
+    hint === "invoice"
+      ? (["invoices", "quotes"] as const)
+      : hint === "quote"
+        ? (["quotes", "invoices"] as const)
+        : (["quotes", "invoices"] as const);
+
+  for (const resource of order) {
+    try {
+      await laravelRequest(`/${resource}/${id}`, { token, organizationId });
+      return resource === "quotes" ? "quote" : "invoice";
+    } catch {
+      // try next
+    }
+  }
+  return null;
+}
+
+/** Convert an accepted quote into an invoice via Laravel. */
+export async function convertQuote(
+  quoteId: string,
+): Promise<ActionResult> {
   if (isLaravelApiEnabled()) {
     try {
       const { token, organizationId } = await getApiContext();
-      await laravelRequest(`/documents/${id}/issue`, {
-        method: "POST",
-        token,
-        organizationId,
-      });
-      revalidateDocumentPaths(id);
-      return { ok: true, id };
+      const invoice = await laravelRequest<{ id: string | number }>(
+        `/quotes/${quoteId}/convert`,
+        {
+          method: "POST",
+          token,
+          organizationId,
+          body: {},
+        },
+      );
+      const invoiceId = String(invoice.id);
+      revalidatePath("/quotes");
+      revalidatePath("/invoices");
+      revalidatePath("/dashboard");
+      revalidatePath(`/quotes/${quoteId}`);
+      revalidatePath(`/invoices/${invoiceId}`);
+      return { ok: true, id: invoiceId };
     } catch (error) {
-      return { ok: false, error: actionErrorMessage(error, "Émission impossible") };
+      return {
+        ok: false,
+        error: actionErrorMessage(error, "Conversion impossible"),
+      };
     }
   }
-  return mockIssueDocument(id);
+
+  await verifySession();
+  const store = await tenantStore();
+  const quote = store.documents.find((d) => d.id === quoteId);
+  if (!quote || quote.kind !== "quote") {
+    return { ok: false, error: "Devis introuvable" };
+  }
+  const { convertQuoteToInvoice } = await import("@/lib/documents");
+  const invoice = convertQuoteToInvoice(quote, store.documents);
+  store.documents.unshift(invoice);
+  const qIdx = store.documents.findIndex((d) => d.id === quoteId);
+  if (qIdx >= 0) {
+    store.documents[qIdx] = { ...quote, status: "converted" };
+  }
+  revalidateDocumentPaths(invoice.id);
+  revalidatePath(`/quotes/${quoteId}`);
+  return { ok: true, id: invoice.id };
+}
+
+export async function issueDocument(id: string): Promise<ActionResult> {
+  return sendDocument(id);
 }
 
 export async function sendDocument(id: string): Promise<ActionResult> {
   if (isLaravelApiEnabled()) {
     try {
+      const kind = await resolveDocumentKind(id);
+      if (!kind) return { ok: false, error: "Document introuvable" };
       const { token, organizationId } = await getApiContext();
-      await laravelRequest(`/documents/${id}/send`, {
-        method: "POST",
+      const statut = kind === "quote" ? "envoye" : "envoyee";
+      await laravelRequest(`/${kind === "quote" ? "quotes" : "invoices"}/${id}/status`, {
+        method: "PUT",
         token,
         organizationId,
+        body: { statut },
       });
       revalidateDocumentPaths(id);
       return { ok: true, id };
@@ -261,13 +357,22 @@ export async function updateDocumentStatus(
 ): Promise<ActionResult> {
   if (isLaravelApiEnabled()) {
     try {
+      const kind = await resolveDocumentKind(id);
+      if (!kind) return { ok: false, error: "Document introuvable" };
       const { token, organizationId } = await getApiContext();
-      await laravelRequest(`/documents/${id}/status`, {
-        method: "PUT",
-        token,
-        organizationId,
-        body: { status },
-      });
+      const statut =
+        kind === "quote"
+          ? quoteStatusToApi(status)
+          : invoiceStatusToApi(status);
+      await laravelRequest(
+        `/${kind === "quote" ? "quotes" : "invoices"}/${id}/status`,
+        {
+          method: "PUT",
+          token,
+          organizationId,
+          body: { statut },
+        },
+      );
       revalidateDocumentPaths(id);
       return { ok: true, id };
     } catch (error) {

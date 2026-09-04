@@ -13,9 +13,6 @@ import {
 import { opaquePortalToken } from "@/lib/documents";
 import { todayIso } from "@/lib/date";
 import type { ImportEntity } from "@/lib/import/csv";
-import { laravelRequest } from "@/lib/laravel/client";
-import { actionErrorMessage } from "@/lib/laravel/action-errors";
-import { getApiContext } from "@/lib/laravel/context";
 import { tenantStore } from "@/lib/mock/store";
 import type { Client } from "@/lib/data/clients";
 import type { CatalogItem } from "@/lib/data/catalog";
@@ -62,36 +59,10 @@ export async function importRows(
   }
 
   if (isLaravelApiEnabled()) {
-    try {
-      const { token, organizationId } = await getApiContext();
-      const result = await laravelRequest<{
-        imported: number;
-        errors: Array<{ row: number; error: string }>;
-      }>(`/import/${entityParsed.data}`, {
-        method: "POST",
-        token,
-        organizationId,
-        body: { rows: parsedRows.data },
-      });
-
-      revalidatePath("/clients");
-      revalidatePath("/expenses");
-      revalidatePath("/catalog");
-      revalidatePath("/suppliers");
-      revalidatePath("/import");
-      revalidatePath("/dashboard");
-
-      if (result.imported === 0 && result.errors.length > 0) {
-        return {
-          ok: false,
-          error: result.errors[0]?.error ?? "Aucune ligne importée",
-        };
-      }
-
-      return { ok: true, count: result.imported };
-    } catch (e) {
-      return { ok: false, error: actionErrorMessage(e, "Erreur d’importation") };
-    }
+    return {
+      ok: false,
+      error: "L’import CSV sera bientôt disponible.",
+    };
   }
 
   try {

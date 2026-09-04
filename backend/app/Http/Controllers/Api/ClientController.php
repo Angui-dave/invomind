@@ -10,24 +10,22 @@ use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
-use Illuminate\Support\Str;
 
 class ClientController extends Controller
 {
-    public function index(Request $request): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
+    /**
+     * Org-wide listing for both admin and agent (no commercial/user_id filter).
+     */
+    public function index(Request $request): AnonymousResourceCollection|JsonResponse
     {
-        $query = Client::where('organization_id', $this->orgId($request))
-            ->orderBy('created_at', 'desc');
+        $query = Client::query()->orderByDesc('created_at');
 
         return $this->paginated($request, $query, ClientResource::class);
     }
 
-    public function show(Request $request, string $id): ClientResource
+    public function show(Request $request, int $id): ClientResource
     {
-        $client = Client::where('organization_id', $this->orgId($request))
-            ->findOrFail($id);
-
-        $this->authorize('view', $client);
+        $client = Client::query()->findOrFail($id);
 
         return new ClientResource($client);
     }
@@ -36,10 +34,14 @@ class ClientController extends Controller
     {
         $entitlements->assertCanCreateClient($this->orgId($request));
 
+        $data = $request->validated();
         $client = Client::create([
-            ...$request->validated(),
-            'organization_id' => $this->orgId($request),
-            'portal_token' => Str::random(32),
+            ...$data,
+            'orga_id' => $this->orgId($request),
+            'user_id' => $data['user_id'] ?? $request->user()->id,
+            'devise' => $data['devise']
+                ?? $request->user()->organization?->devise_defaut
+                ?? 'XOF',
         ]);
 
         return (new ClientResource($client))
@@ -47,25 +49,17 @@ class ClientController extends Controller
             ->setStatusCode(201);
     }
 
-    public function update(ClientRequest $request, string $id): ClientResource
+    public function update(ClientRequest $request, int $id): ClientResource
     {
-        $client = Client::where('organization_id', $this->orgId($request))
-            ->findOrFail($id);
-
-        $this->authorize('update', $client);
-
+        $client = Client::query()->findOrFail($id);
         $client->update($request->validated());
 
         return new ClientResource($client->fresh());
     }
 
-    public function destroy(Request $request, string $id): JsonResponse
+    public function destroy(Request $request, int $id): JsonResponse
     {
-        $client = Client::where('organization_id', $this->orgId($request))
-            ->findOrFail($id);
-
-        $this->authorize('delete', $client);
-
+        $client = Client::query()->findOrFail($id);
         $client->delete();
 
         return response()->json(null, 204);

@@ -2,26 +2,23 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\AbonnementStatut;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
-use App\Models\Membership;
 use App\Models\Organization;
-use App\Models\OrganizationBranding;
-use App\Models\OrganizationFeatures;
-use App\Models\OrganizationSettings;
+use App\Models\Plan;
 use App\Models\Subscription;
 use App\Models\User;
-use App\Services\DefaultEmailTemplateService;
-use App\Services\InvitationService;
 use App\Services\OrganizationBootstrapService;
 use Illuminate\Auth\Events\Verified;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
-use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class AuthController extends Controller
@@ -30,54 +27,53 @@ class AuthController extends Controller
     {
         $data = $request->validated();
 
-        $user = User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password_hash' => Hash::make($data['password']),
-        ]);
+        [$user, $org] = DB::transaction(function () use ($data) {
+            $org = Organization::create([
+                'name_company' => $data['company_name'],
+                'full_name' => $data['name'],
+                'email' => $data['email'],
+            ]);
 
-        $org = Organization::create([
-            'name' => $data['company_name'],
-            'slug' => Str::slug($data['company_name']).'-'.Str::random(6),
-        ]);
+            $user = User::create([
+                'orga_id' => $org->id,
+                'full_name' => $data['name'],
+                'email' => $data['email'],
+                'password_hash' => Hash::make($data['password']),
+                'role' => UserRole::Admin,
+                'is_active' => true,
+                'email_verified_at' => now(),
+            ]);
 
-        Membership::create([
-            'organization_id' => $org->id,
-            'user_id' => $user->id,
-            'role' => 'owner',
-        ]);
+            $plan = Plan::query()->firstOrCreate(
+                ['code' => 'gratuit'],
+                [
+                    'nom' => 'Gratuit',
+                    'prix_mensuel' => 0,
+                    'devise' => 'XOF',
+                    'limite_factures_mois' => 10,
+                    'limite_utilisateurs' => 1,
+                    'actif' => true,
+                ],
+            );
 
-        Subscription::create(['organization_id' => $org->id]);
-        OrganizationSettings::create([
-            'organization_id' => $org->id,
-            'company_name' => $data['company_name'],
-            'email' => $data['email'],
-        ]);
-        OrganizationBranding::create(['organization_id' => $org->id]);
-        OrganizationFeatures::create([
-            'organization_id' => $org->id,
-            'pipeline' => true,
-            'conversations' => true,
-            'expenses' => true,
-            'catalog' => true,
-            'reports' => true,
-            'import_tool' => true,
-        ]);
-        app(DefaultEmailTemplateService::class)->seedFor($org);
-        app(OrganizationBootstrapService::class)->seedExpenseCategories($org);
+            Subscription::create([
+                'orga_id' => $org->id,
+                'plan_id' => $plan->id,
+                'date_debut' => now()->toDateString(),
+                'statut' => AbonnementStatut::EnCours,
+                'renouvellement_auto' => true,
+            ]);
 
-        $user->sendEmailVerificationNotification();
+            app(OrganizationBootstrapService::class)->seedExpenseCategories($org);
+            app(OrganizationBootstrapService::class)->seedReminderRules($org);
 
-        return response()->json([
-            'message' => 'Compte créé. Vérifiez votre e-mail avant de vous connecter.',
-            'email_verification_required' => true,
-            'user' => [
-                'id' => $user->id,
-                'email' => $user->email,
-                'name' => $user->name,
-            ],
-            'organization_id' => $org->id,
-        ], 201);
+            return [$user, $org];
+        });
+
+        $user->forceFill(['last_login_at' => now()])->save();
+        $token = $user->createToken('api')->plainTextToken;
+
+        return response()->json($this->authPayload($user->fresh(), $token), 201);
     }
 
     public function login(LoginRequest $request): JsonResponse
@@ -90,28 +86,21 @@ class AuthController extends Controller
             return response()->json(['message' => 'Invalid credentials.'], 401);
         }
 
-        if (! $user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Veuillez vérifier votre e-mail avant de vous connecter.',
-                'email_verification_required' => true,
-            ], 403);
-        }
-
-        $membership = $this->resolveMembership($user->id, $request->header('X-Organization-Id'));
-
-        if ($membership?->isDisabled()) {
+        if (! $user->is_active) {
             return response()->json(['message' => 'Ce compte a été désactivé.'], 403);
         }
 
-        if (! $membership) {
+        if (! $user->orga_id) {
             return response()->json(['message' => 'Aucune organisation associée.'], 403);
         }
+
+        $user->forceFill(['last_login_at' => now()])->save();
 
         $user->tokens()->where('name', 'api')->delete();
         $token = $user->createToken('api')->plainTextToken;
 
         return response()->json(
-            $this->authPayload($user, $membership->organization_id, $membership->role, $token)
+            $this->authPayload($user->fresh(), $token)
         );
     }
 
@@ -158,31 +147,6 @@ class AuthController extends Controller
         return response()->json(['message' => 'Mot de passe mis à jour.']);
     }
 
-    public function acceptInvitation(Request $request, InvitationService $invitations): JsonResponse
-    {
-        $data = $request->validate([
-            'token' => ['required', 'string'],
-            'name' => ['required', 'string', 'min:2', 'max:255'],
-            'password' => ['required', 'string', 'max:128', PasswordRule::min(10)->letters()->numbers()],
-        ]);
-
-        $accepted = $invitations->accept($data['token'], $data['name'], $data['password']);
-        $invitation = $accepted['invitation'];
-
-        return response()->json(
-            $this->authPayload(
-                $accepted['user'],
-                $invitation->organization_id,
-                $invitation->role,
-                $accepted['token'],
-            ),
-            201,
-        );
-    }
-
-    /**
-     * Signed email verification link — marks the user verified then redirects to the frontend login.
-     */
     public function verifyEmail(Request $request, string $id, string $hash): RedirectResponse|JsonResponse
     {
         $user = User::query()->findOrFail($id);
@@ -233,68 +197,48 @@ class AuthController extends Controller
     {
         $user = $request->user();
 
-        if (! $user->hasVerifiedEmail()) {
-            return response()->json([
-                'message' => 'Veuillez vérifier votre e-mail.',
-                'email_verification_required' => true,
-            ], 403);
-        }
-
-        $membership = $this->resolveMembership(
-            $user->id,
-            $request->header('X-Organization-Id'),
-        );
-
-        if (! $membership) {
+        if (! $user->is_active || ! $user->orga_id) {
             return response()->json(['message' => 'No organization context.'], 403);
         }
 
-        if ($membership->isDisabled()) {
-            return response()->json(['message' => 'Ce compte a été désactivé.'], 403);
-        }
-
-        return response()->json(
-            $this->authPayload($user, $membership->organization_id, $membership->role, null)
-        );
+        return response()->json($this->authPayload($user->loadMissing('organization.subscription.plan'), null));
     }
 
     /**
-     * Prefer the membership for X-Organization-Id when present and valid;
-     * otherwise fall back to the first active membership.
-     */
-    private function resolveMembership(string $userId, ?string $organizationId): ?Membership
-    {
-        if ($organizationId) {
-            $scoped = Membership::query()
-                ->where('user_id', $userId)
-                ->where('organization_id', $organizationId)
-                ->first();
-
-            if ($scoped) {
-                return $scoped;
-            }
-        }
-
-        return Membership::query()
-            ->where('user_id', $userId)
-            ->whereNull('disabled_at')
-            ->orderBy('created_at')
-            ->first()
-            ?? Membership::query()->where('user_id', $userId)->orderBy('created_at')->first();
-    }
-
-    /**
-     * Unified auth envelope for register / login / me / acceptInvitation.
+     * Stable auth envelope for register / login / me.
+     * IDs are always strings so the Next.js BFF can compare cookies safely.
      *
-     * @return array{user: User, organization_id: string, organization: Organization|null, role: string, token?: string}
+     * @return array<string, mixed>
      */
-    private function authPayload(User $user, string $organizationId, string $role, ?string $token): array
+    private function authPayload(User $user, ?string $token): array
     {
+        $org = $user->organization ?? Organization::with('subscription.plan')->find($user->orga_id);
+        $planCode = $org?->subscription?->plan?->code;
+
         $payload = [
-            'user' => $user,
-            'organization_id' => $organizationId,
-            'organization' => Organization::find($organizationId),
-            'role' => $role,
+            'user' => [
+                'id' => (string) $user->id,
+                'uuid' => $user->uuid,
+                'email' => $user->email,
+                'full_name' => $user->full_name,
+                'name' => $user->full_name,
+                'role' => $user->role?->value ?? $user->role,
+                'is_active' => (bool) $user->is_active,
+            ],
+            'organization_id' => (string) $user->orga_id,
+            'organization' => $org ? [
+                'id' => (string) $org->id,
+                'uuid' => $org->uuid,
+                'name' => $org->name_company,
+                'name_company' => $org->name_company,
+                'slug' => $org->uuid,
+                'plan_id' => $planCode === 'gratuit' ? 'free' : ($planCode ?? 'free'),
+                'plan_code' => $planCode,
+                'email' => $org->email,
+                'logo_url' => $org->logo_url,
+                'devise_defaut' => $org->devise_defaut,
+            ] : null,
+            'role' => $user->role?->value ?? $user->role,
         ];
 
         if ($token !== null) {

@@ -18,7 +18,9 @@ export async function listSuppliers(): Promise<Supplier[]> {
         organizationId: session.organizationId,
       }),
     );
-    return rows.map(mapSupplier);
+    return rows.map(mapSupplier).sort((a, b) =>
+      a.company.localeCompare(b.company, "fr"),
+    );
   }
   const store = await tenantStore();
   return [...store.suppliers];

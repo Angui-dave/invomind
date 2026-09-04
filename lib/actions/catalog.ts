@@ -7,6 +7,7 @@ import { verifySession } from "@/lib/dal/session";
 import { laravelRequest } from "@/lib/laravel/client";
 import { actionErrorMessage } from "@/lib/laravel/action-errors";
 import { getApiContext } from "@/lib/laravel/context";
+import { toLaravelCatalogBody } from "@/lib/laravel/payloads";
 import { tenantStore } from "@/lib/mock/store";
 import type { CatalogItem } from "@/lib/data/catalog";
 import type { CurrencyCode } from "@/lib/money";
@@ -23,6 +24,8 @@ const CatalogItemSchema = z.object({
   taxRate: z.number().min(0).default(0),
   unit: z.string().default("unité"),
   kind: z.enum(["service", "product"]).default("service"),
+  reference: z.string().optional().nullable(),
+  actif: z.boolean().optional(),
 });
 
 export async function createCatalogItem(
@@ -33,24 +36,16 @@ export async function createCatalogItem(
     if (!parsed.success) return { ok: false, error: "Article catalogue invalide" };
     try {
       const { token, organizationId } = await getApiContext();
-      const created = await laravelRequest<{ id: string }>("/catalog", {
+      const created = await laravelRequest<{ id: string | number }>("/catalog", {
         method: "POST",
         token,
         organizationId,
-        body: {
-          name: parsed.data.name,
-          description: parsed.data.description,
-          unit_price: parsed.data.unitPrice,
-          currency: parsed.data.currency,
-          tax_rate: parsed.data.taxRate,
-          unit: parsed.data.unit,
-          kind: parsed.data.kind,
-        },
+        body: toLaravelCatalogBody(parsed.data),
       });
       revalidatePath("/catalog");
       revalidatePath("/invoices/new");
       revalidatePath("/quotes/new");
-      return { ok: true, id: created.id };
+      return { ok: true, id: String(created.id) };
     } catch (error) {
       return {
         ok: false,
@@ -74,6 +69,8 @@ export async function createCatalogItem(
     taxRate: parsed.data.taxRate,
     unit: parsed.data.unit,
     kind: parsed.data.kind,
+    reference: parsed.data.reference ?? undefined,
+    actif: parsed.data.actif,
   };
 
   (await tenantStore()).catalogItems.unshift(item);
@@ -97,15 +94,7 @@ export async function updateCatalogItem(
         method: "PUT",
         token,
         organizationId,
-        body: {
-          name: parsed.data.name,
-          description: parsed.data.description,
-          unit_price: parsed.data.unitPrice,
-          currency: parsed.data.currency,
-          tax_rate: parsed.data.taxRate,
-          unit: parsed.data.unit,
-          kind: parsed.data.kind,
-        },
+        body: toLaravelCatalogBody(parsed.data),
       });
       revalidatePath("/catalog");
       return { ok: true, id };
@@ -135,6 +124,8 @@ export async function updateCatalogItem(
     taxRate: parsed.data.taxRate,
     unit: parsed.data.unit,
     kind: parsed.data.kind,
+    reference: parsed.data.reference ?? undefined,
+    actif: parsed.data.actif,
   };
 
   revalidatePath("/catalog");

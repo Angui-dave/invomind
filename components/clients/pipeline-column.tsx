@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PipelineCard } from "@/components/clients/pipeline-card";
-import type { Prospect } from "@/lib/mock-data";
+import type { PipelineStage, Prospect } from "@/lib/mock-data";
 
 type PipelineColumnProps = {
   title: string;
@@ -10,6 +10,7 @@ type PipelineColumnProps = {
   showAdd?: boolean;
   onAdd?: () => void;
   onConvert?: (prospect: Prospect) => void;
+  onStageChange?: (id: string, stage: PipelineStage) => void;
   footer?: ReactNode;
 };
 
@@ -19,6 +20,7 @@ export function PipelineColumn({
   showAdd,
   onAdd,
   onConvert,
+  onStageChange,
 }: PipelineColumnProps) {
   return (
     <div className="flex w-[220px] shrink-0 flex-col rounded-sm border border-line bg-muted/40">
@@ -46,6 +48,7 @@ export function PipelineColumn({
             key={prospect.id}
             prospect={prospect}
             onConvert={onConvert}
+            onStageChange={onStageChange}
           />
         ))}
       </div>

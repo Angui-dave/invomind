@@ -2,25 +2,57 @@
 
 namespace App\Models;
 
+use App\Enums\DirectionMessage;
+use App\Enums\StatutLivraisonMessage;
+use App\Enums\TypeContenuMessage;
 use App\Models\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ConversationMessage extends Model
 {
-    use HasUuids, BelongsToOrganization;
+    use BelongsToOrganization, HasPublicUuid;
 
-    protected $keyType = 'string';
-    public $incrementing = false;
-    public $timestamps = false;
+    protected $table = 'conversation_messages';
 
     protected $fillable = [
-        'organization_id', 'conversation_id', 'direction', 'body', 'sent_at', 'status',
+        'orga_id',
+        'conversation_id',
+        'boite_reception_id',
+        'direction',
+        'type_contenu',
+        'contenu',
+        'url_media',
+        'id_externe',
+        'statut_livraison',
+        'erreur',
+        'expediteur_agent_id',
+        'envoye_at',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'direction' => DirectionMessage::class,
+            'type_contenu' => TypeContenuMessage::class,
+            'statut_livraison' => StatutLivraisonMessage::class,
+            'envoye_at' => 'datetime',
+        ];
+    }
 
     public function conversation(): BelongsTo
     {
-        return $this->belongsTo(Conversation::class);
+        return $this->belongsTo(Conversation::class, 'conversation_id');
+    }
+
+    public function inbox(): BelongsTo
+    {
+        return $this->belongsTo(Inbox::class, 'boite_reception_id');
+    }
+
+    public function senderAgent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'expediteur_agent_id');
     }
 }

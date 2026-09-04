@@ -8,21 +8,34 @@ import {
   type ChannelFilter,
 } from "@/components/conversations/conversation-list";
 import { ConversationThread } from "@/components/conversations/conversation-thread";
+import { TemplateSelector } from "@/components/conversations/template-selector";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import {
+  assignConversation,
+  attachConversationLabel,
+  detachConversationLabel,
+  markConversationRead,
+  refreshConversationsSnapshot,
+  sendConversationMessage,
+  updateConversationStatus,
+} from "@/lib/actions/conversations";
 import type { Client } from "@/lib/data/clients";
 import type {
   Conversation,
+  ConversationLabel,
   ConversationMessage,
 } from "@/lib/data/conversations";
 import type { Prospect } from "@/lib/data/settings";
 import type { BusinessDocument } from "@/lib/documents";
 import { todayIso } from "@/lib/date";
+import { getEcho } from "@/lib/realtime/echo-client";
 import type { InboundMessage } from "@/lib/webhooks/types";
+import { Button } from "@/components/ui/button";
 
 function normalizeHandle(handle: string): string {
   return handle.replace(/[\s\-+]/g, "").toLowerCase();
@@ -43,6 +56,10 @@ type ConversationsPageClientProps = {
   clients?: Client[];
   prospects?: Prospect[];
   invoices?: BusinessDocument[];
+  labels?: ConversationLabel[];
+  organizationId?: string;
+  currentUserId?: string;
+  useRealtime?: boolean;
 };
 
 export function ConversationsPageClient({
@@ -51,6 +68,10 @@ export function ConversationsPageClient({
   clients = [],
   prospects = [],
   invoices = [],
+  labels = [],
+  organizationId,
+  currentUserId,
+  useRealtime = false,
 }: ConversationsPageClientProps) {
   const [conversations, setConversations] =
     useState<Conversation[]>(initialConversations);
@@ -111,10 +132,31 @@ export function ConversationsPageClient({
       prev.map((c) => (c.id === id ? { ...c, unreadCount: 0 } : c)),
     );
     setMobileShowThread(true);
+    if (useRealtime) {
+      void markConversationRead(id);
+    }
   }
 
-  async function handleSend(body: string) {
+  async function handleSend(
+    payload:
+      | string
+      | {
+          body: string;
+          contentType?: "texte" | "image" | "fichier" | "audio" | "video" | "modele";
+          mediaUrl?: string;
+          templatePayload?: string;
+        },
+  ) {
     if (!selectedId || !selected) return;
+
+    const normalized =
+      typeof payload === "string"
+        ? { body: payload, contentType: "texte" as const }
+        : payload;
+    const body = normalized.body.trim();
+    const contentType = normalized.contentType ?? "texte";
+    const mediaUrl = normalized.mediaUrl;
+    const templatePayload = normalized.templatePayload;
 
     const now = `${todayIso()}T${new Date().toISOString().slice(11, 19)}`;
     const messageId = `msg_${Math.random().toString(36).slice(2, 8)}`;
@@ -125,6 +167,8 @@ export function ConversationsPageClient({
       body,
       sentAt: now,
       status: "pending",
+      contentType,
+      mediaUrl,
     };
 
     setMessages((prev) => [...prev, message]);
@@ -135,6 +179,34 @@ export function ConversationsPageClient({
           : c,
       ),
     );
+
+    if (useRealtime) {
+      const result = await sendConversationMessage({
+        conversationId: selectedId,
+        body: contentType === "modele" ? (templatePayload ?? body) : body,
+        contentType,
+        mediaUrl: mediaUrl ?? null,
+        templatePayload,
+      });
+      if (result.ok && result.message) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId
+              ? { ...result.message!, status: result.message!.status ?? "sent" }
+              : m,
+          ),
+        );
+        toast.success("Message envoyé");
+      } else if (!result.ok) {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === messageId ? { ...m, status: "failed" } : m,
+          ),
+        );
+        toast.error(result.error);
+      }
+      return;
+    }
 
     try {
       const res = await fetch("/api/conversations/send", {
@@ -186,6 +258,75 @@ export function ConversationsPageClient({
         ),
       );
       toast.error("Échec de l’envoi du message");
+    }
+  }
+
+  async function handleStatusChange(
+    status: NonNullable<Conversation["status"]>,
+  ) {
+    if (!selectedId || !useRealtime) return;
+    const result = await updateConversationStatus({
+      conversationId: selectedId,
+      status,
+    });
+    if (result.ok) {
+      setConversations((prev) =>
+        prev.map((c) => (c.id === selectedId ? { ...c, status } : c)),
+      );
+      toast.success("Statut mis à jour");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function handleAssignToggle() {
+    if (!selectedId || !useRealtime || !currentUserId) return;
+    const assignToMe = selected?.agentId !== currentUserId;
+    const result = await assignConversation({
+      conversationId: selectedId,
+      agentId: assignToMe ? currentUserId : null,
+    });
+    if (result.ok) {
+      setConversations((prev) =>
+        prev.map((c) =>
+          c.id === selectedId
+            ? { ...c, agentId: assignToMe ? currentUserId : undefined }
+            : c,
+        ),
+      );
+      toast.success(assignToMe ? "Conversation assignée" : "Assignation retirée");
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function handleToggleLabel(label: ConversationLabel) {
+    if (!selectedId || !useRealtime) return;
+    const attached = selected?.labels?.some((l) => l.id === label.id);
+    const result = attached
+      ? await detachConversationLabel({
+          conversationId: selectedId,
+          labelId: label.id,
+        })
+      : await attachConversationLabel({
+          conversationId: selectedId,
+          labelId: label.id,
+        });
+    if (result.ok) {
+      setConversations((prev) =>
+        prev.map((c) => {
+          if (c.id !== selectedId) return c;
+          const current = c.labels ?? [];
+          return {
+            ...c,
+            labels: attached
+              ? current.filter((l) => l.id !== label.id)
+              : [...current, label],
+          };
+        }),
+      );
+    } else {
+      toast.error(result.error);
     }
   }
 
@@ -269,7 +410,9 @@ export function ConversationsPageClient({
     });
   }, []);
 
+  // Mock-mode polling fallback
   useEffect(() => {
+    if (useRealtime) return;
     let cancelled = false;
 
     async function poll() {
@@ -298,18 +441,228 @@ export function ConversationsPageClient({
       window.clearInterval(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [ingestInbound]);
+  }, [ingestInbound, useRealtime]);
+
+  // Laravel Reverb realtime
+  useEffect(() => {
+    if (!useRealtime || !organizationId) return;
+
+    const echo = getEcho();
+    if (!echo) return;
+
+    const channel = echo.private(`organisation.${organizationId}`);
+
+    channel.listen(".message.nouveau", (payload: {
+      message?: {
+        id: string | number;
+        conversation_id: string | number;
+        direction?: string;
+        contenu?: string;
+        type_contenu?: string;
+        url_media?: string;
+        envoye_at?: string;
+        statut_livraison?: string;
+      };
+      conversation_id?: string | number;
+    }) => {
+      const msg = payload.message;
+      if (!msg) return;
+      const conversationId = String(msg.conversation_id ?? payload.conversation_id);
+      const direction =
+        msg.direction === "entrant" || msg.direction === "inbound"
+          ? "inbound"
+          : "outbound";
+      const statusMap: Record<string, ConversationMessage["status"]> = {
+        en_attente: "pending",
+        envoye: "sent",
+        livre: "delivered",
+        lu: "read",
+        echec: "failed",
+      };
+      const mapped: ConversationMessage = {
+        id: String(msg.id),
+        conversationId,
+        direction,
+        body: String(msg.contenu ?? ""),
+        sentAt: String(msg.envoye_at ?? new Date().toISOString()).slice(0, 19),
+        status: msg.statut_livraison
+          ? statusMap[msg.statut_livraison]
+          : undefined,
+        contentType: msg.type_contenu ? String(msg.type_contenu) : undefined,
+        mediaUrl: msg.url_media ? String(msg.url_media) : undefined,
+      };
+
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === mapped.id)) {
+          return prev.map((m) =>
+            m.id === mapped.id
+              ? {
+                  ...m,
+                  ...mapped,
+                  // Prefer newer delivery status when updating existing message
+                  status: mapped.status ?? m.status,
+                }
+              : m,
+          );
+        }
+        // Also match optimistic temp messages by body+outbound pending
+        const optimisticIdx = prev.findIndex(
+          (m) =>
+            m.id.startsWith("msg_") &&
+            m.conversationId === conversationId &&
+            m.direction === "outbound" &&
+            m.body === mapped.body &&
+            (m.status === "pending" || m.status === "sent"),
+        );
+        if (optimisticIdx >= 0) {
+          return prev.map((m, i) => (i === optimisticIdx ? mapped : m));
+        }
+        return [...prev, mapped];
+      });
+
+      setConversations((prev) => {
+        const exists = prev.some((c) => c.id === conversationId);
+        if (!exists) {
+          // Soft refresh list by bumping activity if conversation unknown
+          return prev;
+        }
+        return prev
+          .map((c) =>
+            c.id === conversationId
+              ? {
+                  ...c,
+                  lastMessageAt: mapped.sentAt,
+                  unreadCount:
+                    direction === "inbound" &&
+                    selectedIdRef.current !== conversationId
+                      ? c.unreadCount + 1
+                      : c.unreadCount,
+                }
+              : c,
+          )
+          .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+      });
+    });
+
+    channel.listen(".conversation.mise_a_jour", (payload: {
+      conversation?: {
+        id: string | number;
+        statut?: string;
+        agent_id?: string | number | null;
+        non_lus_count?: number;
+        derniere_activite_at?: string;
+        archivee?: boolean;
+      };
+    }) => {
+      const c = payload.conversation;
+      if (!c) return;
+      const statusMap: Record<string, Conversation["status"]> = {
+        ouverte: "open",
+        en_attente: "pending",
+        resolue: "resolved",
+      };
+      setConversations((prev) =>
+        prev.map((row) =>
+          row.id === String(c.id)
+            ? {
+                ...row,
+                status: c.statut ? statusMap[c.statut] : row.status,
+                agentId:
+                  c.agent_id != null ? String(c.agent_id) : row.agentId,
+                unreadCount:
+                  c.non_lus_count != null ? Number(c.non_lus_count) : row.unreadCount,
+                lastMessageAt: c.derniere_activite_at
+                  ? String(c.derniere_activite_at)
+                  : row.lastMessageAt,
+                archived: c.archivee ?? row.archived,
+              }
+            : row,
+        ),
+      );
+    });
+
+    // Fallback: soft-refresh conversations/messages if the socket drops
+    const fallback = window.setInterval(() => {
+      void refreshConversationsSnapshot().then((result) => {
+        if (!result.ok) return;
+        setConversations(result.conversations);
+        setMessages(result.messages);
+        sinceRef.current = new Date().toISOString();
+      });
+    }, 60_000);
+
+    return () => {
+      echo.leave(`organisation.${organizationId}`);
+      window.clearInterval(fallback);
+    };
+  }, [organizationId, useRealtime]);
 
   return (
     <div className="flex h-[calc(100vh-8rem)] flex-col space-y-4">
-      <div>
-        <h1 className="font-serif text-2xl font-semibold text-ink">
-          Conversations
-        </h1>
-        <p className="mt-1 text-sm text-ink/60">
-          Échanges WhatsApp, Messenger, Instagram et TikTok synchronisés avec le
-          CRM
-        </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="font-serif text-2xl font-semibold text-ink">
+            Conversations
+          </h1>
+          <p className="mt-1 text-sm text-ink/60">
+            Échanges WhatsApp, Messenger, Instagram et TikTok synchronisés avec le
+            CRM
+          </p>
+        </div>
+        {selected && useRealtime ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {labels.map((l) => {
+              const active = selected.labels?.some((x) => x.id === l.id);
+              return (
+                <button
+                  key={l.id}
+                  type="button"
+                  onClick={() => void handleToggleLabel(l)}
+                  className="rounded-full px-2 py-0.5 text-xs font-medium text-white transition opacity-90 hover:opacity-100"
+                  style={{
+                    backgroundColor: l.color,
+                    outline: active ? "2px solid currentColor" : undefined,
+                    opacity: active ? 1 : 0.45,
+                  }}
+                >
+                  {l.name}
+                </button>
+              );
+            })}
+            {currentUserId ? (
+              <Button
+                size="sm"
+                variant={selected.agentId === currentUserId ? "default" : "outline"}
+                onClick={() => void handleAssignToggle()}
+              >
+                {selected.agentId === currentUserId
+                  ? "Me désassigner"
+                  : "M’assigner"}
+              </Button>
+            ) : null}
+            <Button
+              size="sm"
+              variant={selected.status === "open" ? "default" : "outline"}
+              onClick={() => void handleStatusChange("open")}
+            >
+              Ouverte
+            </Button>
+            <Button
+              size="sm"
+              variant={selected.status === "pending" ? "default" : "outline"}
+              onClick={() => void handleStatusChange("pending")}
+            >
+              En attente
+            </Button>
+            <Button
+              size="sm"
+              variant={selected.status === "resolved" ? "default" : "outline"}
+              onClick={() => void handleStatusChange("resolved")}
+            >
+              Résolue
+            </Button>
+          </div>
+        ) : null}
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card">
@@ -335,6 +688,13 @@ export function ConversationsPageClient({
               onSend={handleSend}
               onBack={() => setMobileShowThread(false)}
               onOpenContact={() => setContactSheetOpen(true)}
+              composeExtra={
+                <TemplateSelector
+                  inboxId={selected?.inboxId}
+                  channel={selected?.channel}
+                  onSelect={(p) => void handleSend(p)}
+                />
+              }
               className="w-full"
             />
           )}
@@ -358,6 +718,13 @@ export function ConversationsPageClient({
             messages={threadMessages}
             invoices={invoices}
             onSend={handleSend}
+            composeExtra={
+              <TemplateSelector
+                inboxId={selected?.inboxId}
+                channel={selected?.channel}
+                onSelect={(p) => void handleSend(p)}
+              />
+            }
             onOpenContact={() => setContactSheetOpen(true)}
             className="xl:border-r xl:border-line"
           />
@@ -366,6 +733,15 @@ export function ConversationsPageClient({
             clients={clients}
             prospects={prospects}
             invoices={invoices}
+            laravelEnabled={useRealtime}
+            onClientLinked={(clientId) => {
+              if (!selectedId || !clientId) return;
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === selectedId ? { ...c, clientId } : c,
+                ),
+              );
+            }}
             className="hidden xl:flex"
           />
         </div>
@@ -381,6 +757,16 @@ export function ConversationsPageClient({
             clients={clients}
             prospects={prospects}
             invoices={invoices}
+            laravelEnabled={useRealtime}
+            onClientLinked={(clientId) => {
+              if (!selectedId || !clientId) return;
+              setConversations((prev) =>
+                prev.map((c) =>
+                  c.id === selectedId ? { ...c, clientId } : c,
+                ),
+              );
+              setContactSheetOpen(false);
+            }}
             className="h-full"
           />
         </SheetContent>

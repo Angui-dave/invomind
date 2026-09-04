@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests;
 
+use App\Enums\ClientCategorie;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class ClientRequest extends FormRequest
 {
@@ -14,18 +16,17 @@ class ClientRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'name' => ['required', 'string', 'max:255'],
-            'company' => ['sometimes', 'string', 'max:255'],
-            'email' => ['required', 'email'],
-            'phone' => ['nullable', 'string'],
-            'address' => ['nullable', 'string'],
-            'city' => ['nullable', 'string'],
-            'postal_code' => ['nullable', 'string'],
-            'country' => ['nullable', 'string'],
-            'tax_id' => ['nullable', 'string'],
-            'currency' => ['nullable', 'string', 'max:3'],
-            'payment_term_days' => ['nullable', 'integer', 'min:0'],
-            'reminders_enabled' => ['sometimes', 'boolean'],
+            'name_company' => ['required', 'string', 'max:255'],
+            'email' => ['nullable', 'email', 'max:255'],
+            'phone' => ['nullable', 'string', 'max:30'],
+            'adresse' => ['nullable', 'string', 'max:255'],
+            'ville' => ['nullable', 'string', 'max:100'],
+            'code_postal' => ['nullable', 'string', 'max:20'],
+            'country' => ['nullable', 'string', 'max:100'],
+            'devise' => ['nullable', 'string', 'size:3'],
+            'categorie_client' => ['sometimes', Rule::enum(ClientCategorie::class)],
+            'notes' => ['nullable', 'string'],
+            'user_id' => ['nullable', 'integer', 'exists:users,id'],
         ];
     }
 }

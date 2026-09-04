@@ -1,7 +1,11 @@
 import { getCreditNotes, getInvoices } from "@/lib/dal/documents";
 import { listPayments } from "@/lib/dal/payments";
 import { getOrgSettings } from "@/lib/dal/settings";
+import { dalErrorMessage } from "@/lib/dal/load-error";
+import { DalErrorBanner } from "@/components/dal-error-banner";
 import type { BusinessDocument } from "@/lib/documents";
+import type { Payment } from "@/lib/data/payments";
+import type { OrgSettings } from "@/lib/data/settings";
 import { PaymentsPageClient } from "./payments-client";
 
 function balanceDueFor(
@@ -21,12 +25,22 @@ function balanceDueFor(
 }
 
 export default async function PaymentsPage() {
-  const [payments, invoices, creditNotes, settings] = await Promise.all([
-    listPayments(),
-    getInvoices(),
-    getCreditNotes(),
-    getOrgSettings(),
-  ]);
+  let payments: Payment[] = [];
+  let invoices: BusinessDocument[] = [];
+  let creditNotes: BusinessDocument[] = [];
+  let settings: OrgSettings | null = null;
+  let loadError: string | null = null;
+
+  try {
+    [payments, invoices, creditNotes, settings] = await Promise.all([
+      listPayments(),
+      getInvoices(),
+      getCreditNotes(),
+      getOrgSettings(),
+    ]);
+  } catch (error) {
+    loadError = dalErrorMessage(error);
+  }
 
   const unpaid = invoices
     .filter(
@@ -42,10 +56,13 @@ export default async function PaymentsPage() {
     .filter((inv) => inv.balanceDue > 0.01);
 
   return (
-    <PaymentsPageClient
-      initialPayments={payments}
-      unpaidInvoices={unpaid}
-      defaultCurrency={settings?.defaultCurrency ?? "XOF"}
-    />
+    <>
+      {loadError ? <DalErrorBanner message={loadError} /> : null}
+      <PaymentsPageClient
+        initialPayments={payments}
+        unpaidInvoices={unpaid}
+        defaultCurrency={settings?.defaultCurrency ?? "XOF"}
+      />
+    </>
   );
 }

@@ -2,18 +2,35 @@
 
 namespace App\Console\Commands;
 
-use App\Services\SubscriptionBillingService;
+use App\Enums\AbonnementStatut;
+use App\Models\Plan;
+use App\Models\Subscription;
 use Illuminate\Console\Command;
 
 class ExpireSubscriptionsCommand extends Command
 {
     protected $signature = 'subscriptions:expire';
 
-    protected $description = 'Downgrade organizations whose prepaid CinetPay period has ended';
+    protected $description = 'Downgrade organizations whose subscription end date has passed';
 
-    public function handle(SubscriptionBillingService $billing): int
+    public function handle(): int
     {
-        $count = $billing->expireOverdue();
+        $gratuit = Plan::query()->where('code', 'gratuit')->first();
+        if (! $gratuit) {
+            $this->error('Plan gratuit manquant.');
+
+            return self::FAILURE;
+        }
+
+        $count = Subscription::query()
+            ->whereIn('statut', [AbonnementStatut::EnCours, AbonnementStatut::Essai])
+            ->whereNotNull('date_fin')
+            ->whereDate('date_fin', '<', now()->toDateString())
+            ->update([
+                'plan_id' => $gratuit->id,
+                'statut' => AbonnementStatut::Expire,
+            ]);
+
         $this->info("Expired {$count} subscription(s).");
 
         return self::SUCCESS;

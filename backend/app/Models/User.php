@@ -2,12 +2,14 @@
 
 namespace App\Models;
 
+use App\Enums\UserRole;
+use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Auth\MustVerifyEmail;
 use Illuminate\Auth\Passwords\CanResetPassword;
 use Illuminate\Contracts\Auth\CanResetPassword as CanResetPasswordContract;
 use Illuminate\Contracts\Auth\MustVerifyEmail as MustVerifyEmailContract;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -15,23 +17,29 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable implements CanResetPasswordContract, MustVerifyEmailContract
 {
-    use CanResetPassword, HasApiTokens, HasUuids, MustVerifyEmail, Notifiable;
+    /** @use HasFactory<\Database\Factories\UserFactory> */
+    use CanResetPassword, HasApiTokens, HasFactory, HasPublicUuid, MustVerifyEmail, Notifiable;
 
-    protected $keyType = 'string';
-
-    public $incrementing = false;
-
-    const UPDATED_AT = 'updated_at';
-
-    const CREATED_AT = 'created_at';
-
-    protected $fillable = ['name', 'email', 'password_hash', 'email_verified_at'];
+    protected $fillable = [
+        'orga_id',
+        'full_name',
+        'email',
+        'password_hash',
+        'photo_url',
+        'role',
+        'is_active',
+        'last_login_at',
+        'email_verified_at',
+    ];
 
     protected $hidden = ['password_hash'];
 
     protected function casts(): array
     {
         return [
+            'role' => UserRole::class,
+            'is_active' => 'boolean',
+            'last_login_at' => 'datetime',
             'email_verified_at' => 'datetime',
         ];
     }
@@ -41,15 +49,23 @@ class User extends Authenticatable implements CanResetPasswordContract, MustVeri
         return $this->password_hash;
     }
 
-    public function memberships(): HasMany
+    public function organization(): BelongsTo
     {
-        return $this->hasMany(Membership::class);
+        return $this->belongsTo(Organization::class, 'orga_id');
     }
 
-    public function organizations(): BelongsToMany
+    public function clients(): HasMany
     {
-        return $this->belongsToMany(Organization::class, 'memberships')
-            ->withPivot('role')
-            ->withTimestamps(false);
+        return $this->hasMany(Client::class, 'user_id');
+    }
+
+    public function quotes(): HasMany
+    {
+        return $this->hasMany(Quote::class, 'user_id');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'user_id');
     }
 }

@@ -30,7 +30,7 @@ import {
 } from "@/lib/mock-data";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/rbac/types";
-import { ADMIN_ONLY_ROUTES } from "@/lib/rbac/policy";
+import { ADMIN_ONLY_ROUTES, AGENT_DEFAULT_ROUTE } from "@/lib/rbac/policy";
 
 type NavChild = {
   href: string;
@@ -48,7 +48,7 @@ type NavItem = {
 };
 
 const QUOTE_STATUS_LINKS: NavChild[] = (
-  ["draft", "sent", "accepted", "refused", "expired"] as const
+  ["draft", "sent", "accepted", "refused", "expired", "converted"] as const
 ).map((status) => ({
   href: `/quotes?status=${status}`,
   label: QUOTE_STATUS_LABELS[status],
@@ -274,7 +274,7 @@ export function SidebarNav({
     <div className={cn("flex h-full flex-col", className)}>
       <div className="px-4 py-5">
         <Link
-          href="/dashboard"
+          href={isAgent ? AGENT_DEFAULT_ROUTE : "/dashboard"}
           onClick={onNavigate}
           className="flex items-center gap-2.5 transition-ledger hover:opacity-90"
         >

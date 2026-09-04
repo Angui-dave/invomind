@@ -25,6 +25,14 @@ export type MessageDeliveryStatus =
   | "read"
   | "failed";
 
+export type ConversationStatus = "open" | "pending" | "resolved";
+
+export interface ConversationLabel {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export interface ConversationMessage {
   id: string;
   conversationId: string;
@@ -32,6 +40,9 @@ export interface ConversationMessage {
   body: string;
   sentAt: string;
   status?: MessageDeliveryStatus;
+  /** texte | image | fichier | audio | video | modele */
+  contentType?: string;
+  mediaUrl?: string;
 }
 
 export interface Conversation {
@@ -41,12 +52,18 @@ export interface Conversation {
   contactHandle: string;
   /** Platform thread id (e.g. TikTok conversation_id) required to reply. */
   threadRef?: string;
+  /** Laravel inbox id (boite_reception_id) */
+  inboxId?: string;
   avatarInitials?: string;
   clientId?: string;
+  /** @deprecated Prospects module removed — kept for mock-mode compatibility */
   prospectId?: string;
   unreadCount: number;
   lastMessageAt: string;
   archived?: boolean;
+  status?: ConversationStatus;
+  agentId?: string;
+  labels?: ConversationLabel[];
 }
 
 export type ResolvedContact =

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { redirect } from "next/navigation";
 import { InvoiceForm } from "@/components/invoices/invoice-form";
 import { listCatalogItems } from "@/lib/dal/catalog";
 import {
@@ -9,6 +10,8 @@ import {
 } from "@/lib/dal/documents";
 import { getOrgSettings } from "@/lib/dal/settings";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
+import { isLaravelApiEnabled } from "@/lib/config";
+import { convertQuote } from "@/lib/actions/documents";
 import {
   convertQuoteToInvoice,
   createCreditNoteFromInvoice,
@@ -29,6 +32,21 @@ export default async function NewInvoicePage({
   searchParams: SearchParams;
 }) {
   const params = await searchParams;
+  const laravel = isLaravelApiEnabled();
+
+  // Laravel: convert via API then open the new invoice.
+  if (params.fromQuote && laravel) {
+    const result = await convertQuote(params.fromQuote);
+    if (result.ok && result.id) {
+      redirect(`/invoices/${result.id}`);
+    }
+  }
+
+  // Credit notes unavailable on Laravel — stay on invoices list.
+  if (params.creditOf && laravel) {
+    redirect("/invoices");
+  }
+
   const [clients, catalogItems, settings, invoices, creditNotes] =
     await Promise.all([
       listClients(),
@@ -42,7 +60,7 @@ export default async function NewInvoicePage({
   let kind: "invoice" | "credit_note" = "invoice";
   const existing = [...invoices, ...creditNotes];
 
-  if (params.fromQuote) {
+  if (params.fromQuote && !laravel) {
     const quote = await getDocumentById(params.fromQuote);
     if (quote?.kind === "quote") {
       const client = clients.find((c) => c.id === quote.clientId);
@@ -52,7 +70,7 @@ export default async function NewInvoicePage({
         client?.paymentTermDays ?? 30,
       );
     }
-  } else if (params.creditOf) {
+  } else if (params.creditOf && !laravel) {
     const invoice = await getDocumentById(params.creditOf);
     if (invoice?.kind === "invoice") {
       document = createCreditNoteFromInvoice(invoice, creditNotes);
@@ -70,6 +88,8 @@ export default async function NewInvoicePage({
       catalogItems={catalogItems}
       orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
       existingNumbers={existing.filter((d) => d.kind === kind)}
+      creditNotesUnavailable={laravel}
+      pdfUnavailable={laravel}
     />
   );
 }

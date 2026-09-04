@@ -1,3 +1,4 @@
+import { isLaravelApiEnabled } from "@/lib/config";
 import { assertAdminTenant } from "@/lib/rbac/guards";
 import { verifySession, getCurrentOrganization } from "@/lib/dal/session";
 import {
@@ -59,6 +60,7 @@ export default async function SettingsPage({
       branding={branding}
       enabledModules={modules}
       initialTab={params.tab}
+      laravelApiEnabled={isLaravelApiEnabled()}
     />
   );
 }

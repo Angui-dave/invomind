@@ -2,48 +2,47 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\ProduitType;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\CatalogItemRequest;
-use App\Http\Resources\CatalogItemResource;
-use App\Models\CatalogItem;
-use App\Services\EntitlementService;
+use App\Http\Requests\ProductServiceRequest;
+use App\Http\Resources\ProductServiceResource;
+use App\Models\ProductService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class CatalogController extends Controller
 {
-    public function index(Request $request, EntitlementService $entitlements): AnonymousResourceCollection|\Illuminate\Http\JsonResponse
+    public function index(Request $request): AnonymousResourceCollection|JsonResponse
     {
-        $entitlements->assertModule($this->orgId($request), 'catalog');
+        $query = ProductService::query()->orderBy('name');
 
-        $query = CatalogItem::where('organization_id', $this->orgId($request))
-            ->orderBy('created_at', 'desc');
-
-        return $this->paginated($request, $query, CatalogItemResource::class);
+        return $this->paginated($request, $query, ProductServiceResource::class);
     }
 
-    public function store(CatalogItemRequest $request, EntitlementService $entitlements): JsonResponse
+    public function store(ProductServiceRequest $request): JsonResponse
     {
-        $entitlements->assertModule($this->orgId($request), 'catalog');
+        $data = $request->validated();
+        $type = $data['type'] ?? ProduitType::Produit->value;
 
-        $item = CatalogItem::create([
-            ...$request->validated(),
-            'organization_id' => $this->orgId($request),
+        $item = ProductService::create([
+            ...$data,
+            'orga_id' => $this->orgId($request),
+            'user_id' => $request->user()->id,
+            'type' => $type,
+            'gere_stock' => $data['gere_stock'] ?? ($type !== ProduitType::Service->value && $type !== ProduitType::Service),
         ]);
 
-        return (new CatalogItemResource($item))
+        return (new ProductServiceResource($item))
             ->response()
             ->setStatusCode(201);
     }
 
-    public function update(CatalogItemRequest $request, string $id, EntitlementService $entitlements): CatalogItemResource
+    public function update(ProductServiceRequest $request, int $id): ProductServiceResource
     {
-        $entitlements->assertModule($this->orgId($request), 'catalog');
-
-        $item = CatalogItem::where('organization_id', $this->orgId($request))->findOrFail($id);
+        $item = ProductService::query()->findOrFail($id);
         $item->update($request->validated());
 
-        return new CatalogItemResource($item->fresh());
+        return new ProductServiceResource($item->fresh());
     }
 }

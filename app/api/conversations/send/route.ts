@@ -1,9 +1,6 @@
-import { readSessionCookie } from "@/lib/auth/session";
 import { isConversationChannel } from "@/lib/data/conversations";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
-import { laravelRequest } from "@/lib/laravel/client";
-import { mapConversationSendStatus } from "@/lib/laravel/mappers";
 import { signPayload } from "@/lib/webhooks/signature";
 import { getConfig, logDelivery } from "@/lib/webhooks/store";
 import type { DeliveryAttempt, SendMessagePayload } from "@/lib/webhooks/types";
@@ -34,10 +31,23 @@ function parseBody(data: unknown): SendMessagePayload | null {
   };
 }
 
+/**
+ * Legacy mock outbound send. In Laravel mode use server action
+ * `sendConversationMessage` → POST /conversations/{id}/messages.
+ */
 export async function POST(request: Request) {
+  if (isLaravelApiEnabled()) {
+    return Response.json(
+      {
+        error:
+          "Utilisez sendConversationMessage (POST /conversations/{id}/messages).",
+      },
+      { status: 501 },
+    );
+  }
+
   const session = await verifySession();
   const organizationId = session.organizationId;
-  const token = (await readSessionCookie())?.accessToken;
 
   let json: unknown;
   try {
@@ -57,126 +67,77 @@ export async function POST(request: Request) {
     );
   }
 
-  if (isLaravelApiEnabled()) {
-    const response = await laravelRequest<unknown>("/conversations/send", {
-      method: "POST",
-      token,
-      organizationId,
-      body: {
-        conversation_id: payload.conversationId,
-        channel: payload.channel,
-        to: payload.to,
-        body: payload.body,
-        thread_ref: payload.threadRef,
-      },
-    });
-    const normalized = mapConversationSendStatus(response);
-    return Response.json({
-      ...normalized,
-      raw: response,
-    });
-  }
-
   const config = await getConfig(organizationId);
   const deliveryId = crypto.randomUUID();
   const attemptedAt = new Date().toISOString();
 
-  if (!config.enabled || !config.url) {
-    const attempt: Omit<DeliveryAttempt, "id"> & { id?: string } = {
+  if (!config.url) {
+    const attempt: DeliveryAttempt = {
       id: deliveryId,
+      organizationId,
       conversationId: payload.conversationId,
       channel: payload.channel,
+      to: payload.to,
       status: "skipped",
+      httpStatus: null,
+      error: "Webhook URL non configurée",
       attemptedAt,
-      durationMs: 0,
     };
-    await logDelivery(organizationId, attempt);
-    return Response.json({
-      status: "skipped",
-      deliveredAt: attemptedAt,
-    });
+    await logDelivery(attempt);
+    return Response.json({ ok: true, skipped: true, deliveryId });
   }
 
-  const eventBody = JSON.stringify({
-    event: "message.send",
-    deliveryId,
-    conversationId: payload.conversationId,
-    channel: payload.channel,
-    to: payload.to,
-    body: payload.body,
-    ...(payload.threadRef ? { threadRef: payload.threadRef } : {}),
-    sentAt: attemptedAt,
+  const body = JSON.stringify({
+    event: "message.outbound",
+    organizationId,
+    ...payload,
+    attemptedAt,
   });
-  const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = config.secret
-    ? signPayload(config.secret, timestamp, eventBody)
-    : "";
+    ? signPayload(body, config.secret)
+    : undefined;
 
-  const started = Date.now();
   try {
-    const response = await fetch(config.url, {
+    const res = await fetch(config.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Invomind-Event": "message.send",
-        "X-Invomind-Delivery": deliveryId,
-        "X-Invomind-Timestamp": timestamp,
-        ...(signature ? { "X-Invomind-Signature": signature } : {}),
+        ...(signature ? { "X-InvoMind-Signature": signature } : {}),
       },
-      body: eventBody,
-      signal: AbortSignal.timeout(8000),
+      body,
     });
-
-    const durationMs = Date.now() - started;
-    const ok = response.ok;
-    await logDelivery(organizationId, {
+    const attempt: DeliveryAttempt = {
       id: deliveryId,
+      organizationId,
       conversationId: payload.conversationId,
       channel: payload.channel,
-      status: ok ? "success" : "failed",
-      httpStatus: response.status,
-      error: ok ? undefined : `HTTP ${response.status}`,
+      to: payload.to,
+      status: res.ok ? "delivered" : "failed",
+      httpStatus: res.status,
+      error: res.ok ? null : await res.text().catch(() => "HTTP error"),
       attemptedAt,
-      durationMs,
-    });
-
-    if (!ok) {
-      return Response.json(
-        {
-          status: "failed",
-          httpStatus: response.status,
-          deliveredAt: attemptedAt,
-          error: `Le webhook a répondu ${response.status}`,
-        },
-        { status: 502 },
-      );
-    }
-
+    };
+    await logDelivery(attempt);
     return Response.json({
-      status: "success",
-      httpStatus: response.status,
-      deliveredAt: attemptedAt,
+      ok: res.ok,
+      deliveryId,
+      httpStatus: res.status,
     });
-  } catch (error) {
-    const durationMs = Date.now() - started;
-    const message =
-      error instanceof Error ? error.message : "Erreur réseau inconnue";
-    await logDelivery(organizationId, {
+  } catch (e) {
+    const attempt: DeliveryAttempt = {
       id: deliveryId,
+      organizationId,
       conversationId: payload.conversationId,
       channel: payload.channel,
+      to: payload.to,
       status: "failed",
-      error: message,
+      httpStatus: null,
+      error: e instanceof Error ? e.message : "Network error",
       attemptedAt,
-      durationMs,
+    };
+    await logDelivery(attempt);
+    return Response.json({ ok: false, deliveryId, error: attempt.error }, {
+      status: 502,
     });
-    return Response.json(
-      {
-        status: "failed",
-        deliveredAt: attemptedAt,
-        error: message,
-      },
-      { status: 502 },
-    );
   }
 }

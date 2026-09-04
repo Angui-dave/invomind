@@ -4,13 +4,13 @@ import type { TaxMode } from "@/lib/tax";
 
 export type PlanId = "free" | "pro" | "business";
 
+/** Matches Laravel `client_categorie` (Kanban columns). */
 export type PipelineStage =
-  | "nouveau"
+  | "prospect"
   | "qualifie"
-  | "devis"
   | "negociation"
-  | "gagne"
-  | "perdu";
+  | "client"
+  | "inactif";
 
 export interface OrgSettings {
   companyName: string;
@@ -222,7 +222,7 @@ export const PROSPECTS: Prospect[] = [
     name: "Marie Dupont",
     company: "Boulangerie Dupont",
     estimatedValue: 400_000,
-    stage: "nouveau",
+    stage: "prospect",
     lastInteractionAt: "2026-08-12",
   },
   {
@@ -238,7 +238,7 @@ export const PROSPECTS: Prospect[] = [
     name: "Élodie Martin",
     company: "Cabinet Martin",
     estimatedValue: 2_500_000,
-    stage: "devis",
+    stage: "negociation",
     lastInteractionAt: "2026-08-08",
   },
   {
@@ -254,7 +254,7 @@ export const PROSPECTS: Prospect[] = [
     name: "Amina Traoré",
     company: "Traoré Design",
     estimatedValue: 750_000,
-    stage: "gagne",
+    stage: "client",
     lastInteractionAt: "2026-08-14",
   },
   {
@@ -262,29 +262,27 @@ export const PROSPECTS: Prospect[] = [
     name: "Paul Girard",
     company: "Girard SA",
     estimatedValue: 3_000_000,
-    stage: "perdu",
+    stage: "inactif",
     lastInteractionAt: "2026-07-28",
   },
 ];
 
 export const PIPELINE_STAGES: {
-  id: Exclude<PipelineStage, "perdu">;
+  id: Exclude<PipelineStage, "inactif">;
   label: string;
 }[] = [
-  { id: "nouveau", label: "Nouveau contact" },
+  { id: "prospect", label: "Prospect" },
   { id: "qualifie", label: "Qualifié" },
-  { id: "devis", label: "Devis envoyé" },
   { id: "negociation", label: "En négociation" },
-  { id: "gagne", label: "Gagné" },
+  { id: "client", label: "Client" },
 ];
 
 export const PIPELINE_STAGE_COLORS: Record<PipelineStage, string> = {
-  nouveau: "#C9CCC3",
+  prospect: "#C9CCC3",
   qualifie: "#B08D57",
-  devis: "#2F6E5B",
   negociation: "#16213E",
-  gagne: "#2F6E5B",
-  perdu: "#B23A48",
+  client: "#2F6E5B",
+  inactif: "#B23A48",
 };
 
 export const BILLING_HISTORY: BillingHistoryItem[] = [
@@ -391,7 +389,7 @@ export function activeProspectsValue(prospects?: Prospect[]): {
   count: number;
 } {
   const list = prospects ?? PROSPECTS;
-  const active = list.filter((p) => p.stage !== "perdu");
+  const active = list.filter((p) => p.stage !== "inactif");
   return {
     total: active.reduce((sum, p) => sum + p.estimatedValue, 0),
     count: active.length,

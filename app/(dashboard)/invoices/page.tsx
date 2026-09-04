@@ -1,8 +1,11 @@
 import { getCreditNotes, getInvoices } from "@/lib/dal/documents";
 import { getCurrentOrganization } from "@/lib/dal/session";
+import { dalErrorMessage } from "@/lib/dal/load-error";
 import { getEntitlements } from "@/lib/billing/entitlements";
+import { DalErrorBanner } from "@/components/dal-error-banner";
 import { LimitBanner } from "@/components/feature-gate";
 import type { InvoiceStatus } from "@/lib/mock-data";
+import type { BusinessDocument } from "@/lib/documents";
 import { InvoicesPageClient } from "./invoices-client";
 
 type SearchParams = Promise<{
@@ -36,14 +39,23 @@ export default async function InvoicesPage({
     session.organization.planId,
   );
 
-  const [invoices, creditNotes] = await Promise.all([
-    getInvoices(),
-    getCreditNotes(),
-  ]);
+  let invoices: BusinessDocument[] = [];
+  let creditNotes: BusinessDocument[] = [];
+  let loadError: string | null = null;
+  try {
+    [invoices, creditNotes] = await Promise.all([
+      getInvoices(),
+      getCreditNotes(),
+    ]);
+  } catch (error) {
+    loadError = dalErrorMessage(error);
+  }
+
   const params = await searchParams;
 
   return (
     <>
+      {loadError ? <DalErrorBanner message={loadError} /> : null}
       {!entitlements.canCreateInvoice &&
       entitlements.maxInvoicesPerMonth != null ? (
         <LimitBanner

@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { FilePlus2, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
@@ -8,6 +9,15 @@ import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { linkConversationClient } from "@/lib/actions/conversations";
+import { createClient } from "@/lib/actions/clients";
 import type { Client } from "@/lib/data/clients";
 import type { Prospect } from "@/lib/data/settings";
 import {
@@ -26,6 +36,8 @@ type ContactPanelProps = {
   clients?: Client[];
   prospects?: Prospect[];
   invoices?: BusinessDocument[];
+  laravelEnabled?: boolean;
+  onClientLinked?: (clientId: string | null) => void;
   className?: string;
 };
 
@@ -36,8 +48,21 @@ export function ContactPanel({
   clients = [],
   prospects = [],
   invoices = [],
+  laravelEnabled = false,
+  onClientLinked,
   className,
 }: ContactPanelProps) {
+  const [linking, setLinking] = useState(false);
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+
+  const contact = useMemo(
+    () =>
+      conversation
+        ? resolveContact(conversation, clients, prospects)
+        : ({ kind: "unknown" } as const),
+    [conversation, clients, prospects],
+  );
+
   if (!conversation) {
     return (
       <aside
@@ -53,7 +78,6 @@ export function ContactPanel({
     );
   }
 
-  const contact = resolveContact(conversation, clients, prospects);
   const openInvoices =
     contact.kind === "client"
       ? invoices.filter(
@@ -68,6 +92,55 @@ export function ContactPanel({
       ? (PIPELINE_STAGES.find((s) => s.id === contact.prospect.stage)?.label ??
         contact.prospect.stage)
       : null;
+
+  async function associateClient(clientId: string) {
+    if (!laravelEnabled) {
+      toast.success("Association simulée — activez Laravel pour persister");
+      return;
+    }
+    setLinking(true);
+    const result = await linkConversationClient({
+      conversationId: conversation!.id,
+      clientId,
+    });
+    setLinking(false);
+    if (result.ok) {
+      toast.success("Contact associé au client");
+      onClientLinked?.(clientId);
+    } else {
+      toast.error(result.error);
+    }
+  }
+
+  async function createAndLink() {
+    if (!laravelEnabled) {
+      toast.error("API Laravel requise");
+      return;
+    }
+    setLinking(true);
+    const created = await createClient({
+      name: conversation!.contactName,
+      company: conversation!.contactName,
+      email: `contact+${conversation!.id.replace(/\W/g, "")}@invomind.local`,
+      phone: conversation!.contactHandle,
+    });
+    if (!created.ok || !created.id) {
+      setLinking(false);
+      toast.error(created.ok ? "Client créé sans id" : created.error);
+      return;
+    }
+    const linked = await linkConversationClient({
+      conversationId: conversation!.id,
+      clientId: created.id,
+    });
+    setLinking(false);
+    if (linked.ok) {
+      toast.success("Client créé et associé");
+      onClientLinked?.(created.id);
+    } else {
+      toast.error(linked.error);
+    }
+  }
 
   return (
     <aside
@@ -92,6 +165,9 @@ export function ContactPanel({
               : contact.kind === "prospect"
                 ? contact.prospect.name
                 : conversation.contactHandle}
+          </p>
+          <p className="mt-1 font-mono text-xs text-ink/45">
+            {conversation.contactHandle}
           </p>
         </div>
 
@@ -128,23 +204,49 @@ export function ContactPanel({
         )}
 
         {contact.kind === "unknown" && (
-          <div className="rounded-sm border border-dashed border-line bg-muted/30 p-3">
+          <div className="space-y-3 rounded-sm border border-dashed border-line bg-muted/30 p-3">
             <p className="text-sm font-medium text-ink">Contact non rattaché</p>
-            <p className="mt-1 text-xs text-ink/55">
+            <p className="text-xs text-ink/55">
               Associez ce profil à un client ou créez-en un pour synchroniser
               les factures.
             </p>
+            {clients.length > 0 ? (
+              <div className="flex gap-2">
+                <Select
+                  value={selectedClientId}
+                  onValueChange={setSelectedClientId}
+                >
+                  <SelectTrigger className="h-9 flex-1">
+                    <SelectValue placeholder="Choisir un client" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.company || c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  type="button"
+                  size="sm"
+                  disabled={!selectedClientId || linking}
+                  onClick={() => void associateClient(selectedClientId)}
+                >
+                  Lier
+                </Button>
+              </div>
+            ) : null}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="w-full mt-3"
-              onClick={() =>
-                toast.success("Association simulée — à brancher au CRM")
-              }
+              className="w-full"
+              disabled={linking}
+              onClick={() => void createAndLink()}
             >
               <UserPlus className="size-3.5" aria-hidden />
-              Associer à un client
+              Créer un client
             </Button>
           </div>
         )}
@@ -215,11 +317,8 @@ export function ContactPanel({
               <Button
                 type="button"
                 className="w-full bg-ledger text-paper hover:bg-ledger/90"
-                onClick={() =>
-                  toast.success(
-                    `${contact.prospect.name} converti(e) en client`,
-                  )
-                }
+                disabled={linking}
+                onClick={() => void createAndLink()}
               >
                 <UserPlus className="size-4" aria-hidden />
                 Convertir en client

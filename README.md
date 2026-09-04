@@ -62,7 +62,7 @@ cd backend
 cp .env.example .env   # si besoin
 composer install
 php artisan key:generate
-php artisan migrate    # inclut les plans free / pro / business (requis pour l’inscription)
+php artisan migrate --seed   # plans gratuit/pro/business + règles de relance + catégories dépense
 php artisan serve      # http://localhost:8000
 ```
 

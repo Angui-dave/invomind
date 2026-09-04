@@ -71,26 +71,43 @@ export function SuppliersPageClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {suppliers.map((s) => (
-              <TableRow
-                key={s.id}
-                className="cursor-pointer"
-                onClick={() => {
-                  setEditing(s);
-                  setOpen(true);
-                }}
-              >
-                <TableCell className="font-medium text-ink">
-                  {s.company}
+            {suppliers.length === 0 ? (
+              <TableRow>
+                <TableCell
+                  colSpan={5}
+                  className="py-10 text-center text-sm text-ink/55"
+                >
+                  Aucun fournisseur. Ajoutez votre premier contact.
                 </TableCell>
-                <TableCell className="text-ink/70">{s.name}</TableCell>
-                <TableCell className="text-ink/70">{s.email}</TableCell>
-                <TableCell className="num text-ink/70">
-                  {s.phone ?? "—"}
-                </TableCell>
-                <TableCell className="text-ink/70">{s.city ?? "—"}</TableCell>
               </TableRow>
-            ))}
+            ) : (
+              suppliers.map((s) => (
+                <TableRow
+                  key={s.id}
+                  className="cursor-pointer"
+                  onClick={() => {
+                    setEditing(s);
+                    setOpen(true);
+                  }}
+                >
+                  <TableCell className="font-medium text-ink">
+                    {s.company}
+                  </TableCell>
+                  <TableCell className="text-ink/70">
+                    {s.name || "—"}
+                  </TableCell>
+                  <TableCell className="text-ink/70">
+                    {s.email || "—"}
+                  </TableCell>
+                  <TableCell className="num text-ink/70">
+                    {s.phone ?? "—"}
+                  </TableCell>
+                  <TableCell className="text-ink/70">
+                    {s.city ?? "—"}
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
           </TableBody>
         </Table>
       </div>
@@ -225,7 +242,6 @@ function SupplierForm({
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          required
         />
       </div>
       <div className="grid grid-cols-2 gap-3">

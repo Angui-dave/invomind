@@ -9,7 +9,7 @@ export type SessionPayload = {
   sessionId: string;
   userId: string;
   organizationId: string;
-  role?: "owner" | "admin" | "member";
+  role?: "owner" | "admin" | "member" | "agent";
   /** Populated at read time from ACCESS_TOKEN_COOKIE — never signed into the JWT. */
   accessToken?: string;
   expiresAt: string;

@@ -1,8 +1,6 @@
 import "server-only";
-import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { fetchOrganization, verifySession } from "@/lib/dal/session";
-import { laravelRequest } from "@/lib/laravel/client";
 import { mapBranding as mapApiBranding, mapOrgSettings as mapApiOrgSettings } from "@/lib/laravel/mappers";
 import { tenantStore } from "@/lib/mock/store";
 import type { CurrencyCode } from "@/lib/money";
@@ -15,35 +13,6 @@ import type {
 } from "@/lib/data/settings";
 
 export type { OrgBranding, OrgSettingsExtras };
-
-const REMINDER_EVENT_TO_MILESTONE: Record<
-  string,
-  NonNullable<EmailTemplate["milestone"]>
-> = {
-  "J-3": "J-3",
-  "J+3": "J+3",
-  "J+7": "J+7",
-  "J+14": "J+14",
-  "reminder_J-3": "J-3",
-  "reminder_J+3": "J+3",
-  "reminder_J+7": "J+7",
-  "reminder_J+14": "J+14",
-};
-
-function reminderMilestoneFromEvent(
-  value: string,
-): EmailTemplate["milestone"] | undefined {
-  return REMINDER_EVENT_TO_MILESTONE[value];
-}
-
-type ApiEmailTemplate = {
-  id: string;
-  event?: string;
-  milestone?: string;
-  label: string;
-  subject: string;
-  body: string;
-};
 
 type ApiBillingItem = {
   id: string;
@@ -85,24 +54,11 @@ export async function getSettingsExtras(): Promise<OrgSettingsExtras> {
 }
 
 export async function getEmailTemplates(): Promise<EmailTemplate[]> {
-  const session = await verifySession();
+  await verifySession();
   if (isLaravelApiEnabled()) {
-    const token = (await readSessionCookie())?.accessToken;
-    const templates = await laravelRequest<ApiEmailTemplate[]>("/email-templates", {
-      token,
-      organizationId: session.organizationId,
-    });
-    return templates.map((t) => {
-      const event = t.event ?? String(t.milestone ?? t.id);
-      return {
-        id: t.id,
-        event,
-        milestone: reminderMilestoneFromEvent(event),
-        label: t.label,
-        subject: t.subject,
-        body: t.body,
-      };
-    });
+    // Email template CRUD was removed from the API; ship defaults for Settings UI.
+    const { EMAIL_TEMPLATES } = await import("@/lib/data/settings");
+    return structuredClone(EMAIL_TEMPLATES);
   }
   const store = await tenantStore();
   return structuredClone(store.emailTemplates);

@@ -2,119 +2,90 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Concerns\HasPublicUuid;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Organization extends Model
 {
-    use HasUuids;
+    /** @use HasFactory<\Database\Factories\OrganizationFactory> */
+    use HasFactory, HasPublicUuid, SoftDeletes;
 
-    protected $keyType = 'string';
+    protected $table = 'organisations';
 
-    public $incrementing = false;
+    protected $fillable = [
+        'name_company',
+        'full_name',
+        'logo_url',
+        'email',
+        'phone',
+        'adresse',
+        'ville',
+        'code_postal',
+        'pays',
+        'devise_defaut',
+    ];
 
-    protected $fillable = ['name', 'slug', 'plan_id'];
-
-    public function plan(): BelongsTo
+    public function users(): HasMany
     {
-        return $this->belongsTo(Plan::class);
-    }
-
-    public function memberships(): HasMany
-    {
-        return $this->hasMany(Membership::class);
-    }
-
-    public function subscription(): HasOne
-    {
-        return $this->hasOne(Subscription::class);
-    }
-
-    public function subscriptionInvoices(): HasMany
-    {
-        return $this->hasMany(SubscriptionInvoice::class)->orderByDesc('date');
-    }
-
-    public function settings(): HasOne
-    {
-        return $this->hasOne(OrganizationSettings::class);
-    }
-
-    public function branding(): HasOne
-    {
-        return $this->hasOne(OrganizationBranding::class);
-    }
-
-    public function features(): HasOne
-    {
-        return $this->hasOne(OrganizationFeatures::class);
-    }
-
-    public function webhookConfig(): HasOne
-    {
-        return $this->hasOne(WebhookConfig::class);
+        return $this->hasMany(User::class, 'orga_id');
     }
 
     public function clients(): HasMany
     {
-        return $this->hasMany(Client::class);
+        return $this->hasMany(Client::class, 'orga_id');
     }
 
-    public function documents(): HasMany
+    public function productServices(): HasMany
     {
-        return $this->hasMany(Document::class);
+        return $this->hasMany(ProductService::class, 'orga_id');
     }
 
-    public function payments(): HasMany
+    public function quotes(): HasMany
     {
-        return $this->hasMany(Payment::class);
+        return $this->hasMany(Quote::class, 'orga_id');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(Invoice::class, 'orga_id');
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class, 'orga_id');
+    }
+
+    public function subscription(): HasOne
+    {
+        return $this->hasOne(Subscription::class, 'orga_id')->latestOfMany();
     }
 
     public function expenses(): HasMany
     {
-        return $this->hasMany(Expense::class);
+        return $this->hasMany(Expense::class, 'orga_id');
     }
 
     public function expenseCategories(): HasMany
     {
-        return $this->hasMany(ExpenseCategory::class);
+        return $this->hasMany(ExpenseCategory::class, 'orga_id');
     }
 
     public function suppliers(): HasMany
     {
-        return $this->hasMany(Supplier::class);
+        return $this->hasMany(Supplier::class, 'orga_id');
     }
 
-    public function catalogItems(): HasMany
+    public function reminderRules(): HasMany
     {
-        return $this->hasMany(CatalogItem::class);
+        return $this->hasMany(ReminderRule::class, 'orga_id');
     }
 
-    public function prospects(): HasMany
+    public function paymentIntegrations(): HasMany
     {
-        return $this->hasMany(Prospect::class);
-    }
-
-    public function conversations(): HasMany
-    {
-        return $this->hasMany(Conversation::class);
-    }
-
-    public function invitations(): HasMany
-    {
-        return $this->hasMany(OrganizationInvitation::class);
-    }
-
-    public function emailTemplates(): HasMany
-    {
-        return $this->hasMany(EmailTemplate::class);
-    }
-
-    public function outboundDeliveries(): HasMany
-    {
-        return $this->hasMany(OutboundDelivery::class);
+        return $this->hasMany(PaymentIntegration::class, 'orga_id');
     }
 }

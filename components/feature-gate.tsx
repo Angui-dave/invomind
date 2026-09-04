@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Lock } from "lucide-react";
+import { Clock, Lock } from "lucide-react";
 import { buttonVariants } from "@/components/ui/button";
 import { LedgerCard } from "@/components/ledger-card";
 import { cn } from "@/lib/utils";
@@ -13,6 +13,12 @@ type FeatureGateProps = {
   children: ReactNode;
   /** Hide the upgrade link (e.g. for agents who cannot access billing) */
   showUpgradeLink?: boolean;
+  /**
+   * When true, show "Bientôt disponible" instead of a plan upgrade prompt.
+   * Use for modules that have no Laravel API yet.
+   */
+  unavailable?: boolean;
+  unavailableMessage?: string;
 };
 
 /** Renders children when the plan allows the feature; otherwise an upgrade prompt. */
@@ -21,8 +27,31 @@ export function FeatureGate({
   featureLabel,
   children,
   showUpgradeLink = true,
+  unavailable = false,
+  unavailableMessage,
 }: FeatureGateProps) {
-  if (allowed) return <>{children}</>;
+  if (allowed && !unavailable) return <>{children}</>;
+
+  if (unavailable || (!allowed && unavailable)) {
+    return (
+      <LedgerCard>
+        <div className="flex flex-col items-start gap-4 p-6 sm:p-8">
+          <div className="flex size-10 items-center justify-center rounded-full bg-muted">
+            <Clock className="size-5 text-ink/50" />
+          </div>
+          <div>
+            <h2 className="font-serif text-lg font-semibold text-ink">
+              {featureLabel} — bientôt disponible
+            </h2>
+            <p className="mt-1 max-w-md text-sm text-ink/65">
+              {unavailableMessage ??
+                "Cette fonctionnalité n’est pas encore connectée à l’API. Elle sera disponible dans une prochaine version."}
+            </p>
+          </div>
+        </div>
+      </LedgerCard>
+    );
+  }
 
   return (
     <LedgerCard>

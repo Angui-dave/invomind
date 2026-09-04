@@ -113,7 +113,11 @@ export function QuoteForm({
   const [clientId, setClientId] = useState(initialClientId);
   const [currency, setCurrency] = useState<CurrencyCode>(initialCurrency);
   const [taxMode, setTaxMode] = useState<TaxMode>(
-    document?.taxMode ?? orgSettings.defaultTaxMode,
+    document?.taxMode === "inclusive" || document?.taxMode === "exclusive"
+      ? document.taxMode
+      : orgSettings.defaultTaxMode === "inclusive"
+        ? "inclusive"
+        : "exclusive",
   );
   const [issueDate, setIssueDate] = useState(initialIssue);
   const [dueDate, setDueDate] = useState(initialDue);
@@ -465,9 +469,13 @@ export function QuoteForm({
     try {
       await downloadPdfFromUrl(`/api/documents/${document.id}/pdf`);
     } catch (error) {
-      toast.error(
-        error instanceof Error ? error.message : "Téléchargement impossible",
-      );
+      const message =
+        error instanceof Error ? error.message : "Téléchargement impossible";
+      if (message.toLowerCase().includes("bientôt")) {
+        toast.info(message);
+      } else {
+        toast.error(message);
+      }
     } finally {
       setDownloading(false);
     }

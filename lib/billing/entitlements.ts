@@ -2,7 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
-import { laravelRequest } from "@/lib/laravel/client";
+import { laravelRequest, LaravelApiError } from "@/lib/laravel/client";
 import { tenantStoreById } from "@/lib/mock/store";
 import { planById } from "@/lib/mock/central";
 import type { PlanId } from "@/lib/data/settings";
@@ -29,8 +29,9 @@ export type Entitlements = {
   canCreateClient: boolean;
 };
 
-type ApiEntitlementsResponse = {
-  plan_id?: PlanId;
+export type ApiEntitlementsResponse = {
+  plan_id?: string;
+  plan_code?: string;
   can_create_invoice?: boolean;
   invoices_used?: number;
   invoices_limit?: number | null;
@@ -50,9 +51,41 @@ type ApiEntitlementsResponse = {
   import_tool?: boolean;
 };
 
-function mapApiEntitlements(row: ApiEntitlementsResponse): Entitlements {
+function normalizePlanId(code?: string | null): PlanId {
+  if (code === "pro") return "pro";
+  if (code === "business") return "business";
+  if (code === "free") return "free";
+  // Backend "gratuit"
+  return "free";
+}
+
+function fallbackEntitlements(planId: PlanId = "free"): Entitlements {
   return {
-    planId: (row.plan_id ?? "free") as PlanId,
+    planId,
+    maxInvoicesPerMonth: planId === "free" ? 10 : null,
+    maxClients: null,
+    maxAgents: planId === "free" ? 1 : planId === "pro" ? 3 : 10,
+    agentsUsed: 0,
+    canInviteAgent: planId !== "free",
+    autoReminders: planId !== "free",
+    onlinePayments: planId !== "free",
+    pipeline: false,
+    conversations: false,
+    reports: true,
+    expenses: true,
+    catalog: true,
+    importTool: planId !== "free",
+    invoicesThisMonth: 0,
+    clientCount: 0,
+    canCreateInvoice: true,
+    canCreateClient: true,
+  };
+}
+
+export function mapApiEntitlements(row: ApiEntitlementsResponse): Entitlements {
+  const planId = normalizePlanId(row.plan_code ?? row.plan_id);
+  return {
+    planId,
     maxInvoicesPerMonth: row.invoices_limit ?? null,
     maxClients: row.clients_limit ?? null,
     maxAgents: row.max_agents ?? null,
@@ -62,24 +95,48 @@ function mapApiEntitlements(row: ApiEntitlementsResponse): Entitlements {
     onlinePayments: Boolean(row.online_payments),
     pipeline: Boolean(row.pipeline),
     conversations: Boolean(row.conversations),
-    reports: Boolean(row.reports),
-    expenses: Boolean(row.expenses),
-    catalog: Boolean(row.catalog),
+    reports: row.reports == null ? true : Boolean(row.reports),
+    expenses: row.expenses == null ? true : Boolean(row.expenses),
+    catalog: row.catalog == null ? true : Boolean(row.catalog),
     importTool: Boolean(row.import_tool),
     invoicesThisMonth: Number(row.invoices_used ?? 0),
     clientCount: Number(row.clients_used ?? 0),
-    canCreateInvoice: Boolean(row.can_create_invoice),
-    canCreateClient: Boolean(row.can_create_client),
+    canCreateInvoice:
+      row.can_create_invoice == null ? true : Boolean(row.can_create_invoice),
+    canCreateClient:
+      row.can_create_client == null ? true : Boolean(row.can_create_client),
   };
 }
 
+/**
+ * Single cached entitlements fetch per RSC request.
+ * Soft-fails on 429 / transient errors so navigation never hard-crashes.
+ */
+export const fetchLaravelEntitlementsRaw = cache(
+  async (organizationId: string): Promise<ApiEntitlementsResponse> => {
+    const token = (await readSessionCookie())?.accessToken;
+    try {
+      return await laravelRequest<ApiEntitlementsResponse>(
+        "/organization/entitlements",
+        { token, organizationId },
+      );
+    } catch (error) {
+      if (error instanceof LaravelApiError && error.status === 429) {
+        console.warn("entitlements rate-limited (429), using fallback");
+      } else {
+        console.error("entitlements fetch failed", error);
+      }
+      return {};
+    }
+  },
+);
+
 const fetchLaravelEntitlements = cache(
   async (organizationId: string): Promise<Entitlements> => {
-    const token = (await readSessionCookie())?.accessToken;
-    const row = await laravelRequest<ApiEntitlementsResponse>(
-      "/organization/entitlements",
-      { token, organizationId },
-    );
+    const row = await fetchLaravelEntitlementsRaw(organizationId);
+    if (!row.plan_id && !row.plan_code && row.can_create_invoice == null) {
+      return fallbackEntitlements("free");
+    }
     return mapApiEntitlements(row);
   },
 );

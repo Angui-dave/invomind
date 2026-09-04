@@ -20,6 +20,11 @@ export type ActionResult =
 const PlanSchema = z.enum(["free", "pro", "business"]);
 const PaidPlanSchema = z.enum(["pro", "business"]);
 
+/** Map UI PlanId to Laravel `plans_abonnement.code`. */
+function planCodeToApi(planId: PlanId): "gratuit" | "pro" | "business" {
+  return planId === "free" ? "gratuit" : planId;
+}
+
 /** Start a prepaid CinetPay checkout for Pro/Business. */
 export async function createCheckoutSession(
   planId: PlanId,
@@ -39,18 +44,31 @@ export async function createCheckoutSession(
     try {
       const { token, organizationId } = await getApiContext();
       const res = await laravelRequest<{
-        checkout_url?: string;
+        checkout_url?: string | null;
+        simulated?: boolean;
         message?: string;
       }>("/billing/checkout", {
         method: "POST",
         token,
         organizationId,
         body: {
-          plan_id: parsed.data,
+          plan_code: planCodeToApi(parsed.data),
           ...(customerPhone ? { customer_phone: customerPhone } : {}),
         },
       });
-      if (!res.checkout_url) {
+      // Simulated local checkout: plan already activated server-side.
+      if (res.simulated || !res.checkout_url) {
+        if (res.simulated || res.message) {
+          revalidatePath("/billing");
+          revalidatePath("/settings");
+          revalidatePath("/dashboard");
+          return {
+            ok: true,
+            message:
+              res.message ??
+              `Plan ${parsed.data} activé (paiement simulé)`,
+          };
+        }
         return { ok: false, error: "CinetPay n’a pas renvoyé d’URL de paiement" };
       }
       return { ok: true, url: res.checkout_url };
@@ -95,7 +113,7 @@ export async function changePlan(planId: PlanId): Promise<ActionResult> {
         method: "POST",
         token,
         organizationId,
-        body: { plan_id: parsed.data },
+        body: { plan_code: planCodeToApi(parsed.data) },
       });
       revalidatePath("/settings");
       revalidatePath("/billing");

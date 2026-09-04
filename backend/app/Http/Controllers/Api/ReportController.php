@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\FactureStatut;
 use App\Http\Controllers\Controller;
-use App\Models\Document;
+use App\Models\Client;
 use App\Models\Expense;
-use App\Models\Payment;
-use App\Services\DocumentComputeService;
-use App\Services\EntitlementService;
+use App\Models\Invoice;
+use App\Models\InvoicePayment;
+use App\Models\Quote;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,131 +16,162 @@ use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
-    private const BILLABLE = ['sent', 'partially_paid', 'paid', 'overdue'];
-
-    public function dashboard(Request $request, EntitlementService $entitlements): JsonResponse
+    public function dashboard(Request $request): JsonResponse
     {
-        $entitlements->assertModule($this->orgId($request), 'reports');
+        $orgaId = $this->orgId($request);
+        $now = Carbon::now();
+        $monthStart = $now->copy()->startOfMonth()->toDateString();
+        $monthEnd = $now->copy()->endOfMonth()->toDateString();
 
-        $orgId = $this->orgId($request);
-        $monthStart = Carbon::now()->startOfMonth()->toDateString();
+        $monthRevenue = (float) InvoicePayment::query()
+            ->whereDate('date_paiement', '>=', $monthStart)
+            ->whereDate('date_paiement', '<=', $monthEnd)
+            ->sum('montant');
 
-        $monthRevenue = Payment::where('organization_id', $orgId)
-            ->whereRaw('paid_at >= ?', [$monthStart])
-            ->sum('amount');
+        $pendingStatuses = [
+            FactureStatut::Envoyee->value,
+            FactureStatut::PartiellementPayee->value,
+            FactureStatut::Impayee->value,
+        ];
 
-        $overdueCount = Document::where('organization_id', $orgId)
-            ->where('kind', 'invoice')
-            ->where('status', 'overdue')
+        $pendingInvoiceCount = Invoice::query()
+            ->whereIn('statut', $pendingStatuses)
             ->count();
 
-        $pendingCount = Document::where('organization_id', $orgId)
-            ->where('kind', 'invoice')
-            ->whereIn('status', ['sent', 'partially_paid'])
+        $overdueInvoiceCount = Invoice::query()
+            ->where(function ($q) {
+                $q->where('statut', FactureStatut::EnRetard->value)
+                    ->orWhere(function ($q2) {
+                        $q2->whereIn('statut', [
+                            FactureStatut::Envoyee->value,
+                            FactureStatut::PartiellementPayee->value,
+                            FactureStatut::Impayee->value,
+                        ])->whereDate('date_echeance', '<', now()->toDateString());
+                    });
+            })
             ->count();
 
-        $revenueByMonth = Payment::where('organization_id', $orgId)
-            ->selectRaw("substr(paid_at, 1, 7) as month, sum(amount) as total")
-            ->groupByRaw("substr(paid_at, 1, 7)")
-            ->orderBy('month')
-            ->limit(12)
-            ->get();
-
-        $topClients = Payment::where('organization_id', $orgId)
-            ->select('client_name', DB::raw('sum(amount) as total'))
-            ->groupBy('client_name')
-            ->orderByDesc('total')
-            ->limit(5)
-            ->get();
-
-        return response()->json([
-            'month_revenue' => $monthRevenue,
-            'overdue_invoice_count' => $overdueCount,
-            'pending_invoice_count' => $pendingCount,
-            'revenue_by_month' => $revenueByMonth,
-            'top_clients' => $topClients,
-        ]);
-    }
-
-    public function overview(Request $request, EntitlementService $entitlements, DocumentComputeService $compute): JsonResponse
-    {
-        $entitlements->assertModule($this->orgId($request), 'reports');
-
-        $orgId = $this->orgId($request);
-
-        $totalRevenue = Payment::where('organization_id', $orgId)->sum('amount');
-        $totalExpenses = Expense::where('organization_id', $orgId)->sum('amount');
-
-        $invoicesByStatus = Document::where('organization_id', $orgId)
-            ->where('kind', 'invoice')
-            ->select('status', DB::raw('count(*) as count'), DB::raw('sum(total) as total'))
-            ->groupBy('status')
-            ->get();
-
-        $expensesByCategory = Expense::where('organization_id', $orgId)
-            ->join('expense_categories', 'expenses.category_id', '=', 'expense_categories.id')
-            ->select('expense_categories.name as category', DB::raw('sum(expenses.amount) as total'))
-            ->groupBy('expense_categories.name')
-            ->get();
-
-        $invoices = Document::query()
-            ->where('organization_id', $orgId)
-            ->where('kind', 'invoice')
-            ->whereIn('status', self::BILLABLE)
-            ->with('lines')
-            ->get();
-
-        $creditNotes = Document::query()
-            ->where('organization_id', $orgId)
-            ->where('kind', 'credit_note')
-            ->whereIn('status', ['issued', 'applied'])
-            ->with('lines')
-            ->get();
-
-        $billedHt = $invoices->sum(fn (Document $d) => (float) $d->subtotal_ht);
-        $billedTtc = $invoices->sum(fn (Document $d) => (float) $d->total);
-        $vatCollected = $invoices->sum(fn (Document $d) => (float) $d->tax_total)
-            - $creditNotes->sum(fn (Document $d) => (float) $d->tax_total);
-
-        $vatByRate = [];
-        foreach ($invoices as $invoice) {
-            $lines = $invoice->lines->map(fn ($line) => [
-                'quantity' => $line->quantity,
-                'unit_price' => $line->unit_price,
-                'tax_rate' => $line->tax_rate,
-                'discount_percent' => $line->discount_percent,
-            ])->all();
-            $detailed = $compute->computeDetailed($lines, $invoice->tax_mode ?? 'exclusive');
-            foreach ($detailed['tax_by_rate'] as $rate => $amount) {
-                $key = (string) $rate;
-                $vatByRate[$key] = bcadd($vatByRate[$key] ?? '0.00', (string) $amount, 2);
-            }
-        }
-
-        ksort($vatByRate, SORT_NUMERIC);
-        $vatRows = [];
-        foreach ($vatByRate as $rate => $amount) {
-            $vatRows[] = [
-                'rate' => (float) $rate,
-                'amount' => (float) $amount,
+        $revenueByMonth = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $cursor = $now->copy()->startOfMonth()->subMonths($i);
+            $start = $cursor->toDateString();
+            $end = $cursor->copy()->endOfMonth()->toDateString();
+            $key = $cursor->format('Y-m');
+            $total = (float) InvoicePayment::query()
+                ->whereDate('date_paiement', '>=', $start)
+                ->whereDate('date_paiement', '<=', $end)
+                ->sum('montant');
+            $revenueByMonth[] = [
+                'month' => $key,
+                'total' => $total,
             ];
         }
 
-        $statusCount = fn (string $status): int => (int) ($invoicesByStatus->firstWhere('status', $status)?->count ?? 0);
+        $topClients = Invoice::query()
+            ->select([
+                'clients.name_company as client_name',
+                DB::raw('COALESCE(SUM(factures.montant_total), 0) as total'),
+            ])
+            ->join('clients', 'clients.id', '=', 'factures.client_id')
+            ->whereIn('factures.statut', [
+                FactureStatut::Envoyee->value,
+                FactureStatut::PartiellementPayee->value,
+                FactureStatut::Payee->value,
+                FactureStatut::EnRetard->value,
+                FactureStatut::Impayee->value,
+            ])
+            ->groupBy('clients.id', 'clients.name_company')
+            ->orderByDesc('total')
+            ->limit(5)
+            ->get()
+            ->map(fn ($row) => [
+                'client_name' => (string) $row->client_name,
+                'total' => (float) $row->total,
+            ])
+            ->values()
+            ->all();
+
+        return response()->json([
+            'organization_id' => $orgaId,
+            'month_revenue' => $monthRevenue,
+            'pending_invoice_count' => $pendingInvoiceCount,
+            'overdue_invoice_count' => $overdueInvoiceCount,
+            'revenue_by_month' => $revenueByMonth,
+            'top_clients' => $topClients,
+            // Legacy/simple counters kept for debug UIs
+            'clients' => Client::query()->count(),
+            'quotes' => Quote::query()->count(),
+            'invoices' => Invoice::query()->count(),
+            'invoices_total' => (float) Invoice::query()->sum('montant_total'),
+            'invoices_paid' => (float) Invoice::query()->sum('montant_paye'),
+            'payments_count' => InvoicePayment::query()->count(),
+            'expenses_total' => (float) Expense::query()->sum('montant_ht'),
+        ]);
+    }
+
+    public function overview(Request $request): JsonResponse
+    {
+        $totalRevenue = (float) InvoicePayment::query()->sum('montant');
+        $totalExpenses = (float) Expense::query()->sum('montant_ht');
+        $billedHt = (float) Invoice::query()
+            ->whereNotIn('statut', [FactureStatut::Brouillon->value, FactureStatut::Annulee->value])
+            ->sum('sous_total');
+        $billedTtc = (float) Invoice::query()
+            ->whereNotIn('statut', [FactureStatut::Brouillon->value, FactureStatut::Annulee->value])
+            ->sum('montant_total');
+        $vatCollected = (float) Invoice::query()
+            ->whereNotIn('statut', [FactureStatut::Brouillon->value, FactureStatut::Annulee->value])
+            ->sum('montant_tva');
+
+        $invoicesByStatus = Invoice::query()
+            ->select(['statut', DB::raw('COUNT(*) as count'), DB::raw('COALESCE(SUM(montant_total), 0) as total')])
+            ->groupBy('statut')
+            ->get()
+            ->map(fn ($row) => [
+                'status' => $row->statut instanceof FactureStatut
+                    ? $row->statut->value
+                    : (string) $row->statut,
+                'count' => (int) $row->count,
+                'total' => (float) $row->total,
+            ])
+            ->values()
+            ->all();
+
+        $expensesByCategory = Expense::query()
+            ->select([
+                DB::raw("COALESCE(categories_depense.nom, 'Autres') as category"),
+                DB::raw('COALESCE(SUM(depenses.montant_ht), 0) as total'),
+            ])
+            ->leftJoin('categories_depense', 'categories_depense.id', '=', 'depenses.categorie_id')
+            ->groupBy('categories_depense.nom')
+            ->orderByDesc('total')
+            ->get()
+            ->map(fn ($row) => [
+                'category' => (string) $row->category,
+                'total' => (float) $row->total,
+            ])
+            ->values()
+            ->all();
+
+        $pendingStatuses = [
+            FactureStatut::Envoyee->value,
+            FactureStatut::PartiellementPayee->value,
+            FactureStatut::Impayee->value,
+        ];
 
         return response()->json([
             'total_revenue' => $totalRevenue,
             'total_expenses' => $totalExpenses,
-            'net_profit' => bcsub((string) $totalRevenue, (string) $totalExpenses, 2),
+            'net_profit' => $totalRevenue - $totalExpenses,
+            'billed_ht' => $billedHt,
+            'billed_ttc' => $billedTtc,
+            'vat_collected' => $vatCollected,
+            'vat_by_rate' => [],
             'invoices_by_status' => $invoicesByStatus,
             'expenses_by_category' => $expensesByCategory,
-            'billed_ht' => round($billedHt, 2),
-            'billed_ttc' => round($billedTtc, 2),
-            'vat_collected' => round($vatCollected, 2),
-            'vat_by_rate' => $vatRows,
-            'paid_invoice_count' => $statusCount('paid'),
-            'pending_invoice_count' => $statusCount('sent') + $statusCount('partially_paid'),
-            'overdue_invoice_count' => $statusCount('overdue'),
+            'paid_invoice_count' => Invoice::query()->where('statut', FactureStatut::Payee->value)->count(),
+            'pending_invoice_count' => Invoice::query()->whereIn('statut', $pendingStatuses)->count(),
+            'overdue_invoice_count' => Invoice::query()->where('statut', FactureStatut::EnRetard->value)->count(),
         ]);
     }
 }

@@ -39,10 +39,12 @@ export function AgentsPageClient({
   invitations: initialInvitations,
 }: AgentsPageClientProps) {
   const [agents, setAgents] = useState<AgentDto[]>(initialAgents);
-  const [invitations, setInvitations] = useState<InvitationDto[]>(initialInvitations);
+  const [invitations] = useState<InvitationDto[]>(initialInvitations);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [pending, setPending] = useState(false);
+  const [createdPassword, setCreatedPassword] = useState<string | null>(null);
 
   async function handleInvite() {
     if (!email.trim()) {
@@ -50,29 +52,35 @@ export function AgentsPageClient({
       return;
     }
     setPending(true);
-    const result = await inviteAgent({ email: email.trim() });
+    const result = await inviteAgent({
+      email: email.trim(),
+      name: name.trim() || undefined,
+    });
     setPending(false);
     if (!result.ok) {
       toast.error(result.error);
       return;
     }
-    setInvitations((prev) => {
-      if (prev.some((item) => item.email === email.trim().toLowerCase())) {
-        return prev;
-      }
-      return [
-        {
-          id: result.id ?? `inv_${Date.now()}`,
-          email: email.trim().toLowerCase(),
-          role: "member",
-          expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-        },
-        ...prev,
-      ];
-    });
+    setAgents((prev) => [
+      {
+        id: result.id ?? `agent_${Date.now()}`,
+        name: name.trim() || email.trim().split("@")[0] || "Agent",
+        email: email.trim().toLowerCase(),
+        role: "agent",
+        status: "active",
+        createdAt: new Date().toISOString(),
+      },
+      ...prev,
+    ]);
+    setCreatedPassword(result.temporaryPassword ?? null);
     setDialogOpen(false);
     setEmail("");
-    toast.success("Invitation envoyée par e-mail");
+    setName("");
+    toast.success(
+      result.temporaryPassword
+        ? "Agent créé — communiquez-lui le mot de passe temporaire"
+        : "Agent créé",
+    );
   }
 
   async function handleToggleStatus(agent: AgentDto) {
@@ -107,8 +115,8 @@ export function AgentsPageClient({
             Gestion des agents
           </h1>
           <p className="mt-1 text-sm text-ink/60">
-            Invitez vos collègues par e-mail. Ils définissent leur propre mot de
-            passe.
+            Créez des comptes agents pour votre équipe. Un mot de passe
+            temporaire est généré à la création.
           </p>
         </div>
         <Button
@@ -117,9 +125,16 @@ export function AgentsPageClient({
           onClick={() => setDialogOpen(true)}
         >
           <Plus className="size-4" aria-hidden />
-          Inviter un agent
+          Ajouter un agent
         </Button>
       </div>
+
+      {createdPassword ? (
+        <div className="rounded-2xl border border-brass/35 bg-brass/10 px-4 py-3 text-sm text-ink">
+          Mot de passe temporaire à transmettre à l’agent :{" "}
+          <code className="font-mono font-semibold">{createdPassword}</code>
+        </div>
+      ) : null}
 
       {invitations.length > 0 && (
         <div className="overflow-hidden rounded-2xl border border-line bg-card">
@@ -223,13 +238,22 @@ export function AgentsPageClient({
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Inviter un agent</DialogTitle>
+            <DialogTitle>Ajouter un agent</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
             <p className="text-sm text-ink/65">
-              Un e-mail lui permettra de choisir son mot de passe. Vous ne
-              saisissez jamais le mot de passe à sa place.
+              Le compte est créé immédiatement. Un mot de passe temporaire vous
+              sera affiché une seule fois.
             </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="invite-name">Nom</Label>
+              <Input
+                id="invite-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Awa Diallo"
+              />
+            </div>
             <div className="space-y-1.5">
               <Label htmlFor="invite-email">E-mail</Label>
               <Input
@@ -246,7 +270,7 @@ export function AgentsPageClient({
               disabled={pending}
               onClick={() => void handleInvite()}
             >
-              {pending ? "Envoi…" : "Envoyer l’invitation"}
+              {pending ? "Création…" : "Créer l’agent"}
             </Button>
           </div>
         </DialogContent>

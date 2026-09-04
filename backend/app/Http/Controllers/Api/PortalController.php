@@ -2,166 +2,96 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\CinetPayStatut;
+use App\Enums\ModePaiement;
 use App\Http\Controllers\Controller;
-use App\Http\Resources\DocumentResource;
-use App\Exceptions\DocumentPdfNotReadyException;
-use App\Models\Document;
-use App\Models\Payment;
-use App\Models\PaymentIntent;
-use App\Services\DocumentPaymentService;
-use App\Services\DocumentPdfService;
-use App\Services\PaymentIntentService;
+use App\Http\Resources\InvoiceResource;
+use App\Models\CinetPayPayment;
+use App\Models\Invoice;
+use App\Models\PaymentIntegration;
+use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Symfony\Component\HttpFoundation\Response;
+use Illuminate\Support\Str;
 
 class PortalController extends Controller
 {
-    public function __construct(
-        private DocumentPaymentService $payments,
-        private PaymentIntentService $intents,
-        private DocumentPdfService $pdfs,
-    ) {}
-
-    public function show(string $token): JsonResponse
+    public function show(string $token): InvoiceResource|JsonResponse
     {
-        $doc = Document::where('portal_token', $token)
-            ->with(['lines', 'client', 'organization.settings', 'organization.branding'])
+        $invoice = Invoice::query()
+            ->withoutGlobalScopes()
+            ->with('lines')
+            ->where('uuid', $token)
             ->firstOrFail();
 
-        $settings = $doc->organization?->settings;
-        $branding = $doc->organization?->branding;
-
-        return response()->json([
-            'document' => (new DocumentResource($doc))->resolve(),
-            'payments' => Payment::query()
-                ->where('document_id', $doc->id)
-                ->latest('created_at')
-                ->get(['id', 'amount', 'currency', 'method', 'paid_at', 'reference', 'source']),
-            'outstanding_balance' => $this->payments->outstandingBalance($doc),
-            'payment_status' => $this->paymentStatus($doc),
-            'client' => $doc->client ? [
-                'name' => $doc->client->name,
-                'company' => $doc->client->company,
-                'email' => $doc->client->email,
-                'phone' => $doc->client->phone,
-                'address' => $doc->client->address,
-                'city' => $doc->client->city,
-                'postal_code' => $doc->client->postal_code,
-                'country' => $doc->client->country,
-            ] : null,
-            'organization' => $doc->organization ? [
-                'settings' => $settings ? [
-                    'company_name' => $settings->company_name,
-                    'email' => $settings->email,
-                    'phone' => $settings->phone,
-                    'address' => $settings->address,
-                    'city' => $settings->city,
-                    'postal_code' => $settings->postal_code,
-                    'country' => $settings->country,
-                    'tax_id' => $settings->tax_id,
-                    'bank_name' => $settings->bank_name,
-                    'iban' => $settings->iban,
-                    'bic' => $settings->bic,
-                    'mobile_money_provider' => $settings->mobile_money_provider,
-                    'mobile_money_number' => $settings->mobile_money_number,
-                    'accepted_payment_methods' => $settings->accepted_payment_methods,
-                    'legal_mentions' => $settings->legal_mentions,
-                ] : null,
-                'branding' => $branding ? [
-                    'display_name' => $branding->display_name,
-                    'logo_url' => $branding->logo_url,
-                    'primary_color' => $branding->primary_color,
-                    'accent_color' => $branding->accent_color,
-                    'document_template' => $branding->document_template,
-                ] : null,
-            ] : null,
-        ]);
+        return new InvoiceResource($invoice);
     }
 
-    public function pay(string $token): JsonResponse
+    public function pdf(string $token): JsonResponse
     {
-        Document::where('portal_token', $token)->firstOrFail();
-
-        return response()->json([
-            'message' => 'Le paiement direct du portail est désactivé. Utilisez POST /portal/{token}/checkout.',
-        ], 410);
+        return response()->json(['message' => 'PDF portal non reconnecté.'], 501);
     }
 
-    public function checkout(Request $request, string $token): JsonResponse
+    public function receipt(string $token): JsonResponse
     {
-        $data = $request->validate([
-            'method_hint' => ['sometimes', 'nullable', 'in:wave,orange_money,mtn,moov,card,transfer'],
-            'customer_phone' => ['required_if:method_hint,wave,orange_money,mtn,moov', 'nullable', 'string', 'max:32'],
-        ]);
-
-        $doc = Document::where('portal_token', $token)->firstOrFail();
-        $intent = $this->intents->createForDocument($doc, $data);
-
-        return response()->json([
-            'payment_intent' => [
-                'id' => $intent->id,
-                'status' => $intent->status,
-                'checkout_url' => $intent->checkout_url,
-                'amount' => $intent->amount,
-                'currency' => $intent->currency,
-            ],
-            'outstanding_balance' => $this->payments->outstandingBalance($doc),
-        ], 201);
+        return response()->json(['message' => 'Reçu PDF non reconnecté.'], 501);
     }
 
-    public function pdf(string $token): Response
+    public function pay(Request $request, string $token): JsonResponse
     {
-        $doc = Document::where('portal_token', $token)->firstOrFail();
-
-        return $this->pdfs->stream($doc);
+        return response()->json(['message' => 'Utilisez POST /portal/{uuid}/checkout.'], 410);
     }
 
-    public function receipt(string $token): Response
+    public function checkout(Request $request, string $token, EntitlementService $entitlements): JsonResponse
     {
-        $doc = Document::where('portal_token', $token)->firstOrFail();
-        $payment = Payment::query()
-            ->where('document_id', $doc->id)
-            ->latest('created_at')
+        $invoice = Invoice::query()
+            ->withoutGlobalScopes()
+            ->where('uuid', $token)
+            ->firstOrFail();
+
+        $entitlements->assertOnlinePayments($invoice->orga_id);
+
+        $integration = PaymentIntegration::query()
+            ->withoutGlobalScopes()
+            ->where('orga_id', $invoice->orga_id)
+            ->where('fournisseur', 'cinetpay')
+            ->where('actif', true)
             ->first();
 
-        if (! $payment instanceof Payment) {
-            return response()->json(['message' => 'Aucun reçu disponible pour cette facture.'], 409);
+        if (! $integration) {
+            return response()->json(['message' => 'Intégration CinetPay non configurée.'], 422);
         }
 
-        $payment->setRelation('document', $doc);
+        $data = $request->validate([
+            'numero_telephone' => ['nullable', 'string', 'max:20'],
+            'operateur' => ['nullable', 'string'],
+            'montant' => ['nullable', 'numeric', 'gt:0'],
+        ]);
 
-        try {
-            return $this->pdfs->streamReceipt($payment);
-        } catch (DocumentPdfNotReadyException $e) {
-            return response()->json(['message' => $e->getMessage()], 409);
-        }
-    }
+        $remaining = (float) $invoice->montant_total - (float) $invoice->montant_paye;
+        $montant = (float) ($data['montant'] ?? $remaining);
 
-    private function paymentStatus(Document $doc): string
-    {
-        if ($doc->status === 'paid') {
-            return 'paid';
+        if ($montant <= 0) {
+            return response()->json(['message' => 'Facture déjà soldée.'], 422);
         }
 
-        if ($doc->status === 'partially_paid') {
-            return 'partially_paid';
-        }
+        $payment = CinetPayPayment::withoutGlobalScopes()->create([
+            'orga_id' => $invoice->orga_id,
+            'facture_id' => $invoice->id,
+            'transaction_id' => 'inv_'.Str::uuid()->toString(),
+            'montant' => $montant,
+            'devise' => $invoice->devise ?? 'XOF',
+            'operateur' => $data['operateur'] ?? ModePaiement::Autre,
+            'numero_telephone' => $data['numero_telephone'] ?? null,
+            'statut' => CinetPayStatut::Initiee,
+            'date_initiation' => now(),
+        ]);
 
-        $open = PaymentIntent::query()
-            ->where('document_id', $doc->id)
-            ->whereIn('status', [PaymentIntent::STATUS_PENDING, PaymentIntent::STATUS_PROCESSING])
-            ->exists();
-
-        if ($open) {
-            return 'processing';
-        }
-
-        $failed = PaymentIntent::query()
-            ->where('document_id', $doc->id)
-            ->where('status', PaymentIntent::STATUS_FAILED)
-            ->exists();
-
-        return $failed ? 'failed' : 'unpaid';
+        return response()->json([
+            'transaction_id' => $payment->transaction_id,
+            'montant' => $payment->montant,
+            'message' => 'Paiement initié — brancher l’appel CinetPay Gateway.',
+            'payment' => $payment,
+        ], 201);
     }
 }

@@ -2,9 +2,6 @@
 
 namespace App\Providers;
 
-use App\Contracts\PspGateway;
-use App\Services\Psp\CinetPayGateway;
-use App\Services\Psp\FakePspGateway;
 use Illuminate\Auth\Notifications\ResetPassword;
 use Illuminate\Auth\Notifications\VerifyEmail;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -16,36 +13,19 @@ use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
 {
-    /**
-     * Register any application services.
-     */
     public function register(): void
     {
-        $this->app->singleton(FakePspGateway::class);
-
-        $this->app->bind(PspGateway::class, function ($app) {
-            if (config('services.psp.driver') === 'fake') {
-                $env = (string) config('app.env');
-                if (! in_array($env, ['local', 'testing'], true)) {
-                    throw new \RuntimeException('PSP_DRIVER=fake is only allowed in local/testing.');
-                }
-
-                return $app->make(FakePspGateway::class);
-            }
-
-            return $app->make(CinetPayGateway::class);
-        });
+        //
     }
 
-    /**
-     * Bootstrap any application services.
-     */
     public function boot(): void
     {
         JsonResource::withoutWrapping();
 
         RateLimiter::for('api', function (Request $request) {
-            return Limit::perMinute(60)->by($request->user()?->id ?: $request->ip());
+            // Dashboard RSC pages fire many parallel BFF calls (me, org, entitlements, lists).
+            // 60/min is too low and surfaces as "Too Many Attempts" during normal navigation.
+            return Limit::perMinute(300)->by($request->user()?->id ?: $request->ip());
         });
 
         RateLimiter::for('portal-pdf', function (Request $request) {

@@ -9,6 +9,8 @@ export interface CatalogItem {
   taxRate: number;
   unit: string;
   kind: "service" | "product";
+  reference?: string;
+  actif?: boolean;
 }
 
 export const CATALOG_ITEMS: CatalogItem[] = [

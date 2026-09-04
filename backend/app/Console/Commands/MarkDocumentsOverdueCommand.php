@@ -2,26 +2,29 @@
 
 namespace App\Console\Commands;
 
-use App\Models\Document;
-use Illuminate\Console\Attributes\Description;
-use Illuminate\Console\Attributes\Signature;
+use App\Enums\FactureStatut;
+use App\Models\Invoice;
 use Illuminate\Console\Command;
 
-#[Signature('documents:mark-overdue')]
-#[Description('Passe en overdue les factures émises dont l’échéance est dépassée.')]
 class MarkDocumentsOverdueCommand extends Command
 {
+    protected $signature = 'documents:mark-overdue';
+
+    protected $description = 'Mark unpaid invoices past due date as en_retard';
+
     public function handle(): int
     {
-        $today = now()->toDateString();
+        $count = Invoice::withoutGlobalScopes()
+            ->whereIn('statut', [
+                FactureStatut::Envoyee,
+                FactureStatut::Impayee,
+                FactureStatut::PartiellementPayee,
+            ])
+            ->whereNotNull('date_echeance')
+            ->whereDate('date_echeance', '<', now()->toDateString())
+            ->update(['statut' => FactureStatut::EnRetard]);
 
-        $updated = Document::query()
-            ->where('kind', 'invoice')
-            ->whereIn('status', ['sent', 'partially_paid'])
-            ->where('due_date', '<', $today)
-            ->update(['status' => 'overdue']);
-
-        $this->info("Factures passées en retard : {$updated}.");
+        $this->info("Marked {$count} invoice(s) overdue.");
 
         return self::SUCCESS;
     }

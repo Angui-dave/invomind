@@ -9,7 +9,7 @@ import {
   SESSION_DAYS,
   type SessionPayload,
 } from "@/lib/auth/crypto";
-import { MOCK_ORG_ID, MOCK_SESSION_ID, MOCK_USER_ID } from "@/lib/config";
+import { MOCK_ORG_ID, MOCK_USER_ID } from "@/lib/config";
 
 export {
   ACCESS_TOKEN_COOKIE,
@@ -44,6 +44,25 @@ function cookieOptions(expiresAt: Date) {
   };
 }
 
+function encodeAccessTokenForCookie(token: string): string {
+  return Buffer.from(token, "utf8").toString("base64url");
+}
+
+function decodeAccessTokenCookie(raw: string | undefined): string | undefined {
+  if (!raw) return undefined;
+  // Legacy cookies stored the raw Sanctum token (`id|secret`).
+  if (raw.includes("|")) return raw;
+  try {
+    return Buffer.from(raw, "base64url").toString("utf8");
+  } catch {
+    try {
+      return decodeURIComponent(raw);
+    } catch {
+      return raw;
+    }
+  }
+}
+
 /**
  * Creates a signed session JWT cookie + optional Sanctum bearer cookie.
  * The bearer is never embedded in the JWT (limits blast radius of SESSION_SECRET).
@@ -52,13 +71,13 @@ export async function createSession(
   userId: string = MOCK_USER_ID,
   organizationId: string = MOCK_ORG_ID,
   accessToken?: string,
-  role?: "owner" | "admin" | "member",
+  role?: "owner" | "admin" | "member" | "agent",
 ): Promise<void> {
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000);
   const jwt = await encryptSession({
-    sessionId: MOCK_SESSION_ID,
-    userId,
-    organizationId,
+    sessionId: randomBytes(16).toString("hex"),
+    userId: String(userId),
+    organizationId: String(organizationId),
     role,
     expiresAt: expiresAt.toISOString(),
   });
@@ -68,7 +87,13 @@ export async function createSession(
   cookieStore.set(SESSION_COOKIE, jwt, opts);
 
   if (accessToken) {
-    cookieStore.set(ACCESS_TOKEN_COOKIE, accessToken, opts);
+    // Sanctum tokens are `{id}|{secret}` — encode so cookie parsers never
+    // truncate at `|` (which caused /auth/me 401 → login loop).
+    cookieStore.set(
+      ACCESS_TOKEN_COOKIE,
+      encodeAccessTokenForCookie(accessToken),
+      opts,
+    );
   } else {
     cookieStore.delete(ACCESS_TOKEN_COOKIE);
   }
@@ -84,7 +109,9 @@ export async function readSessionCookie(): Promise<SessionPayload | null> {
   const cookieStore = await cookies();
   const payload = await decryptSession(cookieStore.get(SESSION_COOKIE)?.value);
   if (!payload) return null;
-  const accessToken = cookieStore.get(ACCESS_TOKEN_COOKIE)?.value;
+  const accessToken = decodeAccessTokenCookie(
+    cookieStore.get(ACCESS_TOKEN_COOKIE)?.value,
+  );
   return {
     ...payload,
     ...(accessToken ? { accessToken } : {}),

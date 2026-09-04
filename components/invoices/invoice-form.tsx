@@ -62,6 +62,10 @@ type DocumentFormProps = {
   orgSettings: OrgSettings;
   /** Existing docs of same kind — used only for preview numbering */
   existingNumbers?: BusinessDocument[];
+  /** Credit notes not supported by current Laravel API */
+  creditNotesUnavailable?: boolean;
+  /** PDF endpoint not wired on Laravel yet */
+  pdfUnavailable?: boolean;
 };
 
 function createDefaultReminders(dueDate: string): ReminderMilestoneStatus[] {
@@ -87,6 +91,8 @@ export function InvoiceForm({
   catalogItems,
   orgSettings,
   existingNumbers = [],
+  creditNotesUnavailable = false,
+  pdfUnavailable = false,
 }: DocumentFormProps) {
   const router = useRouter();
   const kind = document?.kind ?? kindProp ?? "invoice";
@@ -123,7 +129,11 @@ export function InvoiceForm({
   const [clientId, setClientId] = useState(initialClientId);
   const [currency, setCurrency] = useState<CurrencyCode>(initialCurrency);
   const [taxMode, setTaxMode] = useState<TaxMode>(
-    document?.taxMode ?? orgSettings.defaultTaxMode,
+    document?.taxMode === "inclusive" || document?.taxMode === "exclusive"
+      ? document.taxMode
+      : orgSettings.defaultTaxMode === "inclusive"
+        ? "inclusive"
+        : "exclusive",
   );
   const [issueDate, setIssueDate] = useState(initialIssue);
   const [dueDate, setDueDate] = useState(initialDue);
@@ -426,6 +436,10 @@ export function InvoiceForm({
 
   async function handleDownloadPdf() {
     if (!document?.id) return;
+    if (pdfUnavailable) {
+      toast.info("Le PDF sera bientôt disponible.");
+      return;
+    }
     setDownloading(true);
     try {
       await downloadPdfFromUrl(`/api/documents/${document.id}/pdf`);
@@ -711,12 +725,24 @@ export function InvoiceForm({
                   <Mail />
                   {saving ? "Envoi…" : "Envoyer par e-mail"}
                 </Button>
-                {kind === "invoice" && document ? (
+                {kind === "invoice" && document && !creditNotesUnavailable ? (
                   <Button
                     type="button"
                     variant="outline"
                     onClick={() =>
                       router.push(`/invoices/new?creditOf=${document.id}`)
+                    }
+                  >
+                    <FileMinus2 />
+                    Créer un avoir
+                  </Button>
+                ) : null}
+                {kind === "invoice" && document && creditNotesUnavailable ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      toast.info("Les avoirs seront bientôt disponibles.")
                     }
                   >
                     <FileMinus2 />

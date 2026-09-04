@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertCircle, Check, CheckCheck, Loader2 } from "lucide-react";
+import { AlertCircle, Check, CheckCheck, FileIcon, Loader2 } from "lucide-react";
 import {
   formatTimeFr,
   type ConversationMessage,
@@ -14,6 +14,8 @@ type MessageBubbleProps = {
 
 export function MessageBubble({ message, contactName }: MessageBubbleProps) {
   const outbound = message.direction === "outbound";
+  const mediaUrl = message.mediaUrl;
+  const contentType = message.contentType ?? "texte";
 
   return (
     <div
@@ -38,9 +40,47 @@ export function MessageBubble({ message, contactName }: MessageBubbleProps) {
         >
           {outbound ? "Vous" : contactName}
         </p>
-        <p className="whitespace-pre-wrap break-words leading-relaxed">
-          {message.body}
-        </p>
+        {mediaUrl && contentType === "image" ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={mediaUrl}
+            alt={message.body || "Image"}
+            className="mb-2 max-h-64 max-w-full rounded-lg object-contain"
+          />
+        ) : null}
+        {mediaUrl && contentType === "audio" ? (
+          <audio controls className="mb-2 max-w-full" src={mediaUrl}>
+            <track kind="captions" />
+          </audio>
+        ) : null}
+        {mediaUrl && contentType === "video" ? (
+          <video
+            controls
+            className="mb-2 max-h-64 max-w-full rounded-lg"
+            src={mediaUrl}
+          >
+            <track kind="captions" />
+          </video>
+        ) : null}
+        {mediaUrl && contentType === "fichier" ? (
+          <a
+            href={mediaUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={cn(
+              "mb-2 flex items-center gap-2 underline",
+              outbound ? "text-paper" : "text-ledger",
+            )}
+          >
+            <FileIcon className="size-4 shrink-0" aria-hidden />
+            Télécharger le fichier
+          </a>
+        ) : null}
+        {message.body && message.body !== "[média]" ? (
+          <p className="whitespace-pre-wrap break-words leading-relaxed">
+            {message.body}
+          </p>
+        ) : null}
         <p
           className={cn(
             "mt-1 flex items-center justify-end gap-1 text-[10px]",

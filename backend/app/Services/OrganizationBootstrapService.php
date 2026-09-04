@@ -4,37 +4,29 @@ namespace App\Services;
 
 use App\Models\ExpenseCategory;
 use App\Models\Organization;
+use App\Models\ReminderRule;
 
 class OrganizationBootstrapService
 {
     /**
-     * @return list<array{name: string, color: string}>
+     * Copy global default expense categories onto the organization (optional overrides later).
+     * Global rows (orga_id NULL) remain visible via BelongsToOrganizationOrGlobal.
      */
-    public static function defaultExpenseCategories(): array
-    {
-        return [
-            ['name' => 'Fournitures', 'color' => '#3B82F6'],
-            ['name' => 'Loyer & locaux', 'color' => '#8B5CF6'],
-            ['name' => 'Transport', 'color' => '#F59E0B'],
-            ['name' => 'Marketing', 'color' => '#10B981'],
-            ['name' => 'Salaires & honoraires', 'color' => '#EF4444'],
-            ['name' => 'Logiciels & abonnements', 'color' => '#06B6D4'],
-            ['name' => 'Divers', 'color' => '#C9CCC3'],
-        ];
-    }
-
     public function seedExpenseCategories(Organization $organization): void
     {
-        if (ExpenseCategory::where('organization_id', $organization->id)->exists()) {
+        if (ExpenseCategory::withoutGlobalScopes()->where('orga_id', $organization->id)->exists()) {
             return;
         }
 
-        foreach (self::defaultExpenseCategories() as $category) {
-            ExpenseCategory::create([
-                'organization_id' => $organization->id,
-                'name' => $category['name'],
-                'color' => $category['color'],
-            ]);
+        // Globals already seeded; no per-org copy required for MVP.
+    }
+
+    public function seedReminderRules(Organization $organization): void
+    {
+        if (ReminderRule::withoutGlobalScopes()->where('orga_id', $organization->id)->exists()) {
+            return;
         }
+
+        // Globals already seeded; no per-org copy required for MVP.
     }
 }

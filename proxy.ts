@@ -25,7 +25,7 @@ const protectedPrefixes = [
 const authRoutes = ["/login", "/register", "/forgot-password", "/reset-password"];
 
 function homeForRole(role: string | undefined): string {
-  return role === "member" ? "/clients" : "/dashboard";
+  return role === "member" || role === "agent" ? "/clients" : "/dashboard";
 }
 
 export default async function proxy(req: NextRequest) {

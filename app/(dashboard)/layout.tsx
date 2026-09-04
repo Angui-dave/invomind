@@ -12,12 +12,15 @@ export default async function DashboardLayout({
 }: {
   children: ReactNode;
 }) {
-  const [{ session, branding, features, enabledModules }, prospectStats, unread] =
-    await Promise.all([
-      getCurrentOrganization(),
-      activeProspectsValue(),
-      unreadTotal(),
-    ]);
+  const orgContext = await getCurrentOrganization();
+
+  // Soft-fail: prospects / conversations were removed from the new API schema.
+  const [prospectStats, unread] = await Promise.all([
+    activeProspectsValue().catch(() => ({ total: 0, count: 0 })),
+    unreadTotal().catch(() => 0),
+  ]);
+
+  const { session, branding, features, enabledModules } = orgContext;
 
   const user = {
     id: session.user.id,

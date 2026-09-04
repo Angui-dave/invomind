@@ -2,43 +2,63 @@
 
 namespace App\Models;
 
+use App\Enums\StatutConversation;
 use App\Models\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Conversation extends Model
 {
-    use HasUuids, BelongsToOrganization;
+    use BelongsToOrganization, HasPublicUuid;
 
-    protected $keyType = 'string';
-    public $incrementing = false;
-    public $timestamps = false;
+    protected $table = 'conversations';
 
     protected $fillable = [
-        'organization_id', 'channel', 'contact_name', 'contact_handle',
-        'thread_ref', 'avatar_initials', 'client_id', 'prospect_id',
-        'unread_count', 'last_message_at', 'archived',
+        'orga_id',
+        'boite_reception_id',
+        'contact_id',
+        'statut',
+        'agent_id',
+        'derniere_activite_at',
+        'non_lus_count',
+        'archivee',
     ];
 
     protected function casts(): array
     {
-        return ['archived' => 'boolean'];
+        return [
+            'statut' => StatutConversation::class,
+            'derniere_activite_at' => 'datetime',
+            'non_lus_count' => 'integer',
+            'archivee' => 'boolean',
+        ];
+    }
+
+    public function inbox(): BelongsTo
+    {
+        return $this->belongsTo(Inbox::class, 'boite_reception_id');
+    }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(MessagingContact::class, 'contact_id');
+    }
+
+    public function agent(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'agent_id');
     }
 
     public function messages(): HasMany
     {
-        return $this->hasMany(ConversationMessage::class);
+        return $this->hasMany(ConversationMessage::class, 'conversation_id');
     }
 
-    public function client(): BelongsTo
+    public function labels(): BelongsToMany
     {
-        return $this->belongsTo(Client::class);
-    }
-
-    public function prospect(): BelongsTo
-    {
-        return $this->belongsTo(Prospect::class);
+        return $this->belongsToMany(Label::class, 'conversation_etiquette', 'conversation_id', 'etiquette_id');
     }
 }

@@ -60,7 +60,6 @@ export async function laravelRequest<T>(
   if (options.organizationId) {
     headers.set("X-Organization-Id", options.organizationId);
   }
-
   if (
     (options.method === "POST" ||
       options.method === "PUT" ||

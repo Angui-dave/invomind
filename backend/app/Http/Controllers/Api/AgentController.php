@@ -2,72 +2,95 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Enums\AbonnementStatut;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
-use App\Models\Membership;
+use App\Models\Plan;
+use App\Models\Subscription;
+use App\Models\User;
+use App\Services\EntitlementService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password as PasswordRule;
 
 class AgentController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $members = Membership::query()
-            ->where('organization_id', $this->orgId($request))
-            ->where('role', 'member')
-            ->with('user')
-            ->orderBy('created_at')
+        $agents = User::query()
+            ->where('orga_id', $this->orgId($request))
+            ->where('role', UserRole::Agent)
+            ->orderBy('full_name')
             ->get()
-            ->map(fn (Membership $membership) => $this->payload($membership));
+            ->map(fn (User $user) => $this->payload($user));
 
-        return response()->json($members);
+        return response()->json($agents);
     }
 
-    public function store(): JsonResponse
+    public function store(Request $request, EntitlementService $entitlements): JsonResponse
     {
-        return response()->json([
-            'message' => 'La création directe d’agent est désactivée. Utilisez POST /organization/invitations.',
-        ], 410);
+        $entitlements->assertCanInviteAgent($this->orgId($request));
+
+        $data = $request->validate([
+            'full_name' => ['required', 'string', 'max:255'],
+            'email' => ['required', 'email', 'unique:users,email'],
+            'password' => ['required', 'string', 'max:128', PasswordRule::min(10)->letters()->numbers()],
+        ]);
+
+        $user = User::create([
+            'orga_id' => $this->orgId($request),
+            'full_name' => $data['full_name'],
+            'email' => $data['email'],
+            'password_hash' => Hash::make($data['password']),
+            'role' => UserRole::Agent,
+            'is_active' => true,
+            'email_verified_at' => now(),
+        ]);
+
+        return response()->json($this->payload($user), 201);
     }
 
-    public function enable(Request $request, string $id): JsonResponse
+    public function enable(Request $request, int $id): JsonResponse
     {
-        $membership = $this->member($request, $id);
-        $membership->update(['disabled_at' => null]);
+        $user = $this->agent($request, $id);
+        $user->update(['is_active' => true]);
 
-        return response()->json($this->payload($membership->fresh('user')));
+        return response()->json($this->payload($user->fresh()));
     }
 
-    public function disable(Request $request, string $id): JsonResponse
+    public function disable(Request $request, int $id): JsonResponse
     {
-        $membership = $this->member($request, $id);
-        $membership->update(['disabled_at' => now()]);
+        $user = $this->agent($request, $id);
+        $user->update(['is_active' => false]);
+        $user->tokens()->delete();
 
-        return response()->json($this->payload($membership->fresh('user')));
+        return response()->json($this->payload($user->fresh()));
     }
 
-    private function member(Request $request, string $id): Membership
+    private function agent(Request $request, int $id): User
     {
-        return Membership::query()
-            ->where('organization_id', $this->orgId($request))
-            ->where('role', 'member')
-            ->where('id', $id)
+        return User::query()
+            ->where('orga_id', $this->orgId($request))
+            ->where('role', UserRole::Agent)
+            ->whereKey($id)
             ->firstOrFail();
     }
 
     /**
      * @return array<string, mixed>
      */
-    private function payload(Membership $membership): array
+    private function payload(User $user): array
     {
         return [
-            'id' => $membership->id,
-            'user_id' => $membership->user_id,
-            'name' => $membership->user?->name,
-            'email' => $membership->user?->email,
-            'role' => $membership->role,
-            'status' => $membership->isDisabled() ? 'disabled' : 'active',
-            'disabled_at' => $membership->disabled_at,
-            'created_at' => $membership->created_at,
+            'id' => $user->id,
+            'uuid' => $user->uuid,
+            'full_name' => $user->full_name,
+            'email' => $user->email,
+            'role' => $user->role?->value ?? $user->role,
+            'status' => $user->is_active ? 'active' : 'disabled',
+            'is_active' => $user->is_active,
+            'created_at' => $user->created_at,
         ];
     }
 }

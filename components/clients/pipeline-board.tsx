@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from "react";
 import { Plus } from "lucide-react";
-import { ClientDialog } from "@/components/clients/client-dialog";
 import { PipelineCard } from "@/components/clients/pipeline-card";
 import { PipelineColumn } from "@/components/clients/pipeline-column";
 import { Button } from "@/components/ui/button";
@@ -23,8 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createClient } from "@/lib/actions/clients";
-import { createProspect } from "@/lib/actions/prospects";
+import {
+  convertProspectToClient,
+  createProspect,
+  updateProspectStage,
+} from "@/lib/actions/prospects";
 import {
   PIPELINE_STAGES,
   TODAY,
@@ -32,6 +34,8 @@ import {
   type Prospect,
 } from "@/lib/mock-data";
 import { toast } from "sonner";
+
+type ActiveStage = Exclude<PipelineStage, "inactif">;
 
 type PipelineBoardProps = {
   initialProspects?: Prospect[];
@@ -41,21 +45,20 @@ export function PipelineBoard({
   initialProspects = [],
 }: PipelineBoardProps) {
   const [prospects, setProspects] = useState<Prospect[]>(initialProspects);
-  const [showLost, setShowLost] = useState(false);
-  const [mobileStage, setMobileStage] = useState<PipelineStage>("nouveau");
+  const [showInactive, setShowInactive] = useState(false);
+  const [mobileStage, setMobileStage] = useState<PipelineStage>("prospect");
   const [addOpen, setAddOpen] = useState(false);
-  const [convertProspect, setConvertProspect] = useState<Prospect | null>(null);
   const [newName, setNewName] = useState("");
   const [newCompany, setNewCompany] = useState("");
-  const [newValue, setNewValue] = useState("1000");
-  const [newStage, setNewStage] = useState<Exclude<PipelineStage, "perdu">>("nouveau");
+  const [newValue, setNewValue] = useState("0");
+  const [newStage, setNewStage] = useState<ActiveStage>("prospect");
 
   const activeProspects = useMemo(
     () =>
       prospects.filter((p) =>
-        showLost ? p.stage === "perdu" : p.stage !== "perdu",
+        showInactive ? p.stage === "inactif" : p.stage !== "inactif",
       ),
-    [prospects, showLost],
+    [prospects, showInactive],
   );
 
   const byStage = (stage: PipelineStage) =>
@@ -67,13 +70,9 @@ export function PipelineBoard({
       return;
     }
     const value = Number(newValue) || 0;
-    if (value <= 0) {
-      toast.error("Le montant doit être supérieur à 0");
-      return;
-    }
     const result = await createProspect({
       name: newName.trim(),
-      company: newCompany.trim() || "—",
+      company: newCompany.trim() || newName.trim(),
       estimatedValue: value,
       stage: newStage,
       lastInteractionAt: TODAY,
@@ -85,7 +84,7 @@ export function PipelineBoard({
     const prospect: Prospect = {
       id: result.id!,
       name: newName.trim(),
-      company: newCompany.trim() || "—",
+      company: newCompany.trim() || newName.trim(),
       estimatedValue: value,
       stage: newStage,
       lastInteractionAt: TODAY,
@@ -94,14 +93,46 @@ export function PipelineBoard({
     setAddOpen(false);
     setNewName("");
     setNewCompany("");
-    setNewValue("1000");
-    setNewStage("nouveau");
+    setNewValue("0");
+    setNewStage("prospect");
     toast.success("Prospect ajouté");
   }
 
-  const activeCount = prospects.filter((p) => p.stage !== "perdu").length;
+  async function handleStageChange(id: string, stage: PipelineStage) {
+    const result = await updateProspectStage(id, stage);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setProspects((prev) =>
+      prev.map((p) =>
+        p.id === id
+          ? { ...p, stage, lastInteractionAt: TODAY }
+          : p,
+      ),
+    );
+    toast.success("Étape mise à jour");
+  }
 
-  if (!showLost && activeCount === 0) {
+  async function handleConvert(prospect: Prospect) {
+    const result = await convertProspectToClient(prospect.id);
+    if (!result.ok) {
+      toast.error(result.error);
+      return;
+    }
+    setProspects((prev) =>
+      prev.map((p) =>
+        p.id === prospect.id
+          ? { ...p, stage: "client", lastInteractionAt: TODAY }
+          : p,
+      ),
+    );
+    toast.success("Marqué comme client");
+  }
+
+  const activeCount = prospects.filter((p) => p.stage !== "inactif").length;
+
+  if (!showInactive && activeCount === 0) {
     return (
       <div className="flex flex-col items-center rounded-sm border border-dashed border-line px-6 py-14 text-center">
         <h3 className="font-serif text-lg font-semibold text-ink">
@@ -141,10 +172,10 @@ export function PipelineBoard({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex items-center gap-2 text-sm text-ink/70">
           <Checkbox
-            checked={showLost}
-            onCheckedChange={(checked) => setShowLost(Boolean(checked))}
+            checked={showInactive}
+            onCheckedChange={(checked) => setShowInactive(Boolean(checked))}
           />
-          Afficher les perdus
+          Afficher les inactifs
         </label>
         <Button
           type="button"
@@ -158,24 +189,29 @@ export function PipelineBoard({
       </div>
 
       <div className="hidden gap-3 overflow-x-auto pb-2 md:flex">
-        {showLost ? (
-          <PipelineColumn title="Perdu" prospects={byStage("perdu")} />
+        {showInactive ? (
+          <PipelineColumn
+            title="Inactif"
+            prospects={byStage("inactif")}
+            onStageChange={handleStageChange}
+          />
         ) : (
           PIPELINE_STAGES.map((stage) => (
             <PipelineColumn
               key={stage.id}
               title={stage.label}
               prospects={byStage(stage.id)}
-              showAdd={stage.id === "nouveau"}
+              showAdd={stage.id === "prospect"}
               onAdd={() => setAddOpen(true)}
-              onConvert={setConvertProspect}
+              onConvert={handleConvert}
+              onStageChange={handleStageChange}
             />
           ))
         )}
       </div>
 
       <div className="space-y-3 md:hidden">
-        {!showLost && (
+        {!showInactive && (
           <Select
             value={mobileStage}
             onValueChange={(value) =>
@@ -195,16 +231,17 @@ export function PipelineBoard({
           </Select>
         )}
         <div className="space-y-2">
-          {(showLost ? byStage("perdu") : byStage(mobileStage)).map(
+          {(showInactive ? byStage("inactif") : byStage(mobileStage)).map(
             (prospect) => (
               <PipelineCard
                 key={prospect.id}
                 prospect={prospect}
-                onConvert={setConvertProspect}
+                onConvert={handleConvert}
+                onStageChange={handleStageChange}
               />
             ),
           )}
-          {!showLost && byStage(mobileStage).length === 0 && (
+          {!showInactive && byStage(mobileStage).length === 0 && (
             <p className="py-8 text-center text-sm text-ink/55">
               Aucun prospect dans cette étape.
             </p>
@@ -224,28 +261,6 @@ export function PipelineBoard({
         onValue={setNewValue}
         onStage={setNewStage}
         onSubmit={handleAddProspect}
-      />
-
-      <ClientDialog
-        open={Boolean(convertProspect)}
-        onOpenChange={(open) => {
-          if (!open) setConvertProspect(null);
-        }}
-        initialValues={
-          convertProspect
-            ? {
-                name: convertProspect.name,
-                company: convertProspect.company,
-                email: "",
-                remindersEnabled: true,
-              }
-            : undefined
-        }
-        onSave={async (values) => {
-          const result = await createClient(values);
-          if (!result.ok) throw new Error(result.error);
-          setConvertProspect(null);
-        }}
       />
     </div>
   );
@@ -269,11 +284,11 @@ function ProspectDialog({
   name: string;
   company: string;
   value: string;
-  stage: Exclude<PipelineStage, "perdu">;
+  stage: ActiveStage;
   onName: (v: string) => void;
   onCompany: (v: string) => void;
   onValue: (v: string) => void;
-  onStage: (v: Exclude<PipelineStage, "perdu">) => void;
+  onStage: (v: ActiveStage) => void;
   onSubmit: () => void;
 }) {
   return (
@@ -300,7 +315,7 @@ function ProspectDialog({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="prs-value">Valeur estimée (€)</Label>
+            <Label htmlFor="prs-value">Valeur estimée (XOF)</Label>
             <Input
               id="prs-value"
               type="number"
@@ -313,9 +328,7 @@ function ProspectDialog({
             <Label>Étape</Label>
             <Select
               value={stage}
-              onValueChange={(v) =>
-                v && onStage(v as Exclude<PipelineStage, "perdu">)
-              }
+              onValueChange={(v) => v && onStage(v as ActiveStage)}
             >
               <SelectTrigger className="w-full">
                 <SelectValue />

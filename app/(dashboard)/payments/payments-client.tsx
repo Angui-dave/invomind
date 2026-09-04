@@ -33,6 +33,7 @@ import {
   formatDateFr,
   formatMoney,
   PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_OPTIONS,
   sumByCurrency,
   TODAY,
   type BusinessDocument,
@@ -193,7 +194,7 @@ function PaymentDialog({
   const first = unpaid[0];
   const [documentId, setDocumentId] = useState(first?.id ?? "");
   const [amount, setAmount] = useState(first?.balanceDue ?? 0);
-  const [method, setMethod] = useState<PaymentMethod>("mobile_money");
+  const [method, setMethod] = useState<PaymentMethod>("wave");
   const [reference, setReference] = useState("");
   const [paidAt, setPaidAt] = useState(TODAY);
 
@@ -294,13 +295,11 @@ function PaymentDialog({
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {(Object.keys(PAYMENT_METHOD_LABELS) as PaymentMethod[]).map(
-                  (m) => (
+                {PAYMENT_METHOD_OPTIONS.map((m) => (
                     <SelectItem key={m} value={m}>
                       {PAYMENT_METHOD_LABELS[m]}
                     </SelectItem>
-                  ),
-                )}
+                  ))}
               </SelectContent>
             </Select>
           </div>

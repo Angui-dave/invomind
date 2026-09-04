@@ -11,7 +11,8 @@ export type QuoteStatus =
   | "sent"
   | "accepted"
   | "refused"
-  | "expired";
+  | "expired"
+  | "converted";
 
 export type InvoiceStatus =
   | "draft"
@@ -25,13 +26,20 @@ export type CreditNoteStatus = "draft" | "issued" | "applied";
 
 export type DocumentStatus = QuoteStatus | InvoiceStatus | CreditNoteStatus;
 
+/** Aligned with Laravel `mode_paiement_enum` (+ legacy UI aliases). */
 export type PaymentMethod =
   | "card"
-  | "mobile_money"
   | "transfer"
-  | "twint"
   | "cash"
-  | "check";
+  | "check"
+  | "orange_money"
+  | "mtn_money"
+  | "moov_money"
+  | "wave"
+  /** @deprecated prefer orange_money / wave / mtn_money / moov_money */
+  | "mobile_money"
+  /** @deprecated not in Laravel schema */
+  | "twint";
 
 export type PortalPaymentStatus =
   | "unpaid"
@@ -94,6 +102,7 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
   accepted: "Accepté",
   refused: "Refusé",
   expired: "Expiré",
+  converted: "Converti",
 };
 
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
@@ -126,12 +135,29 @@ export const DOCUMENT_KIND_LABELS: Record<DocumentKind, string> = {
 
 export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   card: "Carte bancaire",
-  mobile_money: "Mobile Money",
   transfer: "Virement",
-  twint: "TWINT",
   cash: "Espèces",
   check: "Chèque",
+  orange_money: "Orange Money",
+  mtn_money: "MTN Money",
+  moov_money: "Moov Money",
+  wave: "Wave",
+  mobile_money: "Mobile Money",
+  twint: "TWINT",
 };
+
+/** Payment methods exposed in forms (Laravel ModePaiement). */
+export const PAYMENT_METHOD_OPTIONS: PaymentMethod[] = [
+  "cash",
+  "transfer",
+  "card",
+  "orange_money",
+  "mtn_money",
+  "moov_money",
+  "wave",
+  "check",
+];
+
 
 export const REMINDER_DEFAULTS: ReminderMilestone[] = [
   "J-3",

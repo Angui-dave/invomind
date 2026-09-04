@@ -10,6 +10,7 @@ import {
 } from "@/lib/dal/documents";
 import { getOrgSettings } from "@/lib/dal/settings";
 import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
+import { isLaravelApiEnabled } from "@/lib/config";
 
 export const metadata: Metadata = {
   title: "Modifier une facture",
@@ -21,6 +22,7 @@ export default async function EditInvoicePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
+  const laravel = isLaravelApiEnabled();
   const [document, clients, catalogItems, settings, invoices, creditNotes] =
     await Promise.all([
       getDocumentById(id),
@@ -49,6 +51,8 @@ export default async function EditInvoicePage({
       catalogItems={catalogItems}
       orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
       existingNumbers={existingNumbers}
+      creditNotesUnavailable={laravel}
+      pdfUnavailable={laravel}
     />
   );
 }

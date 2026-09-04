@@ -3,19 +3,39 @@
 namespace App\Models;
 
 use App\Models\Concerns\BelongsToOrganization;
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Models\Concerns\HasPublicUuid;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Supplier extends Model
 {
-    use HasUuids, BelongsToOrganization;
+    use BelongsToOrganization, HasPublicUuid, SoftDeletes;
 
-    protected $keyType = 'string';
-    public $incrementing = false;
-    public $timestamps = false;
+    protected $table = 'fournisseurs';
 
     protected $fillable = [
-        'organization_id', 'name', 'company', 'email', 'phone',
-        'address', 'city', 'country', 'tax_id', 'notes',
+        'orga_id',
+        'user_id',
+        'name_company',
+        'contact',
+        'email',
+        'phone',
+        'adresse',
+        'ville',
+        'country',
+        'numero_fiscal',
+        'notes',
     ];
+
+    public function commercial(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function expenses(): HasMany
+    {
+        return $this->hasMany(Expense::class, 'fournisseur_id');
+    }
 }

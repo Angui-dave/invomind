@@ -28,7 +28,8 @@ export function mapPlanIdToTier(planId: PlanId): PlanTier {
   return "BASIC";
 }
 
-export function mapTenantRoleToAppRole(role: TenantRole): AppRole {
+export function mapTenantRoleToAppRole(role: TenantRole | string): AppRole {
+  // Laravel roles: admin | agent. Legacy mock may still use owner / member.
   if (role === "owner" || role === "admin") return "ADMIN_TENANT";
   return "AGENT";
 }

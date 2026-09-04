@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Enums\UserRole;
 use Closure;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
@@ -12,7 +13,7 @@ class RequireAdmin
     {
         $role = $request->attributes->get('membership_role');
 
-        if (! in_array($role, ['owner', 'admin'])) {
+        if ($role !== UserRole::Admin->value && $role !== UserRole::Admin) {
             return response()->json(['message' => 'Admin access required.'], 403);
         }
 

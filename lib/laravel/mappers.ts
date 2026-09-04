@@ -1,6 +1,11 @@
 import type { CatalogItem } from "@/lib/data/catalog";
 import type { Client } from "@/lib/data/clients";
-import type { Conversation, ConversationMessage } from "@/lib/data/conversations";
+import type {
+  Conversation,
+  ConversationLabel,
+  ConversationMessage,
+  ConversationChannel,
+} from "@/lib/data/conversations";
 import type { Expense, ExpenseCategory } from "@/lib/data/expenses";
 import type { CurrencyCode } from "@/lib/money";
 import type { Payment } from "@/lib/data/payments";
@@ -13,7 +18,12 @@ import type {
   InboundMessage,
   MaskedWebhookConfig,
 } from "@/lib/webhooks/types";
-import type { ConversationChannel } from "@/lib/data/conversations";
+import {
+  catalogKindFromApi,
+  categorieClientFromApi,
+  documentStatusFromApi,
+  paymentMethodFromApi,
+} from "@/lib/laravel/enums";
 
 type ApiRecord = Record<string, unknown>;
 
@@ -27,26 +37,36 @@ function asRecord(input: unknown): ApiRecord {
 }
 
 function str(value: unknown, fallback = ""): string {
-  return typeof value === "string" ? value : fallback;
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "bigint") {
+    return String(value);
+  }
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return fallback;
 }
 
 export function mapClient(input: unknown): Client {
   const row = asRecord(input);
+  const nameCompany = str(row.name_company || row.name || row.full_name || "");
   return {
     id: str(row.id),
-    name: str(row.name),
-    company: str(row.company),
+    name: nameCompany,
+    company: nameCompany,
     email: str(row.email),
     phone: row.phone ? str(row.phone) : undefined,
-    address: row.address ? str(row.address) : undefined,
-    city: row.city ? str(row.city) : undefined,
-    postalCode: row.postal_code ? str(row.postal_code) : undefined,
-    country: row.country ? str(row.country) : undefined,
+    address: row.adresse || row.address ? str(row.adresse || row.address) : undefined,
+    city: row.ville || row.city ? str(row.ville || row.city) : undefined,
+    postalCode: row.code_postal || row.postal_code ? str(row.code_postal || row.postal_code) : undefined,
+    country: row.country || row.pays ? str(row.country || row.pays) : undefined,
     taxId: row.tax_id ? str(row.tax_id) : undefined,
-    currency: (row.currency ? str(row.currency) : undefined) as CurrencyCode | undefined,
+    currency: (row.devise || row.currency ? str(row.devise || row.currency) : undefined) as CurrencyCode | undefined,
     paymentTermDays: row.payment_term_days ? num(row.payment_term_days) : undefined,
-    remindersEnabled: Boolean(row.reminders_enabled),
-    portalToken: str(row.portal_token),
+    remindersEnabled: row.reminders_enabled == null ? true : Boolean(row.reminders_enabled),
+    portalToken: str(row.uuid || row.portal_token || row.id),
+    categorieClient: categorieClientFromApi(
+      row.categorie_client ? str(row.categorie_client) : undefined,
+    ),
+    notes: row.notes ? str(row.notes) : undefined,
   };
 }
 
@@ -54,18 +74,89 @@ export function mapDocumentLine(input: unknown): DocumentLine {
   const row = asRecord(input);
   return {
     id: str(row.id),
-    description: str(row.description),
-    quantity: num(row.quantity),
-    unitPrice: num(row.unit_price),
-    taxRate: num(row.tax_rate),
-    discountPercent: row.discount_percent == null ? undefined : num(row.discount_percent),
-    catalogItemId: row.catalog_item_id ? str(row.catalog_item_id) : undefined,
+    description: str(row.designation || row.description || ""),
+    quantity: num(row.quantite ?? row.quantity ?? 1),
+    unitPrice: num(row.prix_unitaire ?? row.unit_price),
+    taxRate: num(row.taux_tva ?? row.tax_rate),
+    discountPercent:
+      row.remise_pourcentage == null && row.discount_percent == null
+        ? undefined
+        : num(row.remise_pourcentage ?? row.discount_percent),
+    catalogItemId: row.produit_id || row.catalog_item_id
+      ? str(row.produit_id ?? row.catalog_item_id)
+      : undefined,
   };
 }
 
+/**
+ * Map Laravel QuoteResource / InvoiceResource (French fields) → BusinessDocument.
+ */
+export function mapInvoiceOrQuote(
+  input: unknown,
+  kind: "invoice" | "quote",
+  clientName = "",
+): BusinessDocument {
+  const row = asRecord(input);
+  const statusRaw = str(row.statut || "brouillon");
+  const lines = Array.isArray(row.lines)
+    ? row.lines.map((item) => mapDocumentLine(item))
+    : [];
+
+  const issueDate =
+    String(row.date_creation ?? "").slice(0, 10) ||
+    new Date().toISOString().slice(0, 10);
+  const dueDate =
+    String(row.date_echeance ?? row.date_validite ?? "").slice(0, 10) ||
+    issueDate;
+
+  const status = documentStatusFromApi(statusRaw, kind);
+
+  return {
+    id: str(row.id),
+    kind,
+    number: str(row.numero ?? ""),
+    clientId: str(row.client_id ?? ""),
+    clientName,
+    status,
+    currency: (str(row.devise ?? "XOF") as BusinessDocument["currency"]),
+    taxMode: "exclusive",
+    issueDate,
+    dueDate,
+    lines,
+    total: num(row.montant_total),
+    subtotalHt: num(row.sous_total),
+    taxTotal: num(row.montant_tva),
+    notes: row.note ? str(row.note) : undefined,
+    onlinePaymentEnabled: false,
+    paidOnlineAt: null,
+    paymentMethod: null,
+    remindersEnabled: kind === "invoice",
+    reminders: [],
+    portalToken: str(row.uuid || row.id),
+    sourceDocumentId: row.devis_id ? str(row.devis_id) : undefined,
+    frozen: statusRaw !== "brouillon",
+    pdfReady: false,
+  };
+}
+
+/** Legacy English DocumentResource shape — routes to FR mapper when detected. */
 export function mapDocument(input: unknown): BusinessDocument {
   const row = asRecord(input);
-  const lines = Array.isArray(row.lines) ? row.lines.map((item) => mapDocumentLine(item)) : [];
+  if (row.statut != null || row.numero != null || row.montant_total != null) {
+    const kind =
+      row.devis_id != null || row.date_echeance != null || row.montant_paye != null
+        ? "invoice"
+        : row.date_validite != null
+          ? "quote"
+          : str(row.kind) === "quote"
+            ? "quote"
+            : "invoice";
+    return mapInvoiceOrQuote(input, kind, str(row.client_name));
+  }
+
+  const lines = Array.isArray(row.lines)
+    ? row.lines.map((item) => mapDocumentLine(item))
+    : [];
   const reminders = Array.isArray(row.reminders)
     ? row.reminders.map((item) => {
         const r = asRecord(item);
@@ -93,10 +184,12 @@ export function mapDocument(input: unknown): BusinessDocument {
     taxTotal: num(row.tax_total),
     onlinePaymentEnabled: Boolean(row.online_payment_enabled),
     paidOnlineAt: row.paid_online_at ? str(row.paid_online_at) : null,
-    paymentMethod: row.payment_method ? (str(row.payment_method) as BusinessDocument["paymentMethod"]) : null,
+    paymentMethod: row.payment_method
+      ? paymentMethodFromApi(str(row.payment_method))
+      : null,
     remindersEnabled: Boolean(row.reminders_enabled),
     reminders,
-    portalToken: str(row.portal_token),
+    portalToken: str(row.portal_token || row.uuid),
     sourceDocumentId: row.source_document_id ? str(row.source_document_id) : undefined,
     notes: row.notes ? str(row.notes) : undefined,
     frozen: Boolean(row.frozen),
@@ -106,71 +199,102 @@ export function mapDocument(input: unknown): BusinessDocument {
 
 export function mapSupplier(input: unknown): Supplier {
   const row = asRecord(input);
+  const company = str(row.name_company || row.company || "");
   return {
     id: str(row.id),
-    name: str(row.name),
-    company: str(row.company),
+    name: str(row.contact || row.name || ""),
+    company,
     email: str(row.email),
     phone: row.phone ? str(row.phone) : undefined,
-    address: row.address ? str(row.address) : undefined,
-    city: row.city ? str(row.city) : undefined,
+    address: row.adresse || row.address ? str(row.adresse || row.address) : undefined,
+    city: row.ville || row.city ? str(row.ville || row.city) : undefined,
     country: row.country ? str(row.country) : undefined,
-    taxId: row.tax_id ? str(row.tax_id) : undefined,
+    taxId: row.numero_fiscal || row.tax_id
+      ? str(row.numero_fiscal || row.tax_id)
+      : undefined,
     notes: row.notes ? str(row.notes) : undefined,
   };
 }
 
 export function mapExpenseCategory(input: unknown): ExpenseCategory {
   const row = asRecord(input);
-  return { id: str(row.id), name: str(row.name), color: str(row.color) };
+  return {
+    id: str(row.id),
+    name: str(row.nom || row.name || ""),
+    color: str(row.couleur || row.color || "#888888"),
+    isGlobal: row.is_global == null ? row.orga_id == null : Boolean(row.is_global),
+    actif: row.actif == null ? true : Boolean(row.actif),
+  };
 }
 
 export function mapExpense(input: unknown): Expense {
   const row = asRecord(input);
+  const category = asRecord(row.category);
+  const supplier = asRecord(row.supplier);
+  const ht = num(row.montant_ht ?? row.amount);
+  const taxRate = num(row.taux_tva ?? row.tax_rate);
+  const taxAmount = num(row.montant_tva ?? row.tax_amount);
+  const amount = num(row.montant_ttc ?? row.amount ?? ht + taxAmount);
+  const dateRaw = row.date_depense ?? row.date;
+  const supplierId = row.fournisseur_id ?? row.supplier_id ?? supplier.id;
+  const supplierName =
+    supplier.name_company ||
+    supplier.company ||
+    row.fournisseur ||
+    row.supplier_name;
   return {
     id: str(row.id),
-    date: str(row.date),
-    description: str(row.description),
-    amount: num(row.amount),
-    currency: str(row.currency) as Expense["currency"],
-    categoryId: str(row.category_id),
-    supplierId: row.supplier_id ? str(row.supplier_id) : undefined,
-    supplierName: row.supplier_name ? str(row.supplier_name) : undefined,
-    taxRate: num(row.tax_rate),
-    taxDeductible: Boolean(row.tax_deductible),
-    taxAmount: num(row.tax_amount),
-    notes: row.notes ? str(row.notes) : undefined,
+    date: String(dateRaw ?? "").slice(0, 10),
+    description: str(row.libelle || row.description || ""),
+    amount,
+    currency: str(row.devise || row.currency || "XOF") as Expense["currency"],
+    categoryId: str(row.categorie_id ?? row.category_id ?? category.id),
+    supplierId: supplierId ? str(supplierId) : undefined,
+    supplierName: supplierName ? str(supplierName) : undefined,
+    taxRate,
+    taxDeductible: taxRate > 0,
+    taxAmount,
+    notes: row.description || row.notes ? str(row.description || row.notes) : undefined,
+    statut: row.statut ? str(row.statut) : undefined,
+    paymentMethod: row.mode_paiement
+      ? paymentMethodFromApi(str(row.mode_paiement))
+      : undefined,
   };
 }
 
 export function mapPayment(input: unknown): Payment {
   const row = asRecord(input);
+  const dateRaw = row.date_paiement ?? row.paid_at;
+  const methodRaw = str(row.mode_paiement || row.method || "virement");
   return {
     id: str(row.id),
-    documentId: str(row.document_id),
-    documentNumber: str(row.document_number),
+    documentId: str(row.facture_id ?? row.document_id),
+    documentNumber: str(row.document_number || ""),
     clientId: str(row.client_id),
-    clientName: str(row.client_name),
-    amount: num(row.amount),
-    currency: str(row.currency) as Payment["currency"],
-    method: str(row.method) as Payment["method"],
-    paidAt: str(row.paid_at),
+    clientName: str(row.client_name || ""),
+    amount: num(row.montant ?? row.amount),
+    currency: str(row.devise || row.currency || "XOF") as Payment["currency"],
+    method: paymentMethodFromApi(methodRaw),
+    paidAt: String(dateRaw ?? "").slice(0, 10),
     reference: row.reference ? str(row.reference) : undefined,
-    notes: row.notes ? str(row.notes) : undefined,
+    notes: row.note || row.notes ? str(row.note || row.notes) : undefined,
   };
 }
 
 export function mapCatalogItem(input: unknown): CatalogItem {
   const row = asRecord(input);
+  const type = str(row.type || row.kind || "service");
   return {
     id: str(row.id),
-    name: str(row.name),
-    description: str(row.description),
-    unitPrice: num(row.unit_price),
-    currency: str(row.currency) as CatalogItem["currency"],
-    taxRate: num(row.tax_rate),
-    unit: str(row.unit),
-    kind: str(row.kind) as CatalogItem["kind"],
+    name: str(row.name || ""),
+    description: str(row.description || ""),
+    unitPrice: num(row.prix_unitaire ?? row.unit_price),
+    currency: str(row.devise || row.currency || "XOF") as CatalogItem["currency"],
+    taxRate: num(row.taux_tva ?? row.tax_rate),
+    unit: str(row.unite || row.unit || "unité"),
+    kind: catalogKindFromApi(type),
+    reference: row.reference ? str(row.reference) : undefined,
+    actif: row.actif == null ? undefined : Boolean(row.actif),
   };
 }
 
@@ -178,57 +302,172 @@ export function mapProspect(input: unknown): Prospect {
   const row = asRecord(input);
   return {
     id: str(row.id),
-    name: str(row.name),
-    company: str(row.company),
+    name: str(row.name || row.name_company || ""),
+    company: str(row.company || row.name_company || ""),
     estimatedValue: num(row.estimated_value),
-    stage: str(row.stage) as Prospect["stage"],
-    lastInteractionAt: str(row.last_interaction_at),
+    stage: categorieClientFromApi(
+      row.categorie_client ? str(row.categorie_client) : str(row.stage),
+    ),
+    lastInteractionAt: str(row.last_interaction_at || row.updated_at || "").slice(0, 10),
+  };
+}
+
+/** Derive a Kanban card from a Client (+ optional estimated value). */
+export function clientToProspect(
+  client: Client,
+  estimatedValue = 0,
+): Prospect {
+  return {
+    id: client.id,
+    name: client.name,
+    company: client.company || client.name,
+    estimatedValue,
+    stage: client.categorieClient ?? "prospect",
+    lastInteractionAt: new Date().toISOString().slice(0, 10),
   };
 }
 
 export function mapConversation(input: unknown): Conversation {
   const row = asRecord(input);
+  const contact = asRecord(row.contact ?? {});
+  const contactName =
+    str(contact.nom_affichage) ||
+    str(row.contact_name) ||
+    str(row.contactName) ||
+    "Contact";
+  const canal = str(row.canal || row.channel, "whatsapp") as Conversation["channel"];
+  const statutRaw = str(row.statut || row.status);
+  const statusMap: Record<string, Conversation["status"]> = {
+    ouverte: "open",
+    en_attente: "pending",
+    resolue: "resolved",
+    open: "open",
+    pending: "pending",
+    resolved: "resolved",
+  };
+  const labelsRaw = Array.isArray(row.labels) ? row.labels : [];
+  const initials = contactName
+    .split(/\s+/)
+    .map((p) => p[0] ?? "")
+    .join("")
+    .slice(0, 2)
+    .toUpperCase();
+
   return {
     id: str(row.id),
-    channel: str(row.channel) as Conversation["channel"],
-    contactName: str(row.contact_name),
-    contactHandle: str(row.contact_handle),
+    channel: canal,
+    contactName,
+    contactHandle: str(contact.identifiant_externe || row.contact_handle || contactName),
     threadRef: row.thread_ref ? str(row.thread_ref) : undefined,
-    avatarInitials: row.avatar_initials ? str(row.avatar_initials) : undefined,
-    clientId: row.client_id ? str(row.client_id) : undefined,
-    prospectId: row.prospect_id ? str(row.prospect_id) : undefined,
-    unreadCount: num(row.unread_count),
-    lastMessageAt: str(row.last_message_at),
-    archived: Boolean(row.archived),
+    inboxId: row.boite_reception_id != null ? str(row.boite_reception_id) : undefined,
+    avatarInitials: row.avatar_initials
+      ? str(row.avatar_initials)
+      : initials || undefined,
+    clientId: contact.client_id
+      ? str(contact.client_id)
+      : row.client_id
+        ? str(row.client_id)
+        : undefined,
+    unreadCount: num(row.non_lus_count ?? row.unread_count),
+    lastMessageAt:
+      str(row.derniere_activite_at) ||
+      str(row.last_message_at) ||
+      new Date().toISOString(),
+    archived: Boolean(row.archivee ?? row.archived),
+    status: statusMap[statutRaw] ?? "open",
+    agentId: row.agent_id != null ? str(row.agent_id) : undefined,
+    labels: labelsRaw.map((l) => {
+      const lab = asRecord(l);
+      return {
+        id: str(lab.id),
+        name: str(lab.nom || lab.name),
+        color: str(lab.couleur || lab.color, "#64748b"),
+      };
+    }),
   };
 }
 
 export function mapConversationMessage(input: unknown): ConversationMessage {
   const row = asRecord(input);
+  const directionRaw = str(row.direction);
+  const direction: ConversationMessage["direction"] =
+    directionRaw === "entrant" || directionRaw === "inbound"
+      ? "inbound"
+      : "outbound";
+  const statusRaw = str(row.statut_livraison || row.status);
+  const statusMap: Record<string, NonNullable<ConversationMessage["status"]>> = {
+    en_attente: "pending",
+    envoye: "sent",
+    livre: "delivered",
+    lu: "read",
+    echec: "failed",
+    pending: "pending",
+    sent: "sent",
+    delivered: "delivered",
+    read: "read",
+    failed: "failed",
+  };
+
   return {
     id: str(row.id),
-    conversationId: str(row.conversation_id),
-    direction: str(row.direction) as ConversationMessage["direction"],
-    body: str(row.body),
-    sentAt: str(row.sent_at),
-    status: row.status ? (str(row.status) as ConversationMessage["status"]) : undefined,
+    conversationId: str(row.conversation_id || row.conversationId),
+    direction,
+    body: str(row.contenu || row.body),
+    sentAt: str(row.envoye_at || row.sent_at || row.sentAt),
+    status: statusRaw ? statusMap[statusRaw] : undefined,
+    contentType: str(row.type_contenu || row.contentType) || undefined,
+    mediaUrl: str(row.url_media || row.mediaUrl) || undefined,
+  };
+}
+
+export function mapInbox(input: unknown): {
+  id: string;
+  channel: Conversation["channel"];
+  name: string;
+  mode: string;
+  connectionStatus: string;
+  active: boolean;
+  maskedCredentials: Record<string, unknown>;
+} {
+  const row = asRecord(input);
+  return {
+    id: str(row.id),
+    channel: str(row.canal, "whatsapp") as Conversation["channel"],
+    name: str(row.nom),
+    mode: str(row.mode, "fake"),
+    connectionStatus: str(row.statut_connexion),
+    active: Boolean(row.actif),
+    maskedCredentials: asRecord(row.identifiants_masques ?? {}),
+  };
+}
+
+export function mapLabel(input: unknown): ConversationLabel {
+  const row = asRecord(input);
+  return {
+    id: str(row.id),
+    name: str(row.nom || row.name),
+    color: str(row.couleur || row.color, "#64748b"),
   };
 }
 
 export function mapOrgSettings(input: unknown): OrgSettings {
   const row = asRecord(input);
+  const taxModeRaw = str(row.default_tax_mode || row.defaultTaxMode);
+  const defaultTaxMode: OrgSettings["defaultTaxMode"] =
+    taxModeRaw === "inclusive" ? "inclusive" : "exclusive";
+  const currencyRaw = str(row.default_currency || row.devise_defaut || "XOF", "XOF");
   return {
-    companyName: str(row.company_name),
+    companyName: str(row.company_name || row.name_company),
     email: str(row.email),
     phone: str(row.phone),
-    address: str(row.address),
-    city: str(row.city),
-    postalCode: str(row.postal_code),
-    country: str(row.country),
+    address: str(row.address || row.adresse),
+    city: str(row.city || row.ville),
+    postalCode: str(row.postal_code || row.code_postal),
+    country: str(row.country || row.pays, "Côte d'Ivoire"),
     taxId: str(row.tax_id),
-    defaultCurrency: str(row.default_currency) as OrgSettings["defaultCurrency"],
-    defaultTaxMode: str(row.default_tax_mode) as OrgSettings["defaultTaxMode"],
-    defaultTaxRate: num(row.default_tax_rate),
+    defaultCurrency: (currencyRaw || "XOF") as OrgSettings["defaultCurrency"],
+    defaultTaxMode,
+    defaultTaxRate: num(row.default_tax_rate ?? 18),
     bankName: str(row.bank_name),
     iban: str(row.iban),
     bic: str(row.bic),
@@ -251,14 +490,18 @@ export function mapBranding(input: unknown): OrgBranding {
       : "classic"
   ) as OrgBranding["documentTemplate"];
   return {
-    displayName: row.display_name ? str(row.display_name) : null,
+    displayName: row.display_name
+      ? str(row.display_name)
+      : row.name_company
+        ? str(row.name_company)
+        : null,
     logoUrl: row.logo_url ? str(row.logo_url) : null,
     primaryColor: str(row.primary_color, "#2563eb") || "#2563eb",
     accentColor: str(row.accent_color, "#10b981") || "#10b981",
     fontFamily: str(row.font_family, "Inter") || "Inter",
     documentTemplate,
     locale: str(row.locale, "fr-SN") || "fr-SN",
-    currency: (str(row.currency, "XOF") || "XOF") as OrgBranding["currency"],
+    currency: (str(row.currency || row.devise_defaut, "XOF") || "XOF") as OrgBranding["currency"],
   };
 }
 
@@ -269,7 +512,11 @@ export function mapInboundMessage(input: unknown): InboundMessage {
     id: str(row.id),
     channel,
     handle: str(row.handle),
-    contactName: row.contact_name ? str(row.contact_name) : row.contactName ? str(row.contactName) : undefined,
+    contactName: row.contact_name
+      ? str(row.contact_name)
+      : row.contactName
+        ? str(row.contactName)
+        : undefined,
     body: str(row.body),
     sentAt: str(row.sent_at) || str(row.sentAt),
     threadRef: row.thread_ref
@@ -318,7 +565,10 @@ export function mapWebhookConfigResponse(input: unknown): {
   return {
     config: {
       url,
-      secretMasked: str(cfg.secret_masked) || str(cfg.secretMasked) || (hasSecret ? "••••••••" : ""),
+      secretMasked:
+        str(cfg.secret_masked) ||
+        str(cfg.secretMasked) ||
+        (hasSecret ? "••••••••" : ""),
       hasSecret,
       enabled: Boolean(cfg.enabled),
       metaVerifyConfigured: Boolean(
@@ -335,7 +585,6 @@ export function mapWebhookConfigResponse(input: unknown): {
   };
 }
 
-/** Normalize Laravel send response `{ message, delivery }` or mock `{ status }` to a status string. */
 export function mapConversationSendStatus(input: unknown): {
   status: DeliveryStatus | string;
   error?: string;
@@ -348,7 +597,10 @@ export function mapConversationSendStatus(input: unknown): {
   const status = str(delivery.status, "failed");
   return {
     status,
-    error: delivery.error ? str(delivery.error) : row.error ? str(row.error) : undefined,
+    error: delivery.error
+      ? str(delivery.error)
+      : row.error
+        ? str(row.error)
+        : undefined,
   };
 }
-

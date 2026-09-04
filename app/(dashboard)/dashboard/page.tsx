@@ -66,15 +66,15 @@ export default async function DashboardPage() {
     series12,
     top,
   ] = await Promise.all([
-    activeProspectsValue(),
-    overdueInvoiceCount(),
-    pendingInvoiceCount(),
-    getInvoices(),
-    monthRevenue(),
-    revenueByMonth(3),
-    revenueByMonth(6),
-    revenueByMonth(12),
-    topClients(5),
+    activeProspectsValue().catch(() => ({ total: 0, count: 0 })),
+    overdueInvoiceCount().catch(() => 0),
+    pendingInvoiceCount().catch(() => 0),
+    getInvoices().catch(() => [] as Awaited<ReturnType<typeof getInvoices>>),
+    monthRevenue().catch(() => 0),
+    revenueByMonth(3).catch(() => []),
+    revenueByMonth(6).catch(() => []),
+    revenueByMonth(12).catch(() => []),
+    topClients(5).catch(() => []),
   ]);
 
   const recent = [...invoices]

@@ -1,8 +1,5 @@
-import { readSessionCookie } from "@/lib/auth/session";
 import { isLaravelApiEnabled } from "@/lib/config";
 import { verifySession } from "@/lib/dal/session";
-import { laravelRequest } from "@/lib/laravel/client";
-import { mapConversationSendStatus } from "@/lib/laravel/mappers";
 import { mapTenantRoleToAppRole } from "@/lib/rbac/types";
 import { isAdminTenant } from "@/lib/rbac/policy";
 import { signPayload } from "@/lib/webhooks/signature";
@@ -12,107 +9,79 @@ import type { DeliveryAttempt } from "@/lib/webhooks/types";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/** Legacy mock webhook test — unavailable in Laravel mode. */
 export async function POST() {
+  if (isLaravelApiEnabled()) {
+    return Response.json(
+      {
+        error:
+          "Test webhook legacy indisponible. Utilisez une boîte fake / sandbox.",
+      },
+      { status: 501 },
+    );
+  }
+
   const session = await verifySession();
   if (!isAdminTenant(mapTenantRoleToAppRole(session.role))) {
     return Response.json({ error: "Non autorisé" }, { status: 403 });
   }
 
-  const token = (await readSessionCookie())?.accessToken;
   const organizationId = session.organizationId;
-
-  if (isLaravelApiEnabled()) {
-    const response = await laravelRequest<unknown>("/conversations/webhook/test", {
-      method: "POST",
-      token,
-      organizationId,
-    });
-    const normalized = mapConversationSendStatus(response);
-    return Response.json({
-      ...normalized,
-      raw: response,
-    });
-  }
-
   const config = await getConfig(organizationId);
   const deliveryId = crypto.randomUUID();
   const attemptedAt = new Date().toISOString();
 
-  if (!config.enabled || !config.url) {
-    const attempt: Omit<DeliveryAttempt, "id"> & { id?: string } = {
-      id: deliveryId,
-      conversationId: "webhook-test",
-      channel: "whatsapp",
-      status: "skipped",
-      attemptedAt,
-      durationMs: 0,
-    };
-    await logDelivery(organizationId, attempt);
-    return Response.json({
-      status: "skipped",
-      deliveredAt: attemptedAt,
-    });
+  if (!config.url) {
+    return Response.json(
+      { error: "Configurez d’abord l’URL du webhook" },
+      { status: 422 },
+    );
   }
 
-  const eventBody = JSON.stringify({
+  const body = JSON.stringify({
     event: "webhook.test",
-    deliveryId,
-    conversationId: "webhook-test",
-    channel: "whatsapp",
-    to: "+221770000000",
-    body: "Message de test InvoMind",
-    sentAt: attemptedAt,
+    organizationId,
+    attemptedAt,
   });
-  const timestamp = String(Math.floor(Date.now() / 1000));
   const signature = config.secret
-    ? signPayload(config.secret, timestamp, eventBody)
-    : "";
+    ? signPayload(body, config.secret)
+    : undefined;
 
-  const started = Date.now();
   try {
-    const response = await fetch(config.url, {
+    const res = await fetch(config.url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Invomind-Event": "webhook.test",
-        "X-Invomind-Delivery": deliveryId,
-        "X-Invomind-Timestamp": timestamp,
-        ...(signature ? { "X-Invomind-Signature": signature } : {}),
+        ...(signature ? { "X-InvoMind-Signature": signature } : {}),
       },
-      body: eventBody,
-      signal: AbortSignal.timeout(8000),
+      body,
     });
-    const durationMs = Date.now() - started;
-    const ok = response.ok;
-    await logDelivery(organizationId, {
+    const attempt: DeliveryAttempt = {
       id: deliveryId,
-      conversationId: "webhook-test",
+      organizationId,
+      conversationId: "test",
       channel: "whatsapp",
-      status: ok ? "success" : "failed",
-      httpStatus: response.status,
-      error: ok ? undefined : `HTTP ${response.status}`,
+      to: "test",
+      status: res.ok ? "delivered" : "failed",
+      httpStatus: res.status,
+      error: res.ok ? null : await res.text().catch(() => "HTTP error"),
       attemptedAt,
-      durationMs,
-    });
-    return Response.json({
-      status: ok ? "success" : "failed",
-      httpStatus: response.status,
-      deliveredAt: attemptedAt,
-      ...(ok ? {} : { error: `Le webhook a répondu ${response.status}` }),
-    }, { status: ok ? 200 : 502 });
-  } catch (error) {
-    const durationMs = Date.now() - started;
-    const message =
-      error instanceof Error ? error.message : "Erreur réseau inconnue";
-    await logDelivery(organizationId, {
+    };
+    await logDelivery(attempt);
+    return Response.json({ ok: res.ok, deliveryId, httpStatus: res.status });
+  } catch (e) {
+    const attempt: DeliveryAttempt = {
       id: deliveryId,
-      conversationId: "webhook-test",
+      organizationId,
+      conversationId: "test",
       channel: "whatsapp",
+      to: "test",
       status: "failed",
-      error: message,
+      httpStatus: null,
+      error: e instanceof Error ? e.message : "Network error",
       attemptedAt,
-      durationMs,
-    });
-    return Response.json({ status: "failed", error: message }, { status: 502 });
+    };
+    await logDelivery(attempt);
+    return Response.json({ ok: false, error: attempt.error }, { status: 502 });
   }
 }

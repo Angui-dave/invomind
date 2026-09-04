@@ -2,29 +2,44 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Concerns\HasUuids;
+use App\Enums\AbonnementStatut;
+use App\Models\Concerns\BelongsToOrganization;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Subscription extends Model
 {
-    use HasUuids;
+    use BelongsToOrganization;
 
-    protected $keyType = 'string';
-    public $incrementing = false;
+    protected $table = 'abonnements';
 
     protected $fillable = [
-        'organization_id', 'plan_id', 'status',
-        'current_period_start', 'current_period_end',
+        'orga_id',
+        'plan_id',
+        'date_debut',
+        'date_fin',
+        'renouvellement_auto',
+        'statut',
     ];
 
-    public function organization(): BelongsTo
+    protected function casts(): array
     {
-        return $this->belongsTo(Organization::class);
+        return [
+            'date_debut' => 'date',
+            'date_fin' => 'date',
+            'renouvellement_auto' => 'boolean',
+            'statut' => AbonnementStatut::class,
+        ];
     }
 
     public function plan(): BelongsTo
     {
-        return $this->belongsTo(Plan::class);
+        return $this->belongsTo(Plan::class, 'plan_id');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(SubscriptionPayment::class, 'abonnement_id');
     }
 }

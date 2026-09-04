@@ -3,33 +3,39 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Plan extends Model
 {
-    public $incrementing = false;
-    protected $keyType = 'string';
     public $timestamps = false;
 
+    protected $table = 'plans_abonnement';
+
     protected $fillable = [
-        'id', 'name', 'price', 'price_label', 'description', 'features',
-        'limit_label', 'highlighted', 'max_invoices_per_month', 'max_clients',
-        'max_agents', 'auto_reminders', 'online_payments', 'pipeline', 'conversations',
-        'reports', 'expenses', 'catalog', 'import_tool',
+        'code',
+        'nom',
+        'prix_mensuel',
+        'prix_annuel',
+        'devise',
+        'limite_factures_mois',
+        'limite_utilisateurs',
+        'limite_clients',
+        'fonctionnalites',
+        'actif',
     ];
 
     protected function casts(): array
     {
         return [
-            'features' => 'array',
-            'highlighted' => 'boolean',
-            'auto_reminders' => 'boolean',
-            'online_payments' => 'boolean',
-            'pipeline' => 'boolean',
-            'conversations' => 'boolean',
-            'reports' => 'boolean',
-            'expenses' => 'boolean',
-            'catalog' => 'boolean',
-            'import_tool' => 'boolean',
+            'prix_mensuel' => 'decimal:2',
+            'prix_annuel' => 'decimal:2',
+            'fonctionnalites' => 'array',
+            'actif' => 'boolean',
         ];
+    }
+
+    public function subscriptions(): HasMany
+    {
+        return $this->hasMany(Subscription::class, 'plan_id');
     }
 }
