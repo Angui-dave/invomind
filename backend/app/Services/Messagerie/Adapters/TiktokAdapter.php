@@ -49,4 +49,19 @@ class TiktokAdapter implements CanalAdapterInterface
             'TikTok Business Messaging API n’est pas encore activée. Voir docs/MESSAGERIE.md.'
         );
     }
+
+    public function souscrirePageWebhook(Inbox $boite): ResultatEnvoiDto
+    {
+        return new ResultatEnvoiDto(false, null, 'TikTok non disponible.');
+    }
+
+    public function verifierIdentifiants(Inbox $boite): ResultatEnvoiDto
+    {
+        return new ResultatEnvoiDto(false, null, 'TikTok non disponible.');
+    }
+
+    public function resoudreNomContact(Inbox $boite, string $externalId): ?string
+    {
+        return null;
+    }
 }

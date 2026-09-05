@@ -13,6 +13,7 @@ use App\Models\Conversation;
 use App\Models\ConversationMessage;
 use App\Models\Inbox;
 use App\Models\MessagingContact;
+use App\Services\Messagerie\CanalAdapterFactory;
 use App\Services\Messagerie\Dto\NormalizedInboundMessageDto;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -20,7 +21,10 @@ use Illuminate\Support\Facades\Log;
 
 class InboundMessageService
 {
-    public function __construct(private MediaDownloadService $media) {}
+    public function __construct(
+        private MediaDownloadService $media,
+        private CanalAdapterFactory $adapters,
+    ) {}
 
     public function ingerer(NormalizedInboundMessageDto $dto): ?ConversationMessage
     {
@@ -45,9 +49,19 @@ class InboundMessageService
                 ->first();
 
             if (! $contactLink) {
+                $displayName = $dto->contactName;
+                if (! $displayName) {
+                    try {
+                        $displayName = $this->adapters->for($inbox)
+                            ->resoudreNomContact($inbox, $dto->contactExternalId);
+                    } catch (\Throwable $e) {
+                        Log::warning('resoudreNomContact failed', ['error' => $e->getMessage()]);
+                    }
+                }
+
                 $contact = MessagingContact::withoutGlobalScopes()->create([
                     'orga_id' => $inbox->orga_id,
-                    'nom_affichage' => $dto->contactName ?: $dto->contactExternalId,
+                    'nom_affichage' => $displayName ?: $dto->contactExternalId,
                 ]);
 
                 $contactLink = ContactInbox::query()->create([
@@ -60,6 +74,19 @@ class InboundMessageService
                 $contact = MessagingContact::withoutGlobalScopes()->findOrFail($contactLink->contact_id);
                 if ($dto->contactName && $contact->nom_affichage === $dto->contactExternalId) {
                     $contact->update(['nom_affichage' => $dto->contactName]);
+                } elseif (
+                    ! $dto->contactName
+                    && $contact->nom_affichage === $dto->contactExternalId
+                ) {
+                    try {
+                        $resolved = $this->adapters->for($inbox)
+                            ->resoudreNomContact($inbox, $dto->contactExternalId);
+                        if ($resolved) {
+                            $contact->update(['nom_affichage' => $resolved]);
+                        }
+                    } catch (\Throwable $e) {
+                        Log::warning('resoudreNomContact failed', ['error' => $e->getMessage()]);
+                    }
                 }
             }
 

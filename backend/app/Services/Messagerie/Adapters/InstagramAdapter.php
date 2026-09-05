@@ -67,4 +67,47 @@ class InstagramAdapter extends AbstractMetaAdapter
             'message' => ['text' => (string) $message->contenu],
         ]);
     }
+
+    public function souscrirePageWebhook(Inbox $boite): ResultatEnvoiDto
+    {
+        // Instagram Messaging webhooks are subscribed on the linked Facebook Page.
+        return $this->subscribePageFields($boite, [
+            'messages',
+            'messaging_postbacks',
+            'message_deliveries',
+            'message_reads',
+        ]);
+    }
+
+    public function verifierIdentifiants(Inbox $boite): ResultatEnvoiDto
+    {
+        $creds = $boite->identifiants ?? [];
+        $token = (string) ($creds['access_token'] ?? '');
+        $igId = (string) ($creds['ig_business_id'] ?? '');
+        $pageId = (string) ($creds['page_id'] ?? '');
+
+        if ($token === '') {
+            return new ResultatEnvoiDto(false, null, 'Identifiants Instagram incomplets (access_token).');
+        }
+
+        if ($igId !== '') {
+            $data = $this->getGraph($igId, $token, ['fields' => 'id,name,username']);
+            if ($data === null || ! isset($data['id'])) {
+                return new ResultatEnvoiDto(false, null, 'Impossible de vérifier le compte Instagram (token ou ig_business_id invalide).');
+            }
+
+            return new ResultatEnvoiDto(true, (string) $data['id']);
+        }
+
+        if ($pageId !== '') {
+            return $this->verifyPageCredentials($boite);
+        }
+
+        return new ResultatEnvoiDto(false, null, 'Identifiants Instagram incomplets (ig_business_id ou page_id).');
+    }
+
+    public function resoudreNomContact(Inbox $boite, string $externalId): ?string
+    {
+        return $this->resolvePageUserName($boite, $externalId);
+    }
 }

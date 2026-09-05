@@ -12,6 +12,9 @@ class InvoiceResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $total = (float) $this->montant_total;
+        $paid = (float) $this->montant_paye;
+
         return [
             'id' => $this->id,
             'uuid' => $this->uuid,
@@ -29,7 +32,14 @@ class InvoiceResource extends JsonResource
             'montant_tva' => $this->montant_tva,
             'montant_total' => $this->montant_total,
             'montant_paye' => $this->montant_paye,
+            'balance_due' => max(0, round($total - $paid, 2)),
             'note' => $this->note,
+            'client' => $this->whenLoaded('client', fn () => $this->client
+                ? [
+                    'id' => $this->client->id,
+                    'name_company' => $this->client->name_company,
+                ]
+                : null),
             'lines' => $this->whenLoaded('lines', fn () => $this->lines->map(fn ($line) => [
                 'id' => $line->id,
                 'produit_id' => $line->produit_id,

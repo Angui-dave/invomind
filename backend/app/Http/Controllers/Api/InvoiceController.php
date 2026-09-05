@@ -24,7 +24,7 @@ class InvoiceController extends Controller
      */
     public function index(Request $request): AnonymousResourceCollection|JsonResponse
     {
-        $query = Invoice::query()->with('lines')->orderByDesc('created_at');
+        $query = Invoice::query()->with(['lines', 'client'])->orderByDesc('created_at');
 
         if ($request->filled('statut')) {
             $query->where('statut', $request->query('statut'));
@@ -39,7 +39,7 @@ class InvoiceController extends Controller
 
     public function show(int $id): InvoiceResource
     {
-        return new InvoiceResource(Invoice::query()->with('lines')->findOrFail($id));
+        return new InvoiceResource(Invoice::query()->with(['lines', 'client'])->findOrFail($id));
     }
 
     public function store(InvoiceRequest $request, EntitlementService $entitlements, LineComputeService $compute): JsonResponse

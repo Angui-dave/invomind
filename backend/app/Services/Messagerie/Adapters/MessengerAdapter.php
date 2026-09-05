@@ -75,6 +75,26 @@ class MessengerAdapter extends AbstractMetaAdapter
         ]);
     }
 
+    public function souscrirePageWebhook(Inbox $boite): ResultatEnvoiDto
+    {
+        return $this->subscribePageFields($boite, [
+            'messages',
+            'messaging_postbacks',
+            'message_deliveries',
+            'message_reads',
+        ]);
+    }
+
+    public function verifierIdentifiants(Inbox $boite): ResultatEnvoiDto
+    {
+        return $this->verifyPageCredentials($boite);
+    }
+
+    public function resoudreNomContact(Inbox $boite, string $externalId): ?string
+    {
+        return $this->resolvePageUserName($boite, $externalId);
+    }
+
     /**
      * @return array<string, mixed>|null
      */

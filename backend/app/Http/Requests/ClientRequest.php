@@ -24,6 +24,8 @@ class ClientRequest extends FormRequest
             'code_postal' => ['nullable', 'string', 'max:20'],
             'country' => ['nullable', 'string', 'max:100'],
             'devise' => ['nullable', 'string', 'size:3'],
+            'delai_paiement_jours' => ['nullable', 'integer', 'min:0', 'max:365'],
+            'numero_fiscal' => ['nullable', 'string', 'max:64'],
             'categorie_client' => ['sometimes', Rule::enum(ClientCategorie::class)],
             'notes' => ['nullable', 'string'],
             'user_id' => ['nullable', 'integer', 'exists:users,id'],

@@ -26,4 +26,19 @@ interface CanalAdapterInterface
     public function normaliserStatuts(Request $request): array;
 
     public function envoyerMessage(Inbox $boite, ConversationMessage $message, string $destinataireExterne): ResultatEnvoiDto;
+
+    /**
+     * Subscribe the Page / IG account to this app's webhook fields.
+     */
+    public function souscrirePageWebhook(Inbox $boite): ResultatEnvoiDto;
+
+    /**
+     * Validate stored credentials against the Graph API.
+     */
+    public function verifierIdentifiants(Inbox $boite): ResultatEnvoiDto;
+
+    /**
+     * Resolve a human-readable contact name from a platform external id (PSID, etc.).
+     */
+    public function resoudreNomContact(Inbox $boite, string $externalId): ?string;
 }

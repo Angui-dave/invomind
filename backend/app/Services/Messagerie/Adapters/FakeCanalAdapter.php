@@ -54,4 +54,19 @@ class FakeCanalAdapter implements CanalAdapterInterface
 
         return new ResultatEnvoiDto(true, 'fake_'.Str::uuid()->toString());
     }
+
+    public function souscrirePageWebhook(Inbox $boite): ResultatEnvoiDto
+    {
+        return new ResultatEnvoiDto(true, 'fake-subscribed');
+    }
+
+    public function verifierIdentifiants(Inbox $boite): ResultatEnvoiDto
+    {
+        return new ResultatEnvoiDto(true, 'fake-ok');
+    }
+
+    public function resoudreNomContact(Inbox $boite, string $externalId): ?string
+    {
+        return 'Contact Fake';
+    }
 }

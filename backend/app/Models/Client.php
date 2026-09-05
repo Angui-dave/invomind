@@ -27,6 +27,8 @@ class Client extends Model
         'code_postal',
         'country',
         'devise',
+        'delai_paiement_jours',
+        'numero_fiscal',
         'categorie_client',
         'notes',
     ];
@@ -35,6 +37,7 @@ class Client extends Model
     {
         return [
             'categorie_client' => ClientCategorie::class,
+            'delai_paiement_jours' => 'integer',
         ];
     }
 

@@ -28,6 +28,8 @@ class ClientResource extends JsonResource
             'code_postal' => $this->code_postal,
             'country' => $this->country,
             'devise' => $this->devise,
+            'delai_paiement_jours' => $this->delai_paiement_jours ?? 30,
+            'numero_fiscal' => $this->numero_fiscal,
             'categorie_client' => $this->categorie_client?->value ?? $this->categorie_client,
             'notes' => $this->notes,
             'created_at' => $this->created_at,

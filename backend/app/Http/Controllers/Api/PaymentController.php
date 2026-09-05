@@ -16,7 +16,9 @@ class PaymentController extends Controller
 {
     public function index(Request $request): AnonymousResourceCollection|JsonResponse
     {
-        $query = InvoicePayment::query()->orderByDesc('date_paiement');
+        $query = InvoicePayment::query()
+            ->with(['invoice:id,numero', 'client:id,name_company'])
+            ->orderByDesc('date_paiement');
 
         if ($request->filled('facture_id')) {
             $query->where('facture_id', $request->query('facture_id'));
@@ -50,6 +52,8 @@ class PaymentController extends Controller
             'reference' => $data['reference'] ?? null,
             'note' => $data['note'] ?? null,
         ]);
+
+        $payment->load(['invoice:id,numero', 'client:id,name_company']);
 
         return (new InvoicePaymentResource($payment))
             ->response()

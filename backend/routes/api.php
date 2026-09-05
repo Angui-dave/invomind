@@ -105,6 +105,8 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
             Route::get('/inboxes', [InboxController::class, 'index']);
             Route::post('/inboxes', [InboxController::class, 'store']);
+            Route::put('/inboxes/{id}', [InboxController::class, 'update']);
+            Route::post('/inboxes/{id}/test', [InboxController::class, 'testConnection']);
             Route::delete('/inboxes/{id}', [InboxController::class, 'destroy']);
             Route::post('/inboxes/{id}/templates/sync', [TemplateController::class, 'sync']);
         });

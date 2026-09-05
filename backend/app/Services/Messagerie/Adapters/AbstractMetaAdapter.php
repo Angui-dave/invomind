@@ -47,12 +47,58 @@ abstract class AbstractMetaAdapter implements CanalAdapterInterface
 
     abstract public function envoyerMessage(Inbox $boite, ConversationMessage $message, string $destinataireExterne): ResultatEnvoiDto;
 
+    public function souscrirePageWebhook(Inbox $boite): ResultatEnvoiDto
+    {
+        return new ResultatEnvoiDto(true, null);
+    }
+
+    public function verifierIdentifiants(Inbox $boite): ResultatEnvoiDto
+    {
+        return new ResultatEnvoiDto(true, null);
+    }
+
+    public function resoudreNomContact(Inbox $boite, string $externalId): ?string
+    {
+        return null;
+    }
+
     protected function graphUrl(string $path): string
     {
         $base = rtrim((string) config('messagerie.meta.graph_base'), '/');
         $version = (string) config('messagerie.meta.graph_version');
 
         return "{$base}/{$version}/".ltrim($path, '/');
+    }
+
+    /**
+     * @param  array<string, mixed>  $query
+     * @return array<string, mixed>|null
+     */
+    protected function getGraph(string $path, string $accessToken, array $query = []): ?array
+    {
+        try {
+            $response = Http::withToken($accessToken)
+                ->timeout(15)
+                ->get($this->graphUrl($path), $query);
+
+            if (! $response->successful()) {
+                Log::warning('Meta Graph GET failed', [
+                    'path' => $path,
+                    'status' => $response->status(),
+                    'body' => $response->json('error.message') ?? $response->body(),
+                ]);
+
+                return null;
+            }
+
+            $json = $response->json();
+
+            return is_array($json) ? $json : null;
+        } catch (\Throwable $e) {
+            Log::warning('Meta Graph GET exception', ['error' => $e->getMessage()]);
+
+            return null;
+        }
     }
 
     /**
@@ -81,6 +127,88 @@ abstract class AbstractMetaAdapter implements CanalAdapterInterface
 
             return new ResultatEnvoiDto(false, null, $e->getMessage());
         }
+    }
+
+    /**
+     * Shared Page webhook subscription for Messenger / Instagram (via Page).
+     *
+     * @param  list<string>  $fields
+     */
+    protected function subscribePageFields(Inbox $boite, array $fields): ResultatEnvoiDto
+    {
+        $creds = $boite->identifiants ?? [];
+        $token = (string) ($creds['access_token'] ?? '');
+        $pageId = (string) ($creds['page_id'] ?? '');
+
+        if ($token === '' || $pageId === '') {
+            return new ResultatEnvoiDto(false, null, 'Identifiants incomplets (access_token, page_id).');
+        }
+
+        try {
+            $response = Http::withToken($token)
+                ->timeout(15)
+                ->post($this->graphUrl("{$pageId}/subscribed_apps"), [
+                    'subscribed_fields' => implode(',', $fields),
+                ]);
+
+            if (! $response->successful()) {
+                $error = $response->json('error.message') ?? $response->body();
+
+                return new ResultatEnvoiDto(false, null, is_string($error) ? $error : 'Échec abonnement webhook');
+            }
+
+            $success = (bool) ($response->json('success') ?? true);
+
+            return $success
+                ? new ResultatEnvoiDto(true, $pageId)
+                : new ResultatEnvoiDto(false, null, 'Abonnement webhook refusé par Meta.');
+        } catch (\Throwable $e) {
+            Log::warning('Meta subscribed_apps failed', ['error' => $e->getMessage()]);
+
+            return new ResultatEnvoiDto(false, null, $e->getMessage());
+        }
+    }
+
+    protected function verifyPageCredentials(Inbox $boite): ResultatEnvoiDto
+    {
+        $creds = $boite->identifiants ?? [];
+        $token = (string) ($creds['access_token'] ?? '');
+        $pageId = (string) ($creds['page_id'] ?? '');
+
+        if ($token === '' || $pageId === '') {
+            return new ResultatEnvoiDto(false, null, 'Identifiants incomplets (access_token, page_id).');
+        }
+
+        $data = $this->getGraph($pageId, $token, ['fields' => 'id,name']);
+        if ($data === null || ! isset($data['id'])) {
+            return new ResultatEnvoiDto(false, null, 'Impossible de vérifier la Page (token ou page_id invalide).');
+        }
+
+        return new ResultatEnvoiDto(true, (string) $data['id']);
+    }
+
+    protected function resolvePageUserName(Inbox $boite, string $psid): ?string
+    {
+        $creds = $boite->identifiants ?? [];
+        $token = (string) ($creds['access_token'] ?? '');
+        if ($token === '' || $psid === '') {
+            return null;
+        }
+
+        $data = $this->getGraph($psid, $token, ['fields' => 'first_name,last_name,name']);
+        if ($data === null) {
+            return null;
+        }
+
+        if (isset($data['name']) && is_string($data['name']) && $data['name'] !== '') {
+            return $data['name'];
+        }
+
+        $first = isset($data['first_name']) && is_string($data['first_name']) ? $data['first_name'] : '';
+        $last = isset($data['last_name']) && is_string($data['last_name']) ? $data['last_name'] : '';
+        $full = trim("{$first} {$last}");
+
+        return $full !== '' ? $full : null;
     }
 
     /**
