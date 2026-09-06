@@ -3,7 +3,7 @@
 import { Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import { portalUrl } from "@/lib/mock-data";
+import { portalUrl } from "@/lib/data/clients";
 
 type PaymentLinkButtonProps = {
   token: string;

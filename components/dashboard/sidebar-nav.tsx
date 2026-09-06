@@ -22,12 +22,8 @@ import {
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
-import {
-  INVOICE_STATUS_LABELS,
-  QUOTE_STATUS_LABELS,
-  type CurrentUser,
-  type EnabledModules,
-} from "@/lib/mock-data";
+import { INVOICE_STATUS_LABELS, QUOTE_STATUS_LABELS } from "@/lib/documents";
+import type { CurrentUser, EnabledModules } from "@/lib/data/settings";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/rbac/types";
 import { ADMIN_ONLY_ROUTES, AGENT_DEFAULT_ROUTE } from "@/lib/rbac/policy";
@@ -59,6 +55,7 @@ const INVOICE_STATUS_LINKS: NavChild[] = (
   [
     "draft",
     "sent",
+    "unpaid",
     "partially_paid",
     "paid",
     "overdue",
@@ -69,6 +66,14 @@ const INVOICE_STATUS_LINKS: NavChild[] = (
   label: INVOICE_STATUS_LABELS[status],
   status,
 }));
+
+const CONVERSATION_CHANNEL_LINKS: NavChild[] = [
+  { href: "/conversations", label: "Tous les canaux", status: "all" },
+  { href: "/conversations?channel=whatsapp", label: "WhatsApp", status: "whatsapp" },
+  { href: "/conversations?channel=messenger", label: "Messenger", status: "messenger" },
+  { href: "/conversations?channel=instagram", label: "Instagram", status: "instagram" },
+  { href: "/conversations?channel=tiktok", label: "TikTok", status: "tiktok" },
+];
 
 function slugifyNavId(label: string) {
   return label
@@ -128,12 +133,16 @@ function StatusSubnavWithParams({
   onNavigate?: () => void;
 }) {
   const searchParams = useSearchParams();
+  const activeParam =
+    basePath === "/conversations"
+      ? (searchParams.get("channel") ?? "all")
+      : searchParams.get("status");
   return (
     <StatusSubnav
       links={links}
       basePath={basePath}
       onNavigate={onNavigate}
-      activeStatus={searchParams.get("status")}
+      activeStatus={activeParam}
     />
   );
 }
@@ -212,6 +221,7 @@ export function SidebarNav({
           icon: MessagesSquare,
           module: "conversations",
           badgeCount: unreadCount,
+          children: CONVERSATION_CHANNEL_LINKS,
         },
         { href: "/payments", label: "Paiements", icon: Wallet },
         {

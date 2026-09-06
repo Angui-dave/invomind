@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Package, Plus } from "lucide-react";
 import { toast } from "sonner";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -30,7 +31,7 @@ import {
 } from "@/components/ui/table";
 import { createCatalogItem, updateCatalogItem } from "@/lib/actions/catalog";
 import type { CatalogItem } from "@/lib/data/catalog";
-import { formatMoney } from "@/lib/mock-data";
+import { formatMoney } from "@/lib/money";
 import type { CurrencyCode } from "@/lib/money";
 
 type CatalogPageClientProps = {
@@ -48,15 +49,7 @@ export function CatalogPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Catalogue
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Prestations et articles réutilisables
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button
           type="button"
           className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
@@ -70,6 +63,26 @@ export function CatalogPageClient({
         </Button>
       </div>
 
+      {items.length === 0 ? (
+        <PageEmptyState
+          icon={Package}
+          title="Catalogue vide"
+          description="Ajoutez des prestations ou articles réutilisables sur vos devis et factures."
+          action={
+            <Button
+              type="button"
+              className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus className="size-4" aria-hidden />
+              Ajouter
+            </Button>
+          }
+        />
+      ) : (
       <div className="overflow-hidden rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
@@ -112,6 +125,7 @@ export function CatalogPageClient({
           </TableBody>
         </Table>
       </div>
+      )}
 
       <CatalogDialog
         key={editing?.id ?? "new"}

@@ -4,12 +4,8 @@ import { Search } from "lucide-react";
 import { ChannelBadge } from "@/components/conversations/channel-badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
-import {
-  conversationStampFr,
-  type Conversation,
-  type ConversationChannel,
-  type ConversationMessage,
-} from "@/lib/mock-data";
+import { conversationStampFr } from "@/lib/formatters";
+import type { Conversation, ConversationChannel, ConversationMessage } from "@/lib/data/conversations";
 import { cn } from "@/lib/utils";
 
 export type ChannelFilter = "all" | ConversationChannel;
@@ -19,20 +15,10 @@ type ConversationListProps = {
   messages: ConversationMessage[];
   selectedId: string | null;
   query: string;
-  channelFilter: ChannelFilter;
   onQueryChange: (value: string) => void;
-  onChannelFilterChange: (value: ChannelFilter) => void;
   onSelect: (id: string) => void;
   className?: string;
 };
-
-const FILTERS: { value: ChannelFilter; label: string }[] = [
-  { value: "all", label: "Tous" },
-  { value: "whatsapp", label: "WA" },
-  { value: "messenger", label: "FB" },
-  { value: "instagram", label: "IG" },
-  { value: "tiktok", label: "TT" },
-];
 
 function previewFor(
   conversationId: string,
@@ -51,14 +37,12 @@ export function ConversationList({
   messages,
   selectedId,
   query,
-  channelFilter,
   onQueryChange,
-  onChannelFilterChange,
   onSelect,
   className,
 }: ConversationListProps) {
   return (
-    <div className={cn("flex h-full min-h-0 flex-col", className)}>
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden", className)}>
       <div className="space-y-3 border-b border-line p-3">
         <div className="relative">
           <Search
@@ -73,30 +57,9 @@ export function ConversationList({
             aria-label="Rechercher une conversation"
           />
         </div>
-        <div
-          className="flex gap-1 rounded-full border border-line bg-muted/40 p-0.5"
-          role="group"
-          aria-label="Filtrer par canal"
-        >
-          {FILTERS.map((filter) => (
-            <button
-              key={filter.value}
-              type="button"
-              onClick={() => onChannelFilterChange(filter.value)}
-              className={cn(
-                "flex-1 rounded-full px-2 py-1.5 text-xs font-medium transition-ledger",
-                channelFilter === filter.value
-                  ? "bg-paper text-ink shadow-sm"
-                  : "text-ink/55 hover:text-ink",
-              )}
-            >
-              {filter.label}
-            </button>
-          ))}
-        </div>
       </div>
 
-      <ul className="min-h-0 flex-1 overflow-y-auto" role="list">
+      <ul className="min-h-0 flex-1 overflow-y-auto overscroll-contain" role="list">
         {conversations.length === 0 ? (
           <li className="px-4 py-8 text-center text-sm text-ink/55">
             Aucune conversation ne correspond à ces critères.
@@ -136,7 +99,7 @@ export function ConversationList({
                       <span className="truncate text-sm font-medium text-ink">
                         {conversation.contactName}
                       </span>
-                      <span className="num shrink-0 text-[11px] text-ink/45">
+                      <span className="num shrink-0 text-[11px] text-ink/45" suppressHydrationWarning>
                         {conversationStampFr(conversation.lastMessageAt)}
                       </span>
                     </span>

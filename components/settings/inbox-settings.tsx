@@ -14,7 +14,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createInbox, deleteInbox } from "@/lib/actions/inboxes";
+import {
+  createInbox,
+  deleteInbox,
+  testInboxConnection,
+  updateInbox,
+} from "@/lib/actions/inboxes";
 import { CHANNEL_LABELS, type ConversationChannel } from "@/lib/data/conversations";
 
 type InboxRow = {
@@ -24,19 +29,34 @@ type InboxRow = {
   mode: string;
   connectionStatus: string;
   active: boolean;
+  maskedCredentials?: Record<string, unknown>;
+};
+
+type InboxMode = "fake" | "sandbox" | "production";
+
+const emptyForm = {
+  canal: "messenger" as ConversationChannel,
+  nom: "",
+  mode: "production" as InboxMode,
+  externalId: "",
+  accessToken: "",
+  phoneNumberId: "",
+  wabaId: "",
+  pageId: "",
+  igBusinessId: "",
 };
 
 export function InboxSettings() {
   const [inboxes, setInboxes] = useState<InboxRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pending, startTransition] = useTransition();
-  const [canal, setCanal] = useState<ConversationChannel>("whatsapp");
-  const [nom, setNom] = useState("");
-  const [mode, setMode] = useState<"fake" | "sandbox" | "production">("fake");
-  const [externalId, setExternalId] = useState("fake-inbox");
-  const [accessToken, setAccessToken] = useState("");
-  const [phoneNumberId, setPhoneNumberId] = useState("");
-  const [pageId, setPageId] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+
+  const apiBase =
+    process.env.NEXT_PUBLIC_LARAVEL_API_URL?.replace(/\/$/, "") ??
+    "http://localhost:8000/api";
+  const webhookCallbackUrl = `${apiBase}/webhooks/meta`;
 
   async function reload() {
     setLoading(true);
@@ -59,29 +79,108 @@ export function InboxSettings() {
     void reload();
   }, []);
 
-  function handleCreate() {
-    if (!nom.trim()) {
+  function setField<K extends keyof typeof emptyForm>(
+    key: K,
+    value: (typeof emptyForm)[K],
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function resetForm() {
+    setEditingId(null);
+    setForm(emptyForm);
+  }
+
+  function startEdit(inbox: InboxRow) {
+    const masked = inbox.maskedCredentials ?? {};
+    setEditingId(inbox.id);
+    setForm({
+      canal: inbox.channel,
+      nom: inbox.name,
+      mode: (inbox.mode as InboxMode) || "production",
+      externalId: String(masked.external_id ?? ""),
+      accessToken: "",
+      phoneNumberId: String(masked.phone_number_id ?? ""),
+      wabaId: String(masked.waba_id ?? ""),
+      pageId: String(masked.page_id ?? ""),
+      igBusinessId: String(masked.ig_business_id ?? ""),
+    });
+  }
+
+  function buildIdentifiants() {
+    const identifiants: Record<string, string | undefined> = {};
+    if (form.mode === "fake") {
+      identifiants.external_id = form.externalId || "fake-inbox";
+    }
+    if (form.accessToken) identifiants.access_token = form.accessToken;
+    if (form.canal === "whatsapp") {
+      if (form.phoneNumberId) identifiants.phone_number_id = form.phoneNumberId;
+      if (form.wabaId) identifiants.waba_id = form.wabaId;
+    }
+    if (form.canal === "messenger" || form.canal === "instagram") {
+      if (form.pageId) identifiants.page_id = form.pageId;
+    }
+    if (form.canal === "instagram" && form.igBusinessId) {
+      identifiants.ig_business_id = form.igBusinessId;
+    }
+    return identifiants;
+  }
+
+  function handleSubmit() {
+    if (!form.nom.trim()) {
       toast.error("Nom requis");
       return;
     }
+    if (
+      form.mode !== "fake" &&
+      (form.canal === "messenger" || form.canal === "instagram") &&
+      !form.pageId.trim() &&
+      !editingId
+    ) {
+      toast.error("Page ID requis pour Messenger / Instagram");
+      return;
+    }
+    if (
+      form.mode !== "fake" &&
+      form.canal === "whatsapp" &&
+      !form.phoneNumberId.trim() &&
+      !editingId
+    ) {
+      toast.error("Phone number ID requis pour WhatsApp");
+      return;
+    }
+
     startTransition(async () => {
-      const result = await createInbox({
-        canal,
-        nom: nom.trim(),
-        mode,
-        identifiants: {
-          external_id: externalId || undefined,
-          access_token: accessToken || undefined,
-          phone_number_id: phoneNumberId || undefined,
-          page_id: pageId || undefined,
-        },
-      });
+      const payload = {
+        canal: form.canal,
+        nom: form.nom.trim(),
+        mode: form.mode,
+        identifiants: buildIdentifiants(),
+      };
+
+      const result = editingId
+        ? await updateInbox(editingId, payload)
+        : await createInbox(payload);
+
       if (result.ok) {
-        toast.success("Boîte connectée");
-        setNom("");
+        toast.success(editingId ? "Boîte mise à jour" : "Boîte connectée");
+        resetForm();
         await reload();
       } else {
         toast.error(result.error);
+      }
+    });
+  }
+
+  function handleTest(id: string) {
+    startTransition(async () => {
+      const result = await testInboxConnection(id);
+      if (result.ok) {
+        toast.success(result.message ?? "Connexion OK — Page abonnée au webhook");
+        await reload();
+      } else {
+        toast.error(result.error);
+        await reload();
       }
     });
   }
@@ -91,6 +190,7 @@ export function InboxSettings() {
       const result = await deleteInbox(id);
       if (result.ok) {
         toast.success("Boîte supprimée");
+        if (editingId === id) resetForm();
         await reload();
       } else {
         toast.error(result.error);
@@ -98,15 +198,60 @@ export function InboxSettings() {
     });
   }
 
+  const showWhatsAppFields = form.canal === "whatsapp";
+  const showPageFields =
+    form.canal === "messenger" || form.canal === "instagram";
+  const showIgFields = form.canal === "instagram";
+  const showFakeId = form.mode === "fake";
+
   return (
     <div className="space-y-6">
+      <LedgerCard className="p-6">
+        <h3 className="font-serif text-lg font-semibold text-ink">
+          Webhook Meta (Messenger / WhatsApp / Instagram)
+        </h3>
+        <p className="mt-1 text-sm text-ink/60">
+          Dans Meta Developer → Messenger → Webhooks, utilisez ces valeurs. En
+          local, exposez l’API avec{" "}
+          <code className="rounded bg-muted px-1 text-xs">ngrok http 8000</code>{" "}
+          et remplacez l’hôte ci-dessous.
+        </p>
+        <dl className="mt-4 space-y-2 text-sm">
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+            <dt className="shrink-0 font-medium text-ink/70">Callback URL</dt>
+            <dd className="break-all rounded-lg border border-line bg-muted/40 px-3 py-1.5 font-mono text-xs text-ink">
+              {webhookCallbackUrl.replace(
+                "http://localhost:8000",
+                "https://<votre-sous-domaine>.ngrok-free.app",
+              )}
+            </dd>
+          </div>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+            <dt className="shrink-0 font-medium text-ink/70">Verify Token</dt>
+            <dd className="rounded-lg border border-line bg-muted/40 px-3 py-1.5 font-mono text-xs text-ink">
+              valeur de <code>META_VERIFY_TOKEN</code> (backend .env)
+            </dd>
+          </div>
+          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
+            <dt className="shrink-0 font-medium text-ink/70">Champs</dt>
+            <dd className="text-ink/70">
+              <code className="text-xs">messages</code>,{" "}
+              <code className="text-xs">messaging_postbacks</code>, optionnel{" "}
+              <code className="text-xs">message_deliveries</code> /{" "}
+              <code className="text-xs">message_reads</code>
+            </dd>
+          </div>
+        </dl>
+      </LedgerCard>
+
       <LedgerCard className="p-6">
         <h3 className="font-serif text-lg font-semibold text-ink">
           Boîtes de réception (canaux)
         </h3>
         <p className="mt-1 text-sm text-ink/60">
           Connectez WhatsApp, Messenger ou Instagram. Mode « fake » pour tester
-          sans credentials Meta. Voir docs/MESSAGERIE.md.
+          sans credentials Meta. Après création en production, cliquez sur
+          « Tester / Connecter » pour valider le token et abonner la Page.
         </p>
         <div className="mt-4">
           {loading ? (
@@ -133,16 +278,39 @@ export function InboxSettings() {
                       {inbox.channel === "tiktok"
                         ? " — TikTok désactivé (bientôt disponible)"
                         : ""}
+                      {inbox.maskedCredentials?.page_id
+                        ? ` · Page ${String(inbox.maskedCredentials.page_id)}`
+                        : ""}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={pending}
-                    onClick={() => handleDelete(inbox.id)}
-                  >
-                    Déconnecter
-                  </Button>
+                  <div className="flex flex-wrap gap-2">
+                    {inbox.mode !== "fake" ? (
+                      <Button
+                        variant="default"
+                        size="sm"
+                        disabled={pending}
+                        onClick={() => handleTest(inbox.id)}
+                      >
+                        Tester / Connecter
+                      </Button>
+                    ) : null}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => startEdit(inbox)}
+                    >
+                      Modifier
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={pending}
+                      onClick={() => handleDelete(inbox.id)}
+                    >
+                      Déconnecter
+                    </Button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -152,18 +320,19 @@ export function InboxSettings() {
 
       <LedgerCard className="p-6">
         <h3 className="font-serif text-lg font-semibold text-ink">
-          Ajouter une boîte
+          {editingId ? "Modifier la boîte" : "Ajouter une boîte"}
         </h3>
         <p className="mt-1 text-sm text-ink/60">
-          En V1, saisie manuelle des tokens / IDs. OAuth Meta Embedded Signup
-          prévu en V2.
+          Saisie manuelle des tokens / IDs. En édition, laissez le token vide
+          pour conserver l’existant. OAuth Meta Embedded Signup prévu en V2.
         </p>
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="space-y-2">
             <Label>Canal</Label>
             <Select
-              value={canal}
-              onValueChange={(v) => setCanal(v as ConversationChannel)}
+              value={form.canal}
+              onValueChange={(v) => setField("canal", v as ConversationChannel)}
+              disabled={Boolean(editingId)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -181,10 +350,8 @@ export function InboxSettings() {
           <div className="space-y-2">
             <Label>Mode</Label>
             <Select
-              value={mode}
-              onValueChange={(v) =>
-                setMode(v as "fake" | "sandbox" | "production")
-              }
+              value={form.mode}
+              onValueChange={(v) => setField("mode", v as InboxMode)}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -199,47 +366,95 @@ export function InboxSettings() {
           <div className="space-y-2 sm:col-span-2">
             <Label>Nom affiché</Label>
             <Input
-              value={nom}
-              onChange={(e) => setNom(e.target.value)}
-              placeholder="Ex. WhatsApp commercial"
+              value={form.nom}
+              onChange={(e) => setField("nom", e.target.value)}
+              placeholder={
+                form.canal === "messenger"
+                  ? "Ex. Messenger boutique"
+                  : "Ex. WhatsApp commercial"
+              }
             />
           </div>
-          <div className="space-y-2">
-            <Label>External ID (fake / résolution webhook)</Label>
-            <Input
-              value={externalId}
-              onChange={(e) => setExternalId(e.target.value)}
-              placeholder="fake-inbox"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Access token Meta</Label>
-            <Input
-              type="password"
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
-              placeholder="Optionnel en mode fake"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Phone number ID (WhatsApp)</Label>
-            <Input
-              value={phoneNumberId}
-              onChange={(e) => setPhoneNumberId(e.target.value)}
-            />
-          </div>
-          <div className="space-y-2">
-            <Label>Page ID (Messenger / IG)</Label>
-            <Input
-              value={pageId}
-              onChange={(e) => setPageId(e.target.value)}
-            />
-          </div>
+
+          {showFakeId ? (
+            <div className="space-y-2 sm:col-span-2">
+              <Label>External ID (résolution webhook fake)</Label>
+              <Input
+                value={form.externalId}
+                onChange={(e) => setField("externalId", e.target.value)}
+                placeholder="fake-inbox"
+              />
+            </div>
+          ) : null}
+
+          {!showFakeId ? (
+            <div className="space-y-2 sm:col-span-2">
+              <Label>
+                Access token Meta
+                {editingId ? " (laisser vide pour conserver)" : ""}
+              </Label>
+              <Input
+                type="password"
+                value={form.accessToken}
+                onChange={(e) => setField("accessToken", e.target.value)}
+                placeholder={
+                  form.canal === "messenger"
+                    ? "Page Access Token"
+                    : "Token Meta"
+                }
+              />
+            </div>
+          ) : null}
+
+          {showWhatsAppFields && !showFakeId ? (
+            <>
+              <div className="space-y-2">
+                <Label>Phone number ID</Label>
+                <Input
+                  value={form.phoneNumberId}
+                  onChange={(e) => setField("phoneNumberId", e.target.value)}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>WABA ID</Label>
+                <Input
+                  value={form.wabaId}
+                  onChange={(e) => setField("wabaId", e.target.value)}
+                />
+              </div>
+            </>
+          ) : null}
+
+          {showPageFields && !showFakeId ? (
+            <div className="space-y-2">
+              <Label>Page ID (Facebook)</Label>
+              <Input
+                value={form.pageId}
+                onChange={(e) => setField("pageId", e.target.value)}
+                placeholder="ID numérique de la Page"
+              />
+            </div>
+          ) : null}
+
+          {showIgFields && !showFakeId ? (
+            <div className="space-y-2">
+              <Label>Instagram Business ID</Label>
+              <Input
+                value={form.igBusinessId}
+                onChange={(e) => setField("igBusinessId", e.target.value)}
+              />
+            </div>
+          ) : null}
         </div>
-        <div className="mt-4">
-          <Button disabled={pending} onClick={handleCreate}>
-            Connecter
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Button disabled={pending} onClick={handleSubmit}>
+            {editingId ? "Enregistrer" : "Créer la boîte"}
           </Button>
+          {editingId ? (
+            <Button variant="outline" disabled={pending} onClick={resetForm}>
+              Annuler
+            </Button>
+          ) : null}
         </div>
       </LedgerCard>
     </div>

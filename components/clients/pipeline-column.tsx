@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { PipelineCard } from "@/components/clients/pipeline-card";
-import type { PipelineStage, Prospect } from "@/lib/mock-data";
+import type { PipelineStage, Prospect } from "@/lib/data/settings";
 
 type PipelineColumnProps = {
   title: string;

@@ -1,29 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ImagePlus, Link2, Send, UserRound, X } from "lucide-react";
-import { toast } from "sonner";
+import { useEffect, useMemo, useRef } from "react";
+import { ArrowLeft, UserRound } from "lucide-react";
 import { ChannelBadge } from "@/components/conversations/channel-badge";
+import {
+  ConversationComposer,
+  type SendPayload,
+} from "@/components/conversations/conversation-composer";
 import { MessageBubble } from "@/components/conversations/message-bubble";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  formatDateFr,
-  latestOpenInvoiceToken,
-  portalUrl,
-  type BusinessDocument,
-  type Conversation,
-  type ConversationMessage,
-} from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
+import type { BusinessDocument } from "@/lib/documents";
+import type { Conversation, ConversationMessage } from "@/lib/data/conversations";
 import { todayIso } from "@/lib/date";
 import { cn } from "@/lib/utils";
 
-export type SendPayload = {
-  body: string;
-  contentType?: "texte" | "image" | "fichier" | "audio" | "video" | "modele";
-  mediaUrl?: string;
-};
+export type { SendPayload };
 
 type ConversationThreadProps = {
   conversation: Conversation | null;
@@ -50,16 +42,6 @@ function dayLabel(isoDate: string): string {
   return formatDateFr(isoDate);
 }
 
-function detectContentType(
-  url: string,
-): "image" | "audio" | "video" | "fichier" {
-  const lower = url.toLowerCase();
-  if (/\.(png|jpe?g|gif|webp|bmp)(\?|$)/.test(lower)) return "image";
-  if (/\.(mp3|ogg|opus|wav|m4a)(\?|$)/.test(lower)) return "audio";
-  if (/\.(mp4|webm|mov)(\?|$)/.test(lower)) return "video";
-  return "fichier";
-}
-
 export function ConversationThread({
   conversation,
   messages,
@@ -70,9 +52,6 @@ export function ConversationThread({
   composeExtra,
   className,
 }: ConversationThreadProps) {
-  const [draft, setDraft] = useState("");
-  const [mediaUrl, setMediaUrl] = useState("");
-  const [showMediaInput, setShowMediaInput] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const conversationId = conversation?.id;
 
@@ -92,42 +71,6 @@ export function ConversationThread({
     if (!el) return;
     el.scrollTop = el.scrollHeight;
   }, [messages, conversationId]);
-
-  function handleSend() {
-    const body = draft.trim();
-    const media = mediaUrl.trim();
-    if (!body && !media) {
-      toast.error("Le message ne peut pas être vide");
-      return;
-    }
-    if (media) {
-      void onSend({
-        body: body || "[média]",
-        contentType: detectContentType(media),
-        mediaUrl: media,
-      });
-    } else {
-      void onSend({ body, contentType: "texte" });
-    }
-    setDraft("");
-    setMediaUrl("");
-    setShowMediaInput(false);
-  }
-
-  function insertPaymentLink() {
-    if (!conversation?.clientId) {
-      toast.error("Aucun client associé pour un lien de paiement");
-      return;
-    }
-    const token = latestOpenInvoiceToken(conversation.clientId, invoices);
-    if (!token) {
-      toast.error("Aucune facture ouverte pour ce client");
-      return;
-    }
-    const url = portalUrl(token);
-    setDraft((prev) => (prev.trim() ? `${prev.trim()}\n${url}` : url));
-    toast.success("Lien de paiement inséré");
-  }
 
   if (!conversation) {
     return (
@@ -149,8 +92,8 @@ export function ConversationThread({
   }
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col bg-paper", className)}>
-      <header className="flex items-center gap-2 border-b border-line px-3 py-2.5 sm:px-4">
+    <div className={cn("flex h-full min-h-0 flex-col overflow-hidden bg-paper", className)}>
+      <header className="flex shrink-0 items-center gap-2 border-b border-line px-3 py-2.5 sm:px-4">
         {onBack && (
           <Button
             type="button"
@@ -193,13 +136,13 @@ export function ConversationThread({
         role="log"
         aria-live="polite"
         aria-relevant="additions"
-        className="min-h-0 flex-1 space-y-4 overflow-y-auto px-3 py-4 sm:px-4"
+        className="min-h-0 flex-1 space-y-4 overflow-x-hidden overflow-y-auto overscroll-contain px-3 py-4 sm:px-4"
       >
         {groups.map(([day, dayMessages]) => (
           <div key={day} className="space-y-3">
             <div className="flex items-center gap-3">
               <div className="h-px flex-1 bg-line" />
-              <span className="text-[11px] font-medium text-ink/45">
+              <span className="text-[11px] font-medium text-ink/45" suppressHydrationWarning>
                 {dayLabel(day)}
               </span>
               <div className="h-px flex-1 bg-line" />
@@ -215,78 +158,12 @@ export function ConversationThread({
         ))}
       </div>
 
-      <div className="border-t border-line p-3 sm:p-4">
-        <div className="mb-2 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={insertPaymentLink}
-            disabled={!conversation.clientId}
-          >
-            <Link2 className="size-3.5" aria-hidden />
-            Insérer le lien de paiement
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setShowMediaInput((v) => !v)}
-          >
-            <ImagePlus className="size-3.5" aria-hidden />
-            Média
-          </Button>
-          {composeExtra}
-        </div>
-        {showMediaInput && (
-          <div className="mb-2 flex items-center gap-2">
-            <Input
-              value={mediaUrl}
-              onChange={(e) => setMediaUrl(e.target.value)}
-              placeholder="URL publique du média (https://…)"
-              className="h-9"
-            />
-            {mediaUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setMediaUrl("")}
-                aria-label="Retirer le média"
-              >
-                <X className="size-3.5" aria-hidden />
-              </Button>
-            )}
-          </div>
-        )}
-        <div className="flex items-end gap-2">
-          <Textarea
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            placeholder="Écrire un message…"
-            className="min-h-[44px] max-h-32 resize-none rounded-2xl"
-            rows={2}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-          />
-          <Button
-            type="button"
-            className="h-10 shrink-0 rounded-full bg-ledger text-paper hover:bg-ledger/90"
-            onClick={handleSend}
-            aria-label="Envoyer"
-          >
-            <Send className="size-4" aria-hidden />
-          </Button>
-        </div>
-        <p className="mt-1.5 text-[11px] text-ink/40">
-          Entrée pour envoyer · Maj+Entrée pour une nouvelle ligne
-          {mediaUrl ? " · média joint" : ""}
-        </p>
-      </div>
+      <ConversationComposer
+        conversation={conversation}
+        invoices={invoices}
+        onSend={onSend}
+        composeExtra={composeExtra}
+      />
     </div>
   );
 }

@@ -92,12 +92,34 @@ class ReportController extends Controller
             ->where('statut', DepenseStatut::Validee->value)
             ->sum('montant_ttc');
 
+        $monthBilledTtc = (float) Invoice::query()
+            ->whereIn('statut', self::BILLABLE)
+            ->whereDate('date_creation', '>=', $monthStart)
+            ->whereDate('date_creation', '<=', $monthEnd)
+            ->sum('montant_total');
+
+        $invoicesByStatus = Invoice::query()
+            ->select(['statut', DB::raw('COUNT(*) as count'), DB::raw('COALESCE(SUM(montant_total), 0) as total')])
+            ->groupBy('statut')
+            ->get()
+            ->map(fn ($row) => [
+                'status' => $row->statut instanceof FactureStatut
+                    ? $row->statut->value
+                    : (string) $row->statut,
+                'count' => (int) $row->count,
+                'total' => (float) $row->total,
+            ])
+            ->values()
+            ->all();
+
         return response()->json([
             'organization_id' => $orgaId,
             'month_revenue' => $monthRevenue,
+            'month_billed_ttc' => $monthBilledTtc,
             'pending_invoice_count' => $pendingInvoiceCount,
             'overdue_invoice_count' => $overdueInvoiceCount,
             'revenue_by_month' => $revenueByMonth,
+            'invoices_by_status' => $invoicesByStatus,
             'top_clients' => $topClients,
             'clients' => Client::query()->count(),
             'quotes' => Quote::query()->count(),
@@ -164,7 +186,7 @@ class ReportController extends Controller
         $vatByRate = InvoiceLine::query()
             ->select([
                 'facture_lignes.taux_tva as rate',
-                DB::raw('COALESCE(SUM(facture_lignes.montant_ht * facture_lignes.taux_tva / 100), 0) as amount'),
+                DB::raw('COALESCE(SUM(facture_lignes.montant_tva), 0) as amount'),
             ])
             ->join('factures', 'factures.id', '=', 'facture_lignes.facture_id')
             ->whereIn('factures.statut', self::BILLABLE)

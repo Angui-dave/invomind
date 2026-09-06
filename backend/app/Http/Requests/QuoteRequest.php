@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\OrgRules;
 use Illuminate\Foundation\Http\FormRequest;
 
 class QuoteRequest extends FormRequest
@@ -14,7 +15,7 @@ class QuoteRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
+            'client_id' => ['required', 'integer', OrgRules::exists('clients')],
             'numero' => ['nullable', 'string', 'max:50'],
             'date_validite' => ['nullable', 'date'],
             'devise' => ['nullable', 'string', 'size:3'],
@@ -22,7 +23,7 @@ class QuoteRequest extends FormRequest
             'note' => ['nullable', 'string'],
             'statut' => ['sometimes', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.produit_id' => ['nullable', 'integer', 'exists:produits_services,id'],
+            'lines.*.produit_id' => ['nullable', 'integer', OrgRules::exists('produits_services')],
             'lines.*.designation' => ['required', 'string', 'max:255'],
             'lines.*.quantite' => ['required', 'numeric', 'gt:0'],
             'lines.*.prix_unitaire' => ['required', 'numeric', 'min:0'],

@@ -37,6 +37,7 @@ class QuoteResource extends JsonResource
                 'taux_tva' => $line->taux_tva,
                 'remise_pourcentage' => $line->remise_pourcentage,
                 'montant_ht' => $line->montant_ht,
+                'montant_tva' => $line->montant_tva,
                 'ordre' => $line->ordre,
             ])),
             'created_at' => $this->created_at,

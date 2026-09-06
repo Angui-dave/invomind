@@ -1,7 +1,10 @@
+/** Reports DAL — Laravel overview/dashboard alignés sur le contrat financier. */
+
 import "server-only";
 import { cache } from "react";
 import {
-  expenseHt,
+  expensesTotalHt as sumExpensesHt,
+  expensesTotalTtc as sumExpensesTtc,
   type RevenuePoint,
   type TopClientRevenue,
 } from "@/lib/data/derive";
@@ -15,15 +18,13 @@ import { getApiContext } from "@/lib/laravel/context";
 import { computeTotals } from "@/lib/tax";
 import { invoiceStatusFromApi } from "@/lib/laravel/enums";
 import type { InvoiceStatus } from "@/lib/documents";
+import {
+  BILLABLE_INVOICE_STATUSES as BILLABLE,
+  PENDING_INVOICE_STATUSES as PENDING,
+  isOverdueInvoice,
+} from "@/lib/domain/invoices";
 
 export type { RevenuePoint, TopClientRevenue };
-
-const BILLABLE: InvoiceStatus[] = [
-  "sent",
-  "partially_paid",
-  "paid",
-  "overdue",
-];
 
 const MONTH_LABELS_FR: Record<string, string> = {
   "01": "Jan",
@@ -42,15 +43,26 @@ const MONTH_LABELS_FR: Record<string, string> = {
 
 type ApiDashboard = {
   month_revenue: number | string;
+  month_billed_ttc?: number | string;
   overdue_invoice_count: number;
   pending_invoice_count: number;
   revenue_by_month: Array<{ month: string; total: number | string }>;
-  top_clients: Array<{ client_name: string; total: number | string }>;
+  invoices_by_status?: Array<{
+    status: string;
+    count: number;
+    total: number | string;
+  }>;
+  top_clients: Array<{
+    client_id?: string | number;
+    client_name: string;
+    total: number | string;
+  }>;
 };
 
 type ApiOverview = {
   total_revenue: number | string;
   total_expenses: number | string;
+  total_expenses_ht?: number | string;
   net_profit: number | string;
   invoices_by_status: Array<{
     status: string;
@@ -85,81 +97,68 @@ function monthsBack(count: number): string[] {
 }
 
 const fetchDashboard = cache(async (): Promise<ApiDashboard> => {
-  try {
-    const { token, organizationId } = await getApiContext();
-    const row = await laravelRequest<Partial<ApiDashboard>>("/reports/dashboard", {
-      token,
-      organizationId,
-    });
-    return {
-      month_revenue: num(row.month_revenue),
-      overdue_invoice_count: Number(row.overdue_invoice_count ?? 0),
-      pending_invoice_count: Number(row.pending_invoice_count ?? 0),
-      revenue_by_month: Array.isArray(row.revenue_by_month)
-        ? row.revenue_by_month.map((item) => ({
-            month: String(item.month ?? ""),
-            total: num(item.total),
-          }))
-        : [],
-      top_clients: Array.isArray(row.top_clients)
-        ? row.top_clients.map((item) => ({
-            client_name: String(item.client_name ?? ""),
-            total: num(item.total),
-          }))
-        : [],
-    };
-  } catch (error) {
-    console.error("fetchDashboard failed", error);
-    return {
-      month_revenue: 0,
-      overdue_invoice_count: 0,
-      pending_invoice_count: 0,
-      revenue_by_month: [],
-      top_clients: [],
-    };
-  }
+  const { token, organizationId } = await getApiContext();
+  const row = await laravelRequest<Partial<ApiDashboard>>("/reports/dashboard", {
+    token,
+    organizationId,
+  });
+  return {
+    month_revenue: num(row.month_revenue),
+    month_billed_ttc: row.month_billed_ttc,
+    overdue_invoice_count: Number(row.overdue_invoice_count ?? 0),
+    pending_invoice_count: Number(row.pending_invoice_count ?? 0),
+    invoices_by_status: Array.isArray(row.invoices_by_status)
+      ? row.invoices_by_status.map((item) => ({
+          status: invoiceStatusFromApi(String(item.status ?? "")),
+          count: Number(item.count ?? 0),
+          total: num(item.total),
+        }))
+      : [],
+    revenue_by_month: Array.isArray(row.revenue_by_month)
+      ? row.revenue_by_month.map((item) => ({
+          month: String(item.month ?? ""),
+          total: num(item.total),
+        }))
+      : [],
+    top_clients: Array.isArray(row.top_clients)
+      ? row.top_clients.map((item) => ({
+          client_id: item.client_id,
+          client_name: String(item.client_name ?? ""),
+          total: num(item.total),
+        }))
+      : [],
+  };
 });
 
 const fetchOverview = cache(async (): Promise<ApiOverview> => {
-  try {
-    const { token, organizationId } = await getApiContext();
-    const row = await laravelRequest<Partial<ApiOverview>>("/reports/overview", {
-      token,
-      organizationId,
-    });
-    return {
-      total_revenue: num(row.total_revenue),
-      total_expenses: num(row.total_expenses),
-      net_profit: num(row.net_profit),
-      invoices_by_status: Array.isArray(row.invoices_by_status)
-        ? row.invoices_by_status.map((item) => ({
-            status: invoiceStatusFromApi(String(item.status ?? "")),
-            count: Number(item.count ?? 0),
-            total: num(item.total),
-          }))
-        : [],
-      expenses_by_category: Array.isArray(row.expenses_by_category)
-        ? row.expenses_by_category
-        : [],
-      billed_ht: row.billed_ht,
-      billed_ttc: row.billed_ttc,
-      vat_collected: row.vat_collected,
-      vat_by_rate: Array.isArray(row.vat_by_rate) ? row.vat_by_rate : [],
-      paid_invoice_count: row.paid_invoice_count,
-      pending_invoice_count: row.pending_invoice_count,
-      overdue_invoice_count: row.overdue_invoice_count,
-    };
-  } catch (error) {
-    console.error("fetchOverview failed", error);
-    return {
-      total_revenue: 0,
-      total_expenses: 0,
-      net_profit: 0,
-      invoices_by_status: [],
-      expenses_by_category: [],
-      vat_by_rate: [],
-    };
-  }
+  const { token, organizationId } = await getApiContext();
+  const row = await laravelRequest<Partial<ApiOverview>>("/reports/overview", {
+    token,
+    organizationId,
+  });
+  return {
+    total_revenue: num(row.total_revenue),
+    total_expenses: num(row.total_expenses),
+    total_expenses_ht: row.total_expenses_ht,
+    net_profit: num(row.net_profit),
+    invoices_by_status: Array.isArray(row.invoices_by_status)
+      ? row.invoices_by_status.map((item) => ({
+          status: invoiceStatusFromApi(String(item.status ?? "")),
+          count: Number(item.count ?? 0),
+          total: num(item.total),
+        }))
+      : [],
+    expenses_by_category: Array.isArray(row.expenses_by_category)
+      ? row.expenses_by_category
+      : [],
+    billed_ht: row.billed_ht,
+    billed_ttc: row.billed_ttc,
+    vat_collected: row.vat_collected,
+    vat_by_rate: Array.isArray(row.vat_by_rate) ? row.vat_by_rate : [],
+    paid_invoice_count: row.paid_invoice_count,
+    pending_invoice_count: row.pending_invoice_count,
+    overdue_invoice_count: row.overdue_invoice_count,
+  };
 });
 
 export async function monthRevenue(): Promise<number> {
@@ -219,7 +218,7 @@ export async function topClients(n = 5): Promise<TopClientRevenue[]> {
   if (isLaravelApiEnabled()) {
     const dashboard = await fetchDashboard();
     return (dashboard.top_clients ?? []).slice(0, n).map((row) => ({
-      clientId: `name:${row.client_name}`,
+      clientId: row.client_id != null ? String(row.client_id) : `name:${row.client_name}`,
       clientName: row.client_name,
       amount: num(row.total),
     }));
@@ -229,7 +228,7 @@ export async function topClients(n = 5): Promise<TopClientRevenue[]> {
   return clients
     .map((c) => ({
       clientId: c.id,
-      clientName: c.name,
+      clientName: c.company || c.name,
       amount: invoices
         .filter(
           (d) =>
@@ -243,6 +242,7 @@ export async function topClients(n = 5): Promise<TopClientRevenue[]> {
     .slice(0, n);
 }
 
+/** CA encaissé TTC */
 export async function totalCollected(): Promise<number> {
   if (isLaravelApiEnabled()) {
     const overview = await fetchOverview();
@@ -276,12 +276,35 @@ export async function billedRevenueTtc(): Promise<number> {
 
 export async function expensesTotalHt(): Promise<number> {
   if (isLaravelApiEnabled()) {
-    // Overview returns expense totals (amount); HT detail still needs lines.
-    const expenses = await listExpenses();
-    return expenses.reduce((s, e) => s + expenseHt(e), 0);
+    const overview = await fetchOverview();
+    if (overview.total_expenses_ht != null) {
+      return num(overview.total_expenses_ht);
+    }
   }
   const expenses = await listExpenses();
-  return expenses.reduce((s, e) => s + expenseHt(e), 0);
+  return sumExpensesHt(expenses);
+}
+
+export async function expensesTotalTtc(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    return num(overview.total_expenses);
+  }
+  const expenses = await listExpenses();
+  return sumExpensesTtc(expenses);
+}
+
+/** Profit = CA encaissé TTC − dépenses TTC validées */
+export async function netProfitTtc(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    return num(overview.net_profit);
+  }
+  const [collected, expenses] = await Promise.all([
+    totalCollected(),
+    listExpenses(),
+  ]);
+  return Math.round((collected - sumExpensesTtc(expenses)) * 100) / 100;
 }
 
 export async function vatCollected(): Promise<number> {
@@ -289,17 +312,21 @@ export async function vatCollected(): Promise<number> {
     const overview = await fetchOverview();
     if (overview.vat_collected != null) return num(overview.vat_collected);
   }
-  const [invoices, creditNotes] = await Promise.all([
-    getInvoices(),
-    getCreditNotes(),
-  ]);
-  const fromInvoices = invoices
+  const invoices = await getInvoices();
+  // Credit notes are not available on Laravel API yet.
+  if (!isLaravelApiEnabled()) {
+    const creditNotes = await getCreditNotes();
+    const fromCredits = creditNotes
+      .filter((d) => d.status === "issued" || d.status === "applied")
+      .reduce((s, d) => s + d.taxTotal, 0);
+    const fromInvoices = invoices
+      .filter((d) => BILLABLE.includes(d.status as InvoiceStatus))
+      .reduce((s, d) => s + d.taxTotal, 0);
+    return Math.round((fromInvoices - fromCredits) * 100) / 100;
+  }
+  return invoices
     .filter((d) => BILLABLE.includes(d.status as InvoiceStatus))
     .reduce((s, d) => s + d.taxTotal, 0);
-  const fromCredits = creditNotes
-    .filter((d) => d.status === "issued" || d.status === "applied")
-    .reduce((s, d) => s + d.taxTotal, 0);
-  return Math.round((fromInvoices - fromCredits) * 100) / 100;
 }
 
 export async function vatByRate(): Promise<{ rate: number; amount: number }[]> {
@@ -327,6 +354,67 @@ export async function vatByRate(): Promise<{ rate: number; amount: number }[]> {
       rate,
       amount: Math.round(amount * 100) / 100,
     }));
+}
+
+export async function invoiceStatusCounts(): Promise<Record<string, number>> {
+  if (isLaravelApiEnabled()) {
+    const dashboard = await fetchDashboard();
+    const counts: Record<string, number> = {};
+    for (const row of dashboard.invoices_by_status ?? []) {
+      counts[row.status] = Number(row.count ?? 0);
+    }
+    return counts;
+  }
+  const invoices = await getInvoices();
+  return invoices.reduce(
+    (acc, inv) => {
+      acc[inv.status] = (acc[inv.status] ?? 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>,
+  );
+}
+
+export async function monthBilledTtc(): Promise<number> {
+  if (isLaravelApiEnabled()) {
+    const dashboard = await fetchDashboard();
+    if (dashboard.month_billed_ttc != null) return num(dashboard.month_billed_ttc);
+  }
+  const invoices = await getInvoices();
+  const key = currentMonthKey();
+  return invoices
+    .filter(
+      (d) =>
+        BILLABLE.includes(d.status as InvoiceStatus) &&
+        monthKey(d.issueDate) === key,
+    )
+    .reduce((s, d) => s + d.total, 0);
+}
+
+export async function countInvoicesByBucket(): Promise<{
+  paid: number;
+  pending: number;
+  overdue: number;
+}> {
+  if (isLaravelApiEnabled()) {
+    const overview = await fetchOverview();
+    return {
+      paid: Number(overview.paid_invoice_count ?? 0),
+      pending: Number(overview.pending_invoice_count ?? 0),
+      overdue: Number(overview.overdue_invoice_count ?? 0),
+    };
+  }
+  const invoices = await getInvoices();
+  const today = todayIso();
+  return {
+    paid: invoices.filter((i) => i.status === "paid").length,
+    pending: invoices.filter((i) =>
+      PENDING.includes(i.status as InvoiceStatus),
+    ).length,
+    overdue: invoices.filter((i) =>
+      isOverdueInvoice(i.status as InvoiceStatus, i.dueDate, today),
+    ).length,
+  };
 }
 
 /** Optional typed access to Laravel overview (for future UI). */

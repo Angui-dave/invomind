@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Truck } from "lucide-react";
 import { toast } from "sonner";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,15 +38,7 @@ export function SuppliersPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Fournisseurs
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Contacts et données fournisseurs
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button
           type="button"
           className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
@@ -59,6 +52,26 @@ export function SuppliersPageClient({
         </Button>
       </div>
 
+      {suppliers.length === 0 ? (
+        <PageEmptyState
+          icon={Truck}
+          title="Aucun fournisseur"
+          description="Ajoutez votre premier contact fournisseur."
+          action={
+            <Button
+              type="button"
+              className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus className="size-4" aria-hidden />
+              Ajouter
+            </Button>
+          }
+        />
+      ) : (
       <div className="overflow-hidden rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
@@ -71,46 +84,36 @@ export function SuppliersPageClient({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {suppliers.length === 0 ? (
-              <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="py-10 text-center text-sm text-ink/55"
-                >
-                  Aucun fournisseur. Ajoutez votre premier contact.
+            {suppliers.map((s) => (
+              <TableRow
+                key={s.id}
+                className="cursor-pointer"
+                onClick={() => {
+                  setEditing(s);
+                  setOpen(true);
+                }}
+              >
+                <TableCell className="font-medium text-ink">
+                  {s.company}
+                </TableCell>
+                <TableCell className="text-ink/70">
+                  {s.name || "—"}
+                </TableCell>
+                <TableCell className="text-ink/70">
+                  {s.email || "—"}
+                </TableCell>
+                <TableCell className="num text-ink/70">
+                  {s.phone ?? "—"}
+                </TableCell>
+                <TableCell className="text-ink/70">
+                  {s.city ?? "—"}
                 </TableCell>
               </TableRow>
-            ) : (
-              suppliers.map((s) => (
-                <TableRow
-                  key={s.id}
-                  className="cursor-pointer"
-                  onClick={() => {
-                    setEditing(s);
-                    setOpen(true);
-                  }}
-                >
-                  <TableCell className="font-medium text-ink">
-                    {s.company}
-                  </TableCell>
-                  <TableCell className="text-ink/70">
-                    {s.name || "—"}
-                  </TableCell>
-                  <TableCell className="text-ink/70">
-                    {s.email || "—"}
-                  </TableCell>
-                  <TableCell className="num text-ink/70">
-                    {s.phone ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-ink/70">
-                    {s.city ?? "—"}
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
+            ))}
           </TableBody>
         </Table>
       </div>
+      )}
 
       <SupplierDialog
         open={open}

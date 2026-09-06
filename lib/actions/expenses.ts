@@ -89,11 +89,17 @@ export async function createExpense(
 
   try {
     const id = `exp_${Math.random().toString(36).slice(2, 8)}`;
+    const vat = calculateVat(
+      parsed.data.amount,
+      parsed.data.taxRate,
+      "inclusive",
+    );
     const expense: Expense = {
       id,
       date: parsed.data.date,
       description: parsed.data.description,
-      amount: parsed.data.amount,
+      amountHt: vat.ht,
+      amountTtc: parsed.data.amount,
       currency: parsed.data.currency as CurrencyCode,
       categoryId: parsed.data.categoryId,
       supplierId: parsed.data.supplierId ?? undefined,
@@ -103,9 +109,10 @@ export async function createExpense(
       ),
       taxRate: parsed.data.taxRate,
       taxDeductible: parsed.data.taxDeductible,
-      taxAmount: parsed.data.taxAmount,
+      taxAmount: parsed.data.taxDeductible ? vat.vat : 0,
       notes: parsed.data.notes ?? undefined,
       paymentMethod: parsed.data.paymentMethod ?? undefined,
+      statut: "validee",
     };
 
     (await tenantStore()).expenses.unshift(expense);
@@ -166,11 +173,17 @@ export async function updateExpense(
     const idx = store.expenses.findIndex((e) => e.id === id);
     if (idx < 0) return { ok: false, error: "Dépense introuvable" };
 
+    const vat = calculateVat(
+      parsed.data.amount,
+      parsed.data.taxRate,
+      "inclusive",
+    );
     store.expenses[idx] = {
       ...store.expenses[idx],
       date: parsed.data.date,
       description: parsed.data.description,
-      amount: parsed.data.amount,
+      amountHt: vat.ht,
+      amountTtc: parsed.data.amount,
       currency: parsed.data.currency as CurrencyCode,
       categoryId: parsed.data.categoryId,
       supplierId: parsed.data.supplierId ?? undefined,
@@ -180,7 +193,7 @@ export async function updateExpense(
       ),
       taxRate: parsed.data.taxRate,
       taxDeductible: parsed.data.taxDeductible,
-      taxAmount: parsed.data.taxAmount,
+      taxAmount: parsed.data.taxDeductible ? vat.vat : 0,
       notes: parsed.data.notes ?? undefined,
       paymentMethod: parsed.data.paymentMethod ?? undefined,
     };

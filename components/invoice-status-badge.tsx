@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 const statusStyles: Record<string, string> = {
   draft: "bg-muted text-muted-foreground border-line",
   sent: "bg-ledger/12 text-ledger border-ledger/30",
+  unpaid: "bg-amber/15 text-amber border-amber/40",
   accepted: "bg-brass/15 text-brass border-brass/40",
   refused: "bg-brick/15 text-brick border-brick/40",
   expired: "bg-muted text-muted-foreground border-line",

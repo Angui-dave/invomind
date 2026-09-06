@@ -3,10 +3,11 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowUpDown, FileMinus2, Plus } from "lucide-react";
+import { ArrowUpDown, FileMinus2, FileText } from "lucide-react";
 import { toast } from "sonner";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
 import { InvoiceTrackingCell } from "@/components/invoice-tracking-cell";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { buttonVariants } from "@/components/ui/button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,13 +20,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { formatDateFr } from "@/lib/formatters";
+import { formatMoney } from "@/lib/money";
 import {
-  formatDateFr,
-  formatMoney,
-  INVOICE_STATUS_LABELS,
-  type BusinessDocument,
-  type InvoiceStatus,
-} from "@/lib/mock-data";
+  billedTtc,
+  collectedFromInvoices,
+  outstandingTtc,
+} from "@/lib/domain/invoices";
+import { INVOICE_STATUS_LABELS, type BusinessDocument, type InvoiceStatus } from "@/lib/documents";
 import { cn } from "@/lib/utils";
 
 type KindTab = "invoices" | "credit_notes";
@@ -39,12 +41,14 @@ type InvoicesPageClientProps = {
   invoices: BusinessDocument[];
   creditNotes: BusinessDocument[];
   status: StatusFilter;
+  hideCreditNotes?: boolean;
 };
 
 export function InvoicesPageClient({
   invoices,
   creditNotes,
   status,
+  hideCreditNotes = false,
 }: InvoicesPageClientProps) {
   const router = useRouter();
   const [kindTab, setKindTab] = useState<KindTab>("invoices");
@@ -56,29 +60,9 @@ export function InvoicesPageClient({
   const [page, setPage] = useState(1);
 
   const source = kindTab === "invoices" ? invoices : creditNotes;
-  const billed = useMemo(
-    () => invoices.reduce((sum, inv) => sum + inv.total, 0),
-    [invoices],
-  );
-  const collected = useMemo(
-    () =>
-      invoices
-        .filter((inv) => inv.status === "paid")
-        .reduce((sum, inv) => sum + inv.total, 0),
-    [invoices],
-  );
-  const outstanding = useMemo(
-    () =>
-      invoices
-        .filter(
-          (inv) =>
-            inv.status === "sent" ||
-            inv.status === "partially_paid" ||
-            inv.status === "overdue",
-        )
-        .reduce((sum, inv) => sum + inv.total, 0),
-    [invoices],
-  );
+  const billed = useMemo(() => billedTtc(invoices), [invoices]);
+  const collected = useMemo(() => collectedFromInvoices(invoices), [invoices]);
+  const outstanding = useMemo(() => outstandingTtc(invoices), [invoices]);
   const currency = invoices[0]?.currency ?? creditNotes[0]?.currency ?? "XOF";
 
   const filtered = useMemo(() => {
@@ -127,29 +111,12 @@ export function InvoicesPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Factures
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            {filtered.length} document{filtered.length > 1 ? "s" : ""}
-            {kindTab === "invoices" && status !== "all"
-              ? ` · ${INVOICE_STATUS_LABELS[status]}`
-              : ""}
-          </p>
-        </div>
-        <Link
-          href="/invoices/new"
-          className={cn(
-            buttonVariants(),
-            "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
-          )}
-        >
-          <Plus className="size-4" aria-hidden />
-          Nouvelle facture
-        </Link>
-      </div>
+      <p className="text-sm text-ink/60">
+        {filtered.length} document{filtered.length > 1 ? "s" : ""}
+        {kindTab === "invoices" && status !== "all"
+          ? ` · ${INVOICE_STATUS_LABELS[status]}`
+          : ""}
+      </p>
 
       {kindTab === "invoices" && (
         <div className="grid gap-3 sm:grid-cols-3">
@@ -174,6 +141,7 @@ export function InvoicesPageClient({
         </div>
       )}
 
+      {hideCreditNotes ? null : (
       <Tabs
         value={kindTab}
         onValueChange={(value) => {
@@ -186,6 +154,7 @@ export function InvoicesPageClient({
           <TabsTrigger value="credit_notes">Avoirs</TabsTrigger>
         </TabsList>
       </Tabs>
+      )}
 
       <div className="flex justify-end">
         <Input
@@ -200,6 +169,35 @@ export function InvoicesPageClient({
         />
       </div>
 
+      {source.length === 0 ? (
+        <PageEmptyState
+          icon={FileText}
+          title={
+            kindTab === "invoices"
+              ? "Aucune facture"
+              : "Aucun avoir"
+          }
+          description={
+            kindTab === "invoices"
+              ? "Créez votre première facture pour démarrer le suivi des encaissements."
+              : "Les avoirs liés à vos factures apparaîtront ici."
+          }
+          action={
+            kindTab === "invoices" ? (
+              <Link
+                href="/invoices/new"
+                className={cn(
+                  buttonVariants(),
+                  "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
+                )}
+              >
+                Nouvelle facture
+              </Link>
+            ) : undefined
+          }
+        />
+      ) : (
+        <>
       <div className="hidden overflow-hidden rounded-2xl border border-line bg-card md:block">
         <Table>
           <TableHeader>
@@ -270,8 +268,10 @@ export function InvoicesPageClient({
                     {kindTab === "invoices" ? (
                       <div className="flex items-center gap-2">
                         <InvoiceTrackingCell invoice={invoice} />
-                        {(invoice.status === "paid" ||
+                        {!hideCreditNotes &&
+                          (invoice.status === "paid" ||
                           invoice.status === "sent" ||
+                          invoice.status === "unpaid" ||
                           invoice.status === "partially_paid") && (
                           <Button
                             type="button"
@@ -359,6 +359,8 @@ export function InvoicesPageClient({
           </Button>
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }

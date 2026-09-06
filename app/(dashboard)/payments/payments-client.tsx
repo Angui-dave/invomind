@@ -1,8 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,18 +30,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createPayment } from "@/lib/actions/payments";
-import {
-  formatDateFr,
-  formatMoney,
-  PAYMENT_METHOD_LABELS,
-  PAYMENT_METHOD_OPTIONS,
-  sumByCurrency,
-  TODAY,
-  type BusinessDocument,
-  type CurrencyCode,
-  type Payment,
-  type PaymentMethod,
-} from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
+import { formatMoney, type CurrencyCode } from "@/lib/money";
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS, type BusinessDocument, type PaymentMethod } from "@/lib/documents";
+import type { Payment } from "@/lib/data/payments";
+import { TODAY } from "@/lib/date";
+import { sumByCurrency } from "@/lib/data/derive";
 
 type UnpaidInvoice = BusinessDocument & { balanceDue: number };
 
@@ -69,20 +64,15 @@ export function PaymentsPageClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Paiements
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Encaissements enregistrés ·{" "}
-            {totalsByCurrency.map((row, i) => (
-              <span key={row.currency} className="num text-brass font-medium">
-                {i > 0 ? " · " : ""}
-                {formatMoney(row.amount, row.currency)}
-              </span>
-            ))}
-          </p>
-        </div>
+        <p className="text-sm text-ink/60">
+          Encaissements enregistrés ·{" "}
+          {totalsByCurrency.map((row, i) => (
+            <span key={row.currency} className="num text-brass font-medium">
+              {i > 0 ? " · " : ""}
+              {formatMoney(row.amount, row.currency)}
+            </span>
+          ))}
+        </p>
         <Button
           type="button"
           className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
@@ -93,6 +83,23 @@ export function PaymentsPageClient({
         </Button>
       </div>
 
+      {payments.length === 0 ? (
+        <PageEmptyState
+          icon={Wallet}
+          title="Aucun paiement"
+          description="Enregistrez un encaissement pour suivre les soldes à percevoir."
+          action={
+            <Button
+              type="button"
+              className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
+              onClick={() => setOpen(true)}
+            >
+              <Plus className="size-4" aria-hidden />
+              Enregistrer un paiement
+            </Button>
+          }
+        />
+      ) : (
       <div className="rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
@@ -134,6 +141,7 @@ export function PaymentsPageClient({
           </TableBody>
         </Table>
       </div>
+      )}
 
       <PaymentDialog
         open={open}

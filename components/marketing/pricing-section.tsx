@@ -2,7 +2,7 @@ import Link from "next/link";
 import { Ban, Check } from "lucide-react";
 import { SectionShell } from "@/components/marketing/section-shell";
 import { buttonVariants } from "@/components/ui/button";
-import { PRICING_PLANS } from "@/lib/mock-data";
+import { PRICING_PLANS } from "@/lib/data/settings";
 import { cn } from "@/lib/utils";
 
 const CTA_LABEL: Record<string, string> = {

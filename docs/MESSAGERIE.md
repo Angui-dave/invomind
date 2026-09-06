@@ -58,10 +58,14 @@ Pour le mode fake sans signature Meta, utilisez `FakeCanalAdapter` via une boît
 
 | Méthode | Path | Rôle |
 |---------|------|------|
-| GET/POST/DELETE | `/inboxes` | **admin** |
+| GET/POST | `/inboxes` | **admin** |
+| PUT | `/inboxes/{id}` | **admin** (édition nom/mode/identifiants) |
+| POST | `/inboxes/{id}/test` | **admin** (vérifie le token Graph + abonne la Page au webhook) |
+| DELETE | `/inboxes/{id}` | **admin** |
 | GET | `/inboxes/{id}/templates` | membre (modèles WhatsApp) |
 | POST | `/inboxes/{id}/templates/sync` | **admin** (sync Meta) |
 | GET | `/conversations` | membre |
+| GET | `/conversations/messages-batch?ids=` | membre |
 | GET | `/conversations/{id}` | membre |
 | GET/POST | `/conversations/{id}/messages` | membre (`type_contenu`: texte/image/audio/video/fichier/modele) |
 | PUT | `/conversations/{id}/status` | membre (`ouverte` / `en_attente` / `resolue`) |
@@ -80,6 +84,69 @@ Pour le mode fake sans signature Meta, utilisez `FakeCanalAdapter` via une boît
 | POST | `/webhooks/tiktok` |
 | POST | `/broadcasting/auth` (Sanctum) |
 
+## Messenger de zéro (Meta + ngrok)
+
+Guide pas-à-pas pour recevoir et répondre aux messages Messenger dans `/conversations`.
+
+### A. Meta App
+
+1. [developers.facebook.com](https://developers.facebook.com) → **Create App** → type **Business**.
+2. Ajouter le produit **Messenger**.
+3. Lier une **Page Facebook** (celle du business) et générer un **Page Access Token** (permissions `pages_messaging`, `pages_manage_metadata`, `pages_show_list`).
+4. Settings → Basic : copier l’**App Secret**.
+5. Choisir un **Verify Token** libre (ex. `invomind-verify-2026`) — même valeur que `META_VERIFY_TOKEN` côté backend.
+
+### B. Tunnel local (ngrok)
+
+Meta exige une URL HTTPS publique pour le webhook :
+
+```bash
+# Terminal dédié
+ngrok http 8000
+# → https://xxxx.ngrok-free.app
+```
+
+Backend `.env` :
+
+```env
+META_VERIFY_TOKEN=invomind-verify-2026
+META_APP_SECRET=<app_secret>
+META_GRAPH_VERSION=v21.0
+```
+
+Processus Laravel :
+
+```bash
+php artisan serve
+php artisan queue:work
+php artisan reverb:start
+```
+
+### C. Webhook Meta
+
+Dans Messenger → **Webhooks** :
+
+| Champ | Valeur |
+|-------|--------|
+| Callback URL | `https://xxxx.ngrok-free.app/api/webhooks/meta` |
+| Verify Token | `META_VERIFY_TOKEN` |
+| Abonnements | `messages`, `messaging_postbacks` (+ optionnel `message_deliveries`, `message_reads`) |
+
+Puis **abonner la Page** (ou laisser le bouton CRM « Tester / Connecter » le faire via `POST /{page_id}/subscribed_apps`).
+
+### D. Boîte InvoMind
+
+1. Paramètres → Canaux : créer une boîte **Messenger**, mode `production`, coller `page_id` + Page Access Token.
+2. Cliquer **Tester / Connecter** → statut `connectee`, Page abonnée.
+3. Depuis un compte **rôle de l’App** (admin/testeur), écrire à la Page → le message apparaît en temps réel dans `/conversations` (nom réel du contact via Graph si disponible).
+4. Répondre depuis le CRM → livraison Messenger (fenêtre **24 h** après le dernier entrant).
+
+### E. App Review (prod publique)
+
+- En mode **Dev**, seuls les rôles de l’App peuvent écrire à la Page.
+- Pour tous les utilisateurs : passer l’App en **Live** et demander l’Advanced Access **`pages_messaging`** (App Review).
+- Hors fenêtre 24 h : seuls message tags / OTN autorisés (hors périmètre actuel).
+
 ## Credentials par plateforme
 
 ### Meta (WhatsApp / Messenger / Instagram) — requis pour la prod
@@ -93,11 +160,11 @@ Pour le mode fake sans signature Meta, utilisez `FakeCanalAdapter` via une boît
    - Verify token = `META_VERIFY_TOKEN`
    - App secret = `META_APP_SECRET` (signature `X-Hub-Signature-256`)
 4. Souscrire aux champs `messages` (WhatsApp) / `messages` (Page / Instagram).
-5. Dans InvoMind (admin) : Paramètres → Canaux, créer une boîte en mode `sandbox` ou `production` et coller les IDs + `access_token`.
+5. Dans InvoMind (admin) : Paramètres → Canaux, créer une boîte en mode `sandbox` ou `production` et coller les IDs + `access_token`, puis **Tester / Connecter**.
 
-**Conformité WhatsApp** : fenêtre de réponse libre **24 h** après le dernier message entrant. Hors fenêtre, envoyez un *message template* approuvé (`type_contenu=modele`) — synchronisable via `POST /inboxes/{id}/templates/sync` (nécessite `waba_id` + `access_token`).
+**Conformité WhatsApp / Messenger** : fenêtre de réponse libre **24 h** après le dernier message entrant. Hors fenêtre WhatsApp, envoyez un *message template* approuvé (`type_contenu=modele`) — synchronisable via `POST /inboxes/{id}/templates/sync` (nécessite `waba_id` + `access_token`).
 
-Souscrire aussi aux webhooks de **statuts** (`message_status` / `statuses`) pour mettre à jour `envoye` → `livre` → `lu`.
+Souscrire aussi aux webhooks de **statuts** (`message_status` / `statuses` / `message_deliveries`) pour mettre à jour `envoye` → `livre` → `lu`.
 
 ### TikTok — limitation documentée
 

@@ -10,12 +10,14 @@ use App\Http\Resources\InvoiceResource;
 use App\Models\Invoice;
 use App\Models\InvoiceLine;
 use App\Models\Quote;
+use App\Services\DocumentStatusService;
 use App\Services\EntitlementService;
 use App\Services\LineComputeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class InvoiceController extends Controller
 {
@@ -140,14 +142,16 @@ class InvoiceController extends Controller
         return new InvoiceResource($invoice);
     }
 
-    public function updateStatus(Request $request, int $id): InvoiceResource
+    public function updateStatus(Request $request, int $id, DocumentStatusService $statuses): InvoiceResource
     {
         $data = $request->validate([
-            'statut' => ['required', 'string'],
+            'statut' => ['required', Rule::enum(FactureStatut::class)],
         ]);
 
         $invoice = Invoice::query()->with('lines')->findOrFail($id);
-        $invoice->update(['statut' => $data['statut']]);
+        $next = FactureStatut::from($data['statut']);
+        $statuses->assertInvoiceTransition($invoice->statut, $next);
+        $invoice->update(['statut' => $next]);
 
         return new InvoiceResource($invoice->fresh('lines'));
     }
@@ -155,7 +159,13 @@ class InvoiceController extends Controller
     public function convertFromQuote(Request $request, int $quoteId, EntitlementService $entitlements, LineComputeService $compute): JsonResponse
     {
         $entitlements->assertCanCreateInvoice($this->orgId($request));
-        $quote = Quote::query()->with('lines')->findOrFail($quoteId);
+        $quote = Quote::query()->with(['lines', 'client'])->findOrFail($quoteId);
+        $quoteStatus = $quote->statut instanceof DevisStatut
+            ? $quote->statut
+            : DevisStatut::tryFrom((string) $quote->statut);
+        if (! in_array($quoteStatus, [DevisStatut::Accepte, DevisStatut::Envoye], true)) {
+            abort(422, 'Seul un devis envoyé ou accepté peut être converti.');
+        }
 
         $invoice = DB::transaction(function () use ($request, $compute, $quote) {
             $computedLines = [];
@@ -176,6 +186,8 @@ class InvoiceController extends Controller
 
             $totals = $compute->computeTotals($computedLines, (float) $quote->remise_montant);
             $orgaId = $this->orgId($request);
+            $quote->loadMissing('client');
+            $termDays = (int) ($quote->client?->delai_paiement_jours ?? 30);
 
             $invoice = Invoice::create([
                 'orga_id' => $orgaId,
@@ -184,7 +196,7 @@ class InvoiceController extends Controller
                 'devis_id' => $quote->id,
                 'numero' => $this->nextNumero($orgaId),
                 'date_creation' => now(),
-                'date_echeance' => now()->addDays(30)->toDateString(),
+                'date_echeance' => now()->addDays($termDays)->toDateString(),
                 'statut' => FactureStatut::Brouillon,
                 'devise' => $quote->devise,
                 'sous_total' => $totals['sous_total'],

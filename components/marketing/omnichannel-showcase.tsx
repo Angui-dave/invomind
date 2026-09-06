@@ -1,5 +1,5 @@
 import { ChannelBadge } from "@/components/conversations/channel-badge";
-import { formatMoney } from "@/lib/mock-data";
+import { formatMoney } from "@/lib/money";
 
 const THREADS = [
   { initials: "AD", name: "Aminata Diallo", channel: "whatsapp" as const, preview: "Le devis a bien été envoyé hier.", unread: 2 },

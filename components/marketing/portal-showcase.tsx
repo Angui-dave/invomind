@@ -11,7 +11,7 @@ import {
   Zap,
 } from "lucide-react";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
-import { formatMoney } from "@/lib/mock-data";
+import { formatMoney } from "@/lib/money";
 import { cn } from "@/lib/utils";
 
 /* -------------------------------------------------------------------------- */

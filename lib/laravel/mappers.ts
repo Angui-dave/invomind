@@ -47,21 +47,32 @@ function str(value: unknown, fallback = ""): string {
 
 export function mapClient(input: unknown): Client {
   const row = asRecord(input);
-  const nameCompany = str(row.name_company || row.name || row.full_name || "");
+  const company = str(row.name_company || row.company || row.name || "");
+  const contactName = str(row.contact_name || row.name || company);
   return {
     id: str(row.id),
-    name: nameCompany,
-    company: nameCompany,
+    name: contactName || company,
+    company,
     email: str(row.email),
     phone: row.phone ? str(row.phone) : undefined,
     address: row.adresse || row.address ? str(row.adresse || row.address) : undefined,
     city: row.ville || row.city ? str(row.ville || row.city) : undefined,
     postalCode: row.code_postal || row.postal_code ? str(row.code_postal || row.postal_code) : undefined,
     country: row.country || row.pays ? str(row.country || row.pays) : undefined,
-    taxId: row.tax_id ? str(row.tax_id) : undefined,
+    taxId: row.numero_fiscal || row.tax_id
+      ? str(row.numero_fiscal || row.tax_id)
+      : undefined,
     currency: (row.devise || row.currency ? str(row.devise || row.currency) : undefined) as CurrencyCode | undefined,
-    paymentTermDays: row.payment_term_days ? num(row.payment_term_days) : undefined,
-    remindersEnabled: row.reminders_enabled == null ? true : Boolean(row.reminders_enabled),
+    paymentTermDays:
+      row.delai_paiement_jours != null || row.payment_term_days != null
+        ? num(row.delai_paiement_jours ?? row.payment_term_days)
+        : 30,
+    remindersEnabled:
+      row.relances_actives != null
+        ? Boolean(row.relances_actives)
+        : row.reminders_enabled == null
+          ? true
+          : Boolean(row.reminders_enabled),
     portalToken: str(row.uuid || row.portal_token || row.id),
     categorieClient: categorieClientFromApi(
       row.categorie_client ? str(row.categorie_client) : undefined,
@@ -110,20 +121,37 @@ export function mapInvoiceOrQuote(
     issueDate;
 
   const status = documentStatusFromApi(statusRaw, kind);
+  const total = num(row.montant_total);
+  const amountPaid =
+    row.montant_paye != null ? num(row.montant_paye) : undefined;
+  const balanceDue =
+    row.balance_due != null
+      ? num(row.balance_due)
+      : amountPaid != null
+        ? Math.max(0, Math.round((total - amountPaid) * 100) / 100)
+        : undefined;
+
+  const client =
+    row.client && typeof row.client === "object"
+      ? asRecord(row.client)
+      : null;
+  const resolvedClientName =
+    clientName ||
+    str(row.client_name || client?.name_company || "");
 
   return {
     id: str(row.id),
     kind,
     number: str(row.numero ?? ""),
     clientId: str(row.client_id ?? ""),
-    clientName,
+    clientName: resolvedClientName,
     status,
     currency: (str(row.devise ?? "XOF") as BusinessDocument["currency"]),
     taxMode: "exclusive",
     issueDate,
     dueDate,
     lines,
-    total: num(row.montant_total),
+    total,
     subtotalHt: num(row.sous_total),
     taxTotal: num(row.montant_tva),
     notes: row.note ? str(row.note) : undefined,
@@ -136,6 +164,8 @@ export function mapInvoiceOrQuote(
     sourceDocumentId: row.devis_id ? str(row.devis_id) : undefined,
     frozen: statusRaw !== "brouillon",
     pdfReady: false,
+    amountPaid,
+    balanceDue,
   };
 }
 
@@ -231,10 +261,12 @@ export function mapExpense(input: unknown): Expense {
   const row = asRecord(input);
   const category = asRecord(row.category);
   const supplier = asRecord(row.supplier);
-  const ht = num(row.montant_ht ?? row.amount);
+  const amountHt = num(row.montant_ht ?? row.amount_ht ?? row.amount);
   const taxRate = num(row.taux_tva ?? row.tax_rate);
   const taxAmount = num(row.montant_tva ?? row.tax_amount);
-  const amount = num(row.montant_ttc ?? row.amount ?? ht + taxAmount);
+  const amountTtc = num(
+    row.montant_ttc ?? row.amount_ttc ?? amountHt + taxAmount,
+  );
   const dateRaw = row.date_depense ?? row.date;
   const supplierId = row.fournisseur_id ?? row.supplier_id ?? supplier.id;
   const supplierName =
@@ -246,7 +278,8 @@ export function mapExpense(input: unknown): Expense {
     id: str(row.id),
     date: String(dateRaw ?? "").slice(0, 10),
     description: str(row.libelle || row.description || ""),
-    amount,
+    amountHt,
+    amountTtc,
     currency: str(row.devise || row.currency || "XOF") as Expense["currency"],
     categoryId: str(row.categorie_id ?? row.category_id ?? category.id),
     supplierId: supplierId ? str(supplierId) : undefined,
@@ -255,7 +288,7 @@ export function mapExpense(input: unknown): Expense {
     taxDeductible: taxRate > 0,
     taxAmount,
     notes: row.description || row.notes ? str(row.description || row.notes) : undefined,
-    statut: row.statut ? str(row.statut) : undefined,
+    statut: row.statut ? str(row.statut) : "validee",
     paymentMethod: row.mode_paiement
       ? paymentMethodFromApi(str(row.mode_paiement))
       : undefined,
@@ -266,12 +299,24 @@ export function mapPayment(input: unknown): Payment {
   const row = asRecord(input);
   const dateRaw = row.date_paiement ?? row.paid_at;
   const methodRaw = str(row.mode_paiement || row.method || "virement");
+  const invoice =
+    row.invoice && typeof row.invoice === "object"
+      ? asRecord(row.invoice)
+      : null;
+  const client =
+    row.client && typeof row.client === "object"
+      ? asRecord(row.client)
+      : null;
   return {
     id: str(row.id),
     documentId: str(row.facture_id ?? row.document_id),
-    documentNumber: str(row.document_number || ""),
-    clientId: str(row.client_id),
-    clientName: str(row.client_name || ""),
+    documentNumber: str(
+      row.document_number || invoice?.numero || "",
+    ),
+    clientId: str(row.client_id ?? client?.id ?? ""),
+    clientName: str(
+      row.client_name || client?.name_company || "",
+    ),
     amount: num(row.montant ?? row.amount),
     currency: str(row.devise || row.currency || "XOF") as Payment["currency"],
     method: paymentMethodFromApi(methodRaw),

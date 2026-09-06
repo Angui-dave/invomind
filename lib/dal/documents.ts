@@ -118,7 +118,9 @@ export async function listDocuments(
       listClients(),
     ]);
     const docKind = kind as "invoice" | "quote";
-    const byId = new Map(clients.map((c) => [c.id, c.name]));
+    const byId = new Map(
+      clients.map((c) => [c.id, c.company || c.name]),
+    );
     return rows
       .map((row) => {
         const doc = mapInvoiceOrQuote(row, docKind);

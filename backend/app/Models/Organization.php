@@ -27,7 +27,15 @@ class Organization extends Model
         'code_postal',
         'pays',
         'devise_defaut',
+        'parametres',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'parametres' => 'array',
+        ];
+    }
 
     public function users(): HasMany
     {

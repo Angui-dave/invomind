@@ -169,7 +169,7 @@ Le Kanban clients utilise `clients.categorie_client` (`prospect`, `qualifie`, `n
 `GET /organization/entitlements` :
 
 - Quotas factures / clients / agents selon le plan
-- `pipeline` : toujours `false` (module absent)
+- `pipeline` : `true` (Kanban = `categorie_client`)
 - `conversations` : `true` (module messagerie omnicanale — voir [MESSAGERIE.md](./MESSAGERIE.md))
 - `expenses`, `catalog`, `reports` : `true`
 - `import_tool` : `true` si plan ≠ `gratuit` (mais **aucune route** `/import` pour l’instant)
@@ -205,3 +205,9 @@ Env Laravel : `CINETPAY_*`, `PSP_DRIVER=fake` pour tests.
 | Pipeline stages | = `categorie_client` |
 | `portalToken` | `uuid` de la facture |
 | Conversion devis | `POST /quotes/{id}/convert` |
+| `amountHt` / `amountTtc` (dépense) | `montant_ht` / `montant_ttc` |
+| `paymentTermDays` / `taxId` | `delai_paiement_jours` / `numero_fiscal` |
+| `amountPaid` / `balanceDue` | `montant_paye` / `balance_due` |
+| CA encaissé / profit | Σ paiements / Σ paiements − dépenses TTC validées |
+
+Contrat détaillé : [superpowers/specs/2026-09-05-modele-metier-financier.md](./superpowers/specs/2026-09-05-modele-metier-financier.md).

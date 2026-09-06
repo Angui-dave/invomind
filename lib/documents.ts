@@ -17,6 +17,7 @@ export type QuoteStatus =
 export type InvoiceStatus =
   | "draft"
   | "sent"
+  | "unpaid"
   | "partially_paid"
   | "paid"
   | "overdue"
@@ -36,6 +37,7 @@ export type PaymentMethod =
   | "mtn_money"
   | "moov_money"
   | "wave"
+  | "autre"
   /** @deprecated prefer orange_money / wave / mtn_money / moov_money */
   | "mobile_money"
   /** @deprecated not in Laravel schema */
@@ -94,6 +96,10 @@ export interface BusinessDocument {
   notes?: string;
   frozen?: boolean;
   pdfReady?: boolean;
+  /** Cumulative payments (Laravel montant_paye) */
+  amountPaid?: number;
+  /** Remaining TTC due (Laravel balance_due) */
+  balanceDue?: number;
 }
 
 export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
@@ -108,6 +114,7 @@ export const QUOTE_STATUS_LABELS: Record<QuoteStatus, string> = {
 export const INVOICE_STATUS_LABELS: Record<InvoiceStatus, string> = {
   draft: "Brouillon",
   sent: "Envoyée",
+  unpaid: "Impayée",
   partially_paid: "Partiellement payée",
   paid: "Payée",
   overdue: "En retard",
@@ -142,6 +149,7 @@ export const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   mtn_money: "MTN Money",
   moov_money: "Moov Money",
   wave: "Wave",
+  autre: "Autre",
   mobile_money: "Mobile Money",
   twint: "TWINT",
 };

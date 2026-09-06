@@ -109,6 +109,11 @@ export function clientInitials(name: string): string {
     .toUpperCase();
 }
 
+/** Libellé principal = raison sociale (name_company). */
+export function clientDisplayName(client: Pick<Client, "company" | "name">): string {
+  return (client.company || client.name || "").trim() || "Client";
+}
+
 export function portalUrl(token: string): string {
   return `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/f/${token}`;
 }

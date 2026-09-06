@@ -30,6 +30,8 @@ class ClientResource extends JsonResource
             'devise' => $this->devise,
             'delai_paiement_jours' => $this->delai_paiement_jours ?? 30,
             'numero_fiscal' => $this->numero_fiscal,
+            'relances_actives' => (bool) ($this->relances_actives ?? true),
+            'reminders_enabled' => (bool) ($this->relances_actives ?? true),
             'categorie_client' => $this->categorie_client?->value ?? $this->categorie_client,
             'notes' => $this->notes,
             'created_at' => $this->created_at,

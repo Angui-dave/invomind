@@ -150,13 +150,15 @@ export async function importRows(
           id: `exp_${Math.random().toString(36).slice(2, 8)}`,
           date: row.date?.trim() || todayIso(),
           description: row.description.trim(),
-          amount,
+          amountHt: amount,
+          amountTtc: amount,
           currency: "XOF" as CurrencyCode,
           categoryId: category.id,
           supplierName: row.supplier?.trim() || undefined,
           taxRate: 0,
           taxDeductible: true,
           taxAmount: 0,
+          statut: "validee",
         };
         store.expenses.unshift(expense);
         imported++;

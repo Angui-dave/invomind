@@ -3,12 +3,8 @@
 import { Bell, Check } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import {
-  formatDateFr,
-  REMINDER_MILESTONE_LABELS,
-  type ReminderMilestone,
-  type ReminderMilestoneStatus,
-} from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
+import { REMINDER_MILESTONE_LABELS, type ReminderMilestone, type ReminderMilestoneStatus } from "@/lib/documents";
 
 type ReminderTimelineProps = {
   reminders: ReminderMilestoneStatus[];

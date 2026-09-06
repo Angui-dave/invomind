@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Plus, Receipt } from "lucide-react";
 import { toast } from "sonner";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -33,15 +35,32 @@ import {
 import { createExpense, updateExpense } from "@/lib/actions/expenses";
 import { createExpenseCategory } from "@/lib/actions/expense-categories";
 import type { Expense, ExpenseCategory } from "@/lib/data/expenses";
+import { isValidatedExpense } from "@/lib/data/derive";
 import type { Supplier } from "@/lib/data/suppliers";
 import { calculateVat } from "@/lib/tax";
 import { todayIso } from "@/lib/date";
-import { formatDateFr, formatMoney } from "@/lib/mock-data";
-import type { CurrencyCode } from "@/lib/money";
+import { formatDateFr } from "@/lib/formatters";
+import { formatMoney, type CurrencyCode } from "@/lib/money";
 
 function supplierLabel(s: Pick<Supplier, "company" | "name">): string {
   return (s.company || s.name || "").trim() || "Fournisseur";
 }
+
+/** Formulaire dépense : `amount` = TTC saisi (converti en HT à l’enregistrement). */
+type ExpenseFormValues = {
+  date: string;
+  description: string;
+  amount: number;
+  currency: CurrencyCode;
+  categoryId: string;
+  supplierId?: string | null;
+  supplierName?: string | null;
+  taxRate: number;
+  taxDeductible: boolean;
+  taxAmount: number;
+  notes?: string | null;
+  paymentMethod?: string | null;
+};
 
 type ExpensesPageClientProps = {
   initialExpenses: Expense[];
@@ -56,6 +75,7 @@ export function ExpensesPageClient({
   suppliers,
   defaultCurrency,
 }: ExpensesPageClientProps) {
+  const router = useRouter();
   const [expenses, setExpenses] = useState<Expense[]>(initialExpenses);
   const [categories, setCategories] =
     useState<ExpenseCategory[]>(initialCategories);
@@ -73,7 +93,10 @@ export function ExpensesPageClient({
   }, [expenses, categoryFilter]);
 
   const total = useMemo(
-    () => filtered.reduce((s, e) => s + e.amount, 0),
+    () =>
+      filtered
+        .filter(isValidatedExpense)
+        .reduce((s, e) => s + e.amountTtc, 0),
     [filtered],
   );
 
@@ -84,17 +107,12 @@ export function ExpensesPageClient({
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Dépenses
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Charges de l’entreprise ·{" "}
-            <span className="num font-medium text-brick">
-              {formatMoney(total, defaultCurrency)}
-            </span>
-          </p>
-        </div>
+        <p className="text-sm text-ink/60">
+          Charges de l’entreprise ·{" "}
+          <span className="num font-medium text-brick">
+            {formatMoney(total, defaultCurrency)}
+          </span>
+        </p>
         <div className="flex flex-wrap gap-2">
           <Button
             type="button"
@@ -151,6 +169,26 @@ export function ExpensesPageClient({
         ))}
       </div>
 
+      {expenses.length === 0 ? (
+        <PageEmptyState
+          icon={Receipt}
+          title="Aucune dépense"
+          description="Créez votre première charge pour suivre les coûts de l’entreprise."
+          action={
+            <Button
+              type="button"
+              className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
+              onClick={() => {
+                setEditing(null);
+                setOpen(true);
+              }}
+            >
+              <Plus className="size-4" aria-hidden />
+              Nouvelle dépense
+            </Button>
+          }
+        />
+      ) : (
       <div className="rounded-2xl border border-line bg-card">
         <Table>
           <TableHeader>
@@ -170,7 +208,7 @@ export function ExpensesPageClient({
                   colSpan={6}
                   className="py-10 text-center text-sm text-ink/55"
                 >
-                  Aucune dépense pour le moment. Créez votre première charge.
+                  Aucune dépense ne correspond à ces critères.
                 </TableCell>
               </TableRow>
             ) : (
@@ -198,7 +236,7 @@ export function ExpensesPageClient({
                     {expense.supplierName ?? "—"}
                   </TableCell>
                   <TableCell className="num text-right font-medium">
-                    {formatMoney(expense.amount, expense.currency)}
+                    {formatMoney(expense.amountTtc, expense.currency)}
                   </TableCell>
                   <TableCell>
                     {expense.taxDeductible ? (
@@ -215,6 +253,7 @@ export function ExpensesPageClient({
           </TableBody>
         </Table>
       </div>
+      )}
 
       <ExpenseDialog
         open={open}
@@ -233,6 +272,12 @@ export function ExpensesPageClient({
               const match = suppliers.find((s) => s.id === values.supplierId);
               return match ? supplierLabel(match) : undefined;
             })();
+          const vat = calculateVat(values.amount, values.taxRate, "inclusive");
+          const expenseAmounts = {
+            amountHt: vat.ht,
+            amountTtc: values.amount,
+            taxAmount: values.taxDeductible ? vat.vat : 0,
+          };
           if (editing) {
             const result = await updateExpense(editing.id, values);
             if (!result.ok) {
@@ -244,13 +289,24 @@ export function ExpensesPageClient({
                 e.id === editing.id
                   ? {
                       ...e,
-                      ...values,
+                      date: values.date,
+                      description: values.description,
+                      currency: values.currency as CurrencyCode,
+                      categoryId: values.categoryId,
+                      supplierId: values.supplierId ?? undefined,
                       supplierName: resolvedSupplierName,
+                      taxRate: values.taxRate,
+                      taxDeductible: values.taxDeductible,
+                      notes: values.notes ?? undefined,
+                      paymentMethod: values.paymentMethod ?? undefined,
+                      statut: e.statut ?? "validee",
+                      ...expenseAmounts,
                     }
                   : e,
               ),
             );
             toast.success("Dépense modifiée");
+            router.refresh();
           } else {
             const result = await createExpense(values);
             if (!result.ok) {
@@ -260,12 +316,23 @@ export function ExpensesPageClient({
             setExpenses((prev) => [
               {
                 id: result.id!,
-                ...values,
+                date: values.date,
+                description: values.description,
+                currency: values.currency as CurrencyCode,
+                categoryId: values.categoryId,
+                supplierId: values.supplierId ?? undefined,
                 supplierName: resolvedSupplierName,
+                taxRate: values.taxRate,
+                taxDeductible: values.taxDeductible,
+                notes: values.notes ?? undefined,
+                paymentMethod: values.paymentMethod ?? undefined,
+                statut: "validee",
+                ...expenseAmounts,
               },
               ...prev,
             ]);
             toast.success("Dépense enregistrée");
+            router.refresh();
           }
           setOpen(false);
         }}
@@ -307,7 +374,7 @@ function ExpenseDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   expense: Expense | null;
-  onSave: (e: Omit<Expense, "id">) => Promise<void>;
+  onSave: (e: ExpenseFormValues) => Promise<void>;
   categories: ExpenseCategory[];
   suppliers: Supplier[];
   defaultCurrency: CurrencyCode;
@@ -363,10 +430,10 @@ function ExpenseForm({
   onPendingCategoryConsumed: () => void;
   onRequestNewCategory: () => void;
   onCancel: () => void;
-  onSave: (e: Omit<Expense, "id">) => Promise<void>;
+  onSave: (e: ExpenseFormValues) => Promise<void>;
 }) {
   const [description, setDescription] = useState(expense?.description ?? "");
-  const [amount, setAmount] = useState(expense?.amount ?? 0);
+  const [amount, setAmount] = useState(expense?.amountTtc ?? 0);
   const [date, setDate] = useState(expense?.date ?? todayIso());
   const [categoryId, setCategoryId] = useState(
     expense?.categoryId ?? categories[0]?.id ?? "",

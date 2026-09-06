@@ -8,11 +8,9 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import {
-  formatDateFr,
-  portalUrl,
-  type Invoice,
-} from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
+import { portalUrl } from "@/lib/data/clients";
+import type { Invoice } from "@/lib/data/documents";
 
 type InvoiceTrackingCellProps = {
   invoice: Invoice;

@@ -206,6 +206,8 @@ export async function markConversationRead(
       token,
       organizationId,
     });
+    revalidatePath("/conversations");
+    revalidatePath("/", "layout");
     return { ok: true };
   } catch (e) {
     return { ok: false, error: actionErrorMessage(e, "Erreur lecture") };

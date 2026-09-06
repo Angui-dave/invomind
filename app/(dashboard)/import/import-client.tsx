@@ -75,16 +75,6 @@ export function ImportPageClient() {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-serif text-2xl font-semibold text-ink">
-          Importation de données
-        </h1>
-        <p className="mt-1 text-sm text-ink/60">
-          Importez un fichier CSV pour migrer clients, fournisseurs, dépenses ou
-          catalogue
-        </p>
-      </header>
-
       <ol className="grid gap-2 sm:grid-cols-3">
         {[
           { n: 1, label: "Fichier" },

@@ -1,8 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Plus, UserCheck, UserX } from "lucide-react";
+import { Plus, UserCheck, Users, UserX } from "lucide-react";
 import { toast } from "sonner";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -109,16 +110,7 @@ export function AgentsPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Gestion des agents
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Créez des comptes agents pour votre équipe. Un mot de passe
-            temporaire est généré à la création.
-          </p>
-        </div>
+      <div className="flex justify-end">
         <Button
           type="button"
           className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
@@ -176,11 +168,23 @@ export function AgentsPageClient({
           <TableBody>
             {agents.length === 0 ? (
               <TableRow>
-                <TableCell
-                  colSpan={5}
-                  className="py-10 text-center text-sm text-ink/55"
-                >
-                  Aucun agent dans cette organisation.
+                <TableCell colSpan={5} className="p-0">
+                  <PageEmptyState
+                    className="border-0 py-12"
+                    icon={Users}
+                    title="Aucun agent"
+                    description="Ajoutez un agent pour collaborer sur le CRM et la messagerie."
+                    action={
+                      <Button
+                        type="button"
+                        className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
+                        onClick={() => setDialogOpen(true)}
+                      >
+                        <Plus className="size-4" aria-hidden />
+                        Ajouter un agent
+                      </Button>
+                    }
+                  />
                 </TableCell>
               </TableRow>
             ) : (

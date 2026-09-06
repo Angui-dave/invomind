@@ -17,14 +17,8 @@ import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SectionShell } from "@/components/marketing/section-shell";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  calculateVat,
-  CURRENCY_OPTIONS,
-  formatMoney,
-  TAX_PRESETS,
-  type CurrencyCode,
-  type TaxMode,
-} from "@/lib/mock-data";
+import { CURRENCY_OPTIONS, formatMoney, type CurrencyCode } from "@/lib/money";
+import { calculateVat, TAX_PRESETS, type TaxMode } from "@/lib/tax";
 import {
   buildEmvQrPayload,
   providerLabel,

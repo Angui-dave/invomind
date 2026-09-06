@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\OrgRules;
 use Illuminate\Foundation\Http\FormRequest;
 
 class InvoiceRequest extends FormRequest
@@ -14,8 +15,8 @@ class InvoiceRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'client_id' => ['required', 'integer', 'exists:clients,id'],
-            'devis_id' => ['nullable', 'integer', 'exists:devis,id'],
+            'client_id' => ['required', 'integer', OrgRules::exists('clients')],
+            'devis_id' => ['nullable', 'integer', OrgRules::exists('devis')],
             'numero' => ['nullable', 'string', 'max:50'],
             'date_echeance' => ['nullable', 'date'],
             'devise' => ['nullable', 'string', 'size:3'],
@@ -23,7 +24,7 @@ class InvoiceRequest extends FormRequest
             'note' => ['nullable', 'string'],
             'statut' => ['sometimes', 'string'],
             'lines' => ['required', 'array', 'min:1'],
-            'lines.*.produit_id' => ['nullable', 'integer', 'exists:produits_services,id'],
+            'lines.*.produit_id' => ['nullable', 'integer', OrgRules::exists('produits_services')],
             'lines.*.designation' => ['required', 'string', 'max:255'],
             'lines.*.quantite' => ['required', 'numeric', 'gt:0'],
             'lines.*.prix_unitaire' => ['required', 'numeric', 'min:0'],

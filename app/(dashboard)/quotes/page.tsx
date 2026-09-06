@@ -1,8 +1,13 @@
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import { getQuotes } from "@/lib/dal/documents";
 import { dalErrorMessage } from "@/lib/dal/load-error";
 import { DalErrorBanner } from "@/components/dal-error-banner";
-import type { QuoteStatus } from "@/lib/mock-data";
+import { PageHeader } from "@/components/dashboard/page-header";
+import { buttonVariants } from "@/components/ui/button";
+import type { QuoteStatus } from "@/lib/documents";
 import type { BusinessDocument } from "@/lib/documents";
+import { cn } from "@/lib/utils";
 import { QuotesPageClient } from "./quotes-client";
 
 type SearchParams = Promise<{
@@ -39,12 +44,28 @@ export default async function QuotesPage({
   }
 
   return (
-    <>
+    <div className="space-y-6">
+      <PageHeader
+        title="Devis"
+        description="Propositions commerciales"
+        actions={
+          <Link
+            href="/quotes/new"
+            className={cn(
+              buttonVariants(),
+              "h-9 rounded-full bg-ledger text-paper hover:bg-ledger/90",
+            )}
+          >
+            <Plus className="size-4" aria-hidden />
+            Nouveau devis
+          </Link>
+        }
+      />
       {loadError ? <DalErrorBanner message={loadError} /> : null}
       <QuotesPageClient
         quotes={quotes}
         status={parseQuoteStatusFilter(params.status)}
       />
-    </>
+    </div>
   );
 }

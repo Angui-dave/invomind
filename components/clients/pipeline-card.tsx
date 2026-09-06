@@ -1,15 +1,9 @@
 "use client";
 
 import { UserPlus } from "lucide-react";
-import {
-  DEFAULT_CURRENCY,
-  formatMoney,
-  PIPELINE_STAGE_COLORS,
-  PIPELINE_STAGES,
-  relativeDateFr,
-  type PipelineStage,
-  type Prospect,
-} from "@/lib/mock-data";
+import { relativeDateFr } from "@/lib/formatters";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { PIPELINE_STAGE_COLORS, PIPELINE_STAGES, type PipelineStage, type Prospect } from "@/lib/data/settings";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -51,7 +45,7 @@ export function PipelineCard({
       <p className="num mt-2 text-sm font-semibold text-brass">
         {formatMoney(prospect.estimatedValue, DEFAULT_CURRENCY)}
       </p>
-      <p className="mt-1 text-xs text-ink/50">
+      <p className="mt-1 text-xs text-ink/50" suppressHydrationWarning>
         {relativeDateFr(prospect.lastInteractionAt)}
       </p>
       {onStageChange ? (

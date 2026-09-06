@@ -44,6 +44,9 @@ export type LaravelClientInput = {
   currency?: string;
   notes?: string | null;
   categorieClient?: string;
+  paymentTermDays?: number;
+  taxId?: string;
+  remindersEnabled?: boolean;
 };
 
 export function toLaravelClientBody(data: LaravelClientInput) {
@@ -58,8 +61,17 @@ export function toLaravelClientBody(data: LaravelClientInput) {
     country: data.country || null,
     devise: data.currency ?? "XOF",
     notes: data.notes ?? null,
+    ...(data.paymentTermDays != null
+      ? { delai_paiement_jours: data.paymentTermDays }
+      : {}),
+    ...(data.taxId != null && data.taxId !== ""
+      ? { numero_fiscal: data.taxId }
+      : {}),
     ...(data.categorieClient
       ? { categorie_client: categorieClientToApi(data.categorieClient) }
+      : {}),
+    ...(data.remindersEnabled != null
+      ? { relances_actives: data.remindersEnabled }
       : {}),
   };
 }
@@ -159,6 +171,7 @@ export type LaravelOrgInput = {
   defaultCurrency?: string;
   logoUrl?: string | null;
   fullName?: string | null;
+  parametres?: Record<string, unknown>;
 };
 
 export function toLaravelOrganizationBody(data: LaravelOrgInput) {
@@ -175,6 +188,7 @@ export function toLaravelOrganizationBody(data: LaravelOrgInput) {
       : {}),
     ...(data.logoUrl !== undefined ? { logo_url: data.logoUrl } : {}),
     ...(data.fullName !== undefined ? { full_name: data.fullName } : {}),
+    ...(data.parametres ? { parametres: data.parametres } : {}),
   };
 }
 

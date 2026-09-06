@@ -49,7 +49,7 @@ import {
   getTaxPresetForCurrency,
   type TaxMode,
 } from "@/lib/tax";
-import { formatDateFr } from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
 
 type DocumentFormProps = {
   mode: "new" | "edit";

@@ -31,7 +31,7 @@ import {
   type BusinessDocument,
   type DocumentLine,
 } from "@/lib/documents";
-import { formatDateFr } from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
 import { CURRENCIES, CURRENCY_OPTIONS, type CurrencyCode } from "@/lib/money";
 import {
   computeTotals,

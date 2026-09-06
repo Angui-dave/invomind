@@ -3,6 +3,7 @@ import { getOrgSettings } from "@/lib/dal/settings";
 import { getCurrentOrganization } from "@/lib/dal/session";
 import { dalErrorMessage } from "@/lib/dal/load-error";
 import { DalErrorBanner } from "@/components/dal-error-banner";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { FeatureGate } from "@/components/feature-gate";
 import { getAppRole } from "@/lib/rbac/guards";
 import { isAdminTenant } from "@/lib/rbac/policy";
@@ -28,7 +29,11 @@ export default async function CatalogPage() {
   }
 
   return (
-    <>
+    <div className="space-y-6">
+      <PageHeader
+        title="Catalogue"
+        description="Produits et prestations facturables"
+      />
       {loadError ? <DalErrorBanner message={loadError} /> : null}
       <FeatureGate
         allowed={features.catalog}
@@ -40,6 +45,6 @@ export default async function CatalogPage() {
           defaultCurrency={settings?.defaultCurrency ?? "XOF"}
         />
       </FeatureGate>
-    </>
+    </div>
   );
 }

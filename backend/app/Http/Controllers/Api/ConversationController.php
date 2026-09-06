@@ -20,6 +20,7 @@ use App\Models\Label;
 use App\Models\User;
 use App\Services\EntitlementService;
 use App\Services\Messagerie\FenetreReponseService;
+use App\Support\OrgRules;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
@@ -79,6 +80,31 @@ class ConversationController extends Controller
             ->orderBy('envoye_at');
 
         return $this->paginated($request, $query, ConversationMessageResource::class);
+    }
+
+    public function messagesBatch(Request $request): JsonResponse
+    {
+        $this->entitlements->assertModule($this->orgId($request), 'conversations');
+
+        $ids = $request->query('ids', []);
+        if (is_string($ids)) {
+            $ids = array_filter(array_map('intval', explode(',', $ids)));
+        }
+        if (! is_array($ids) || $ids === []) {
+            return response()->json(['data' => []]);
+        }
+
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        $owned = Conversation::query()->whereIn('id', $ids)->pluck('id')->all();
+
+        $messages = ConversationMessage::query()
+            ->whereIn('conversation_id', $owned)
+            ->orderBy('envoye_at')
+            ->get();
+
+        return response()->json([
+            'data' => ConversationMessageResource::collection($messages)->resolve(),
+        ]);
     }
 
     public function sendMessage(ConversationSendMessageRequest $request, int $id): ConversationMessageResource
@@ -215,7 +241,7 @@ class ConversationController extends Controller
         $this->entitlements->assertModule($this->orgId($request), 'conversations');
 
         $data = $request->validate([
-            'client_id' => ['nullable', 'integer', 'exists:clients,id'],
+            'client_id' => ['nullable', 'integer', OrgRules::exists('clients')],
         ]);
 
         $conversation = Conversation::query()->with('contact')->findOrFail($id);

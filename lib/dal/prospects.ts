@@ -28,6 +28,7 @@ export async function listProspects(): Promise<Prospect[]> {
           d.status !== "refused" &&
           d.status !== "expired" &&
           d.status !== "paid" &&
+          d.status !== "overdue" &&
           d.status !== "converted",
       );
       const estimatedValue = openDocs.reduce((sum, d) => sum + d.total, 0);

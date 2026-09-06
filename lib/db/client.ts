@@ -1,6 +1,7 @@
 /**
  * LEGACY — Drizzle / Postgres client used by the pre-Laravel Next data path.
- * Production path: USE_LARAVEL_API=true → Laravel API (see docs/LARAVEL.md).
+ * Legacy only. Production path: USE_LARAVEL_API=true → Laravel API
+ * and lib/domain for formulas. Do not import this module from app code.
  * This module throws if imported at runtime; do not use for new features.
  */
 import "server-only";

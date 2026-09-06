@@ -1,4 +1,5 @@
-import { formatMoney, PIPELINE_STAGES } from "@/lib/mock-data";
+import { formatMoney } from "@/lib/money";
+import { PIPELINE_STAGES } from "@/lib/data/settings";
 
 const STAGE_CARDS: Record<string, { name: string; company: string; value: number }[]> = {
   nouveau: [{ name: "Marie Dupont", company: "Boulangerie Dupont", value: 400_000 }],

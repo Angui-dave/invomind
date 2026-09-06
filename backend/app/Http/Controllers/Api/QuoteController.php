@@ -8,11 +8,13 @@ use App\Http\Requests\QuoteRequest;
 use App\Http\Resources\QuoteResource;
 use App\Models\Quote;
 use App\Models\QuoteLine;
+use App\Services\DocumentStatusService;
 use App\Services\LineComputeService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class QuoteController extends Controller
 {
@@ -128,14 +130,16 @@ class QuoteController extends Controller
         return new QuoteResource($quote);
     }
 
-    public function updateStatus(Request $request, int $id): QuoteResource
+    public function updateStatus(Request $request, int $id, DocumentStatusService $statuses): QuoteResource
     {
         $data = $request->validate([
-            'statut' => ['required', 'string'],
+            'statut' => ['required', Rule::enum(DevisStatut::class)],
         ]);
 
         $quote = Quote::query()->with('lines')->findOrFail($id);
-        $quote->update(['statut' => $data['statut']]);
+        $next = DevisStatut::from($data['statut']);
+        $statuses->assertQuoteTransition($quote->statut, $next);
+        $quote->update(['statut' => $next]);
 
         return new QuoteResource($quote->fresh('lines'));
     }

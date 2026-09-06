@@ -25,10 +25,11 @@ import {
   updateConversationStatus,
 } from "@/lib/actions/conversations";
 import type { Client } from "@/lib/data/clients";
-import type {
-  Conversation,
-  ConversationLabel,
-  ConversationMessage,
+import {
+  CHANNEL_LABELS,
+  type Conversation,
+  type ConversationLabel,
+  type ConversationMessage,
 } from "@/lib/data/conversations";
 import type { Prospect } from "@/lib/data/settings";
 import type { BusinessDocument } from "@/lib/documents";
@@ -60,6 +61,7 @@ type ConversationsPageClientProps = {
   organizationId?: string;
   currentUserId?: string;
   useRealtime?: boolean;
+  channel?: ChannelFilter;
 };
 
 export function ConversationsPageClient({
@@ -72,16 +74,16 @@ export function ConversationsPageClient({
   organizationId,
   currentUserId,
   useRealtime = false,
+  channel = "all",
 }: ConversationsPageClientProps) {
+  const channelFilter = channel;
+
   const [conversations, setConversations] =
     useState<Conversation[]>(initialConversations);
   const [messages, setMessages] =
     useState<ConversationMessage[]>(initialMessages);
-  const [selectedId, setSelectedId] = useState<string | null>(
-    initialConversations[0]?.id ?? null,
-  );
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [query, setQuery] = useState("");
-  const [channelFilter, setChannelFilter] = useState<ChannelFilter>("all");
   const [mobileShowThread, setMobileShowThread] = useState(false);
   const [contactSheetOpen, setContactSheetOpen] = useState(false);
 
@@ -115,8 +117,25 @@ export function ConversationsPageClient({
       .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
   }, [conversations, query, channelFilter]);
 
-  const selected =
-    conversations.find((c) => c.id === selectedId) ?? null;
+  useEffect(() => {
+    setSelectedId((current) => {
+      const visible = conversations
+        .filter((c) => !c.archived)
+        .filter((c) =>
+          channelFilter === "all" ? true : c.channel === channelFilter,
+        )
+        .sort((a, b) => b.lastMessageAt.localeCompare(a.lastMessageAt));
+      if (visible.length === 0) return null;
+      if (current && visible.some((c) => c.id === current)) return current;
+      return visible[0].id;
+    });
+  }, [channelFilter, conversations]);
+
+  useEffect(() => {
+    setMobileShowThread(false);
+  }, [channelFilter]);
+
+  const selected = filtered.find((c) => c.id === selectedId) ?? null;
 
   const threadMessages = useMemo(
     () =>
@@ -598,15 +617,13 @@ export function ConversationsPageClient({
   }, [organizationId, useRealtime]);
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="flex shrink-0 flex-wrap items-end justify-between gap-3 border-b border-line px-4 py-3 sm:px-6">
         <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Conversations
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Échanges WhatsApp, Messenger, Instagram et TikTok synchronisés avec le
-            CRM
+          <p className="text-sm text-ink/60">
+            {channelFilter === "all"
+              ? "Échanges WhatsApp, Messenger, Instagram et TikTok synchronisés avec le CRM"
+              : `${filtered.length} conversation${filtered.length > 1 ? "s" : ""} · ${CHANNEL_LABELS[channelFilter]}`}
           </p>
         </div>
         {selected && useRealtime ? (
@@ -665,17 +682,15 @@ export function ConversationsPageClient({
         ) : null}
       </div>
 
-      <div className="min-h-0 flex-1 overflow-hidden rounded-2xl border border-line bg-card">
-        <div className="flex h-full lg:hidden">
+      <div className="min-h-0 flex-1 overflow-hidden bg-paper">
+        <div className="flex h-full min-h-0 lg:hidden">
           {!mobileShowThread || !selected ? (
             <ConversationList
               conversations={filtered}
               messages={messages}
               selectedId={selectedId}
               query={query}
-              channelFilter={channelFilter}
               onQueryChange={setQuery}
-              onChannelFilterChange={setChannelFilter}
               onSelect={selectConversation}
               className="w-full"
             />
@@ -700,15 +715,13 @@ export function ConversationsPageClient({
           )}
         </div>
 
-        <div className="hidden h-full lg:grid lg:grid-cols-[300px_minmax(0,1fr)] xl:grid-cols-[300px_minmax(0,1fr)_320px]">
+        <div className="hidden h-full min-h-0 lg:grid lg:grid-cols-[240px_minmax(0,1fr)] lg:grid-rows-[minmax(0,1fr)] xl:grid-cols-[240px_minmax(0,1fr)_240px]">
           <ConversationList
             conversations={filtered}
             messages={messages}
             selectedId={selectedId}
             query={query}
-            channelFilter={channelFilter}
             onQueryChange={setQuery}
-            onChannelFilterChange={setChannelFilter}
             onSelect={selectConversation}
             className="border-r border-line"
           />

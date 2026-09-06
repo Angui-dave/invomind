@@ -20,12 +20,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  CURRENCY_OPTIONS,
-  TAX_PRESETS,
-  type Client,
-  type CurrencyCode,
-} from "@/lib/mock-data";
+import { CURRENCY_OPTIONS, type CurrencyCode } from "@/lib/money";
+import type { Client } from "@/lib/data/clients";
+import { TAX_PRESETS } from "@/lib/tax";
 import { toast } from "sonner";
 
 export type ClientFormValues = {

@@ -245,15 +245,6 @@ export function SettingsPageClient({
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-serif text-2xl font-semibold text-ink">
-          Paramètres
-        </h1>
-        <p className="mt-1 text-sm text-ink/60">
-          Entreprise, fiscalité, abonnement, relances, paiements et canaux
-        </p>
-      </header>
-
       <Tabs defaultValue={settingsTab}>
         <TabsList
           variant="default"

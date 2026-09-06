@@ -16,10 +16,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { cn } from "@/lib/utils";
 
 type TemplateSelectorProps = {
   inboxId?: string;
   channel?: string;
+  variant?: "button" | "icon";
   onSelect: (payload: {
     body: string;
     contentType: "modele";
@@ -30,6 +37,7 @@ type TemplateSelectorProps = {
 export function TemplateSelector({
   inboxId,
   channel,
+  variant = "icon",
   onSelect,
 }: TemplateSelectorProps) {
   const [open, setOpen] = useState(false);
@@ -87,65 +95,91 @@ export function TemplateSelector({
   }
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <Button type="button" variant="outline" size="sm" />
-        }
-      >
-        <FileText className="size-3.5" aria-hidden />
-        Modèle WhatsApp
-      </DialogTrigger>
-      <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle>Modèles WhatsApp approuvés</DialogTitle>
-        </DialogHeader>
-        <div className="mb-3 flex justify-end">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void handleSync()}
-            disabled={syncing}
+    <>
+      {variant === "icon" ? (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="rounded-full bg-muted text-ink/70 hover:bg-muted/80 hover:text-ink"
+                onClick={() => setOpen(true)}
+                aria-label="Modèle WhatsApp"
+              />
+            }
           >
-            <RefreshCw
-              className={`size-3.5 ${syncing ? "animate-spin" : ""}`}
-              aria-hidden
-            />
-            Sync Meta
-          </Button>
-        </div>
-        {loading ? (
-          <p className="text-sm text-ink/55">Chargement…</p>
-        ) : templates.length === 0 ? (
-          <p className="text-sm text-ink/55">
-            Aucun modèle approuvé. Synchronisez depuis Meta (nécessite waba_id +
-            access_token sur la boîte).
-          </p>
-        ) : (
-          <ul className="space-y-2">
-            {templates.map((t) => (
-              <li key={t.id}>
-                <button
-                  type="button"
-                  className="w-full rounded-lg border border-line px-3 py-2 text-left hover:bg-muted/50"
-                  onClick={() => pick(t)}
-                >
-                  <p className="text-sm font-medium text-ink">{t.name}</p>
-                  <p className="text-xs text-ink/50">
-                    {t.language} · {t.category}
-                  </p>
-                  {t.preview ? (
-                    <p className="mt-1 line-clamp-2 text-xs text-ink/70">
-                      {t.preview}
+            <FileText className="size-3.5" aria-hidden />
+          </TooltipTrigger>
+          <TooltipContent className="bg-ink text-paper border-ink">
+            Modèle WhatsApp
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
+
+      <Dialog open={open} onOpenChange={setOpen}>
+        {variant === "button" ? (
+          <DialogTrigger
+            render={
+              <Button type="button" variant="outline" size="sm" />
+            }
+          >
+            <FileText className="size-3.5" aria-hidden />
+            Modèle WhatsApp
+          </DialogTrigger>
+        ) : null}
+        <DialogContent className="max-h-[80vh] overflow-y-auto sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Modèles WhatsApp approuvés</DialogTitle>
+          </DialogHeader>
+          <div className="mb-3 flex justify-end">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void handleSync()}
+              disabled={syncing}
+            >
+              <RefreshCw
+                className={cn("size-3.5", syncing && "animate-spin")}
+                aria-hidden
+              />
+              Sync Meta
+            </Button>
+          </div>
+          {loading ? (
+            <p className="text-sm text-ink/55">Chargement…</p>
+          ) : templates.length === 0 ? (
+            <p className="text-sm text-ink/55">
+              Aucun modèle approuvé. Synchronisez depuis Meta (nécessite waba_id +
+              access_token sur la boîte).
+            </p>
+          ) : (
+            <ul className="space-y-2">
+              {templates.map((t) => (
+                <li key={t.id}>
+                  <button
+                    type="button"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-left hover:bg-muted/50"
+                    onClick={() => pick(t)}
+                  >
+                    <p className="text-sm font-medium text-ink">{t.name}</p>
+                    <p className="text-xs text-ink/50">
+                      {t.language} · {t.category}
                     </p>
-                  ) : null}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </DialogContent>
-    </Dialog>
+                    {t.preview ? (
+                      <p className="mt-1 line-clamp-2 text-xs text-ink/70">
+                        {t.preview}
+                      </p>
+                    ) : null}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

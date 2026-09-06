@@ -19,16 +19,14 @@ import {
 import { linkConversationClient } from "@/lib/actions/conversations";
 import { createClient } from "@/lib/actions/clients";
 import type { Client } from "@/lib/data/clients";
-import type { Prospect } from "@/lib/data/settings";
 import {
-  DEFAULT_CURRENCY,
-  formatMoney,
   PIPELINE_STAGE_COLORS,
   PIPELINE_STAGES,
-  resolveContact,
-  type BusinessDocument,
-  type Conversation,
-} from "@/lib/mock-data";
+  type Prospect,
+} from "@/lib/data/settings";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import type { BusinessDocument } from "@/lib/documents";
+import { resolveContact, type Conversation } from "@/lib/data/conversations";
 import { cn } from "@/lib/utils";
 
 type ContactPanelProps = {
@@ -123,6 +121,7 @@ export function ContactPanel({
       company: conversation!.contactName,
       email: `contact+${conversation!.id.replace(/\W/g, "")}@invomind.local`,
       phone: conversation!.contactHandle,
+      remindersEnabled: true,
     });
     if (!created.ok || !created.id) {
       setLinking(false);

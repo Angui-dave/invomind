@@ -29,6 +29,7 @@ class Client extends Model
         'devise',
         'delai_paiement_jours',
         'numero_fiscal',
+        'relances_actives',
         'categorie_client',
         'notes',
     ];
@@ -38,6 +39,7 @@ class Client extends Model
         return [
             'categorie_client' => ClientCategorie::class,
             'delai_paiement_jours' => 'integer',
+            'relances_actives' => 'boolean',
         ];
     }
 

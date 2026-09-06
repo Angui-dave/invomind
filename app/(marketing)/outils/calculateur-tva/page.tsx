@@ -10,15 +10,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  calculateVat,
-  CURRENCY_OPTIONS,
-  formatMoney,
-  getTaxPreset,
-  TAX_PRESETS,
-  type CurrencyCode,
-  type TaxMode,
-} from "@/lib/mock-data";
+import { CURRENCY_OPTIONS, formatMoney, type CurrencyCode } from "@/lib/money";
+import { calculateVat, getTaxPreset, TAX_PRESETS, type TaxMode } from "@/lib/tax";
 
 export default function VatCalculatorPage() {
   const [country, setCountry] = useState("SN");

@@ -20,6 +20,7 @@ import {
 import { DEFAULT_ORG_SETTINGS } from "@/lib/data/settings";
 import type { EnabledModules, PlanId } from "@/lib/data/settings";
 import type { ApiOrganizationResponse } from "@/lib/laravel/types";
+import { mapBranding, mapOrgSettings } from "@/lib/laravel/mappers";
 
 type ApiMeResponse = {
   user: {
@@ -55,6 +56,9 @@ type ApiOrgShowResponse = {
   pays?: string | null;
   logo_url?: string | null;
   devise_defaut?: string;
+  parametres?: Record<string, unknown>;
+  settings?: Record<string, unknown>;
+  branding?: Record<string, unknown>;
   subscription?: {
     plan_code?: string | null;
     plan_id?: number | string | null;
@@ -250,21 +254,15 @@ export const fetchOrganization = cache(async (): Promise<ApiOrganizationResponse
       postal_code: org.code_postal,
       country: org.pays,
       default_currency: org.devise_defaut ?? "XOF",
-      default_tax_mode: "exclusive",
-      default_tax_rate: 18,
+      ...(org.settings ?? org.parametres ?? {}),
     },
-    branding: {
+    branding: org.branding ?? {
       display_name: org.name_company,
       logo_url: org.logo_url,
-      primary_color: "#2563eb",
-      accent_color: "#10b981",
-      font_family: "Inter",
-      document_template: "classic",
-      locale: "fr-CI",
       currency: org.devise_defaut ?? "XOF",
     },
     features: {
-      pipeline: false,
+      pipeline: true,
       conversations: true,
       expenses: true,
       catalog: true,
@@ -295,7 +293,7 @@ export const getCurrentOrganization = cache(async () => {
         settings: {},
         branding: {},
         features: {
-          pipeline: false,
+          pipeline: true,
           conversations: true,
           expenses: true,
           catalog: true,
@@ -348,25 +346,18 @@ export const getCurrentOrganization = cache(async () => {
       },
       settings: {
         ...DEFAULT_ORG_SETTINGS,
-        companyName:
-          String(settingsRaw.company_name ?? organization.name ?? DEFAULT_ORG_SETTINGS.companyName),
-        email: String(settingsRaw.email ?? DEFAULT_ORG_SETTINGS.email),
-        phone: String(settingsRaw.phone ?? ""),
-        address: String(settingsRaw.address ?? ""),
-        city: String(settingsRaw.city ?? ""),
-        postalCode: String(settingsRaw.postal_code ?? ""),
-        country: String(settingsRaw.country ?? "Côte d'Ivoire"),
-        defaultCurrency: (settingsRaw.default_currency as "XOF") ?? "XOF",
+        ...mapOrgSettings({
+          ...settingsRaw,
+          company_name: settingsRaw.company_name ?? organization.name,
+          default_currency: settingsRaw.default_currency ?? settingsRaw.devise_defaut,
+        }),
       },
       branding: {
-        displayName: (brandingRaw.display_name as string | null) ?? organization.name,
-        logoUrl: (brandingRaw.logo_url as string | null) ?? null,
-        primaryColor: (brandingRaw.primary_color as string) ?? "#2563eb",
-        accentColor: (brandingRaw.accent_color as string) ?? "#10b981",
-        fontFamily: (brandingRaw.font_family as string) ?? "Inter",
-        documentTemplate: "classic" as const,
-        locale: (brandingRaw.locale as string) ?? "fr-CI",
-        currency: (brandingRaw.currency as "XOF") ?? "XOF",
+        ...mapBranding({
+          ...brandingRaw,
+          name_company: organization.name,
+          devise_defaut: settingsRaw.default_currency,
+        }),
       },
       enabledModules,
       features,

@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { InvoiceStatusBadge } from "@/components/invoice-status-badge";
-import { formatDateFr, formatMoney } from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
+import { formatMoney } from "@/lib/money";
 
 const DEMO_INVOICE = {
   number: "FAC-2026-088",

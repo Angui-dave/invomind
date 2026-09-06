@@ -26,12 +26,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { formatMoney } from "@/lib/mock-data";
+import { formatMoney } from "@/lib/money";
 import type { CurrencyCode } from "@/lib/money";
 import type { RevenuePoint } from "@/lib/dal/reports";
 
 const salesConfig = {
-  amount: { label: "CA", color: "var(--chart-1)" },
+  amount: { label: "CA encaissé", color: "var(--chart-1)" },
 } satisfies ChartConfig;
 
 const expenseConfig = {
@@ -81,13 +81,6 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="font-serif text-2xl font-semibold text-ink">Rapports</h1>
-        <p className="mt-1 text-sm text-ink/60">
-          Analyses et synthèses comptables
-        </p>
-      </header>
-
       <Tabs defaultValue="sales">
         <TabsList variant="default" className="h-auto flex-wrap rounded-full bg-muted/80 p-1">
           <TabsTrigger value="sales" className="rounded-full">Ventes</TabsTrigger>
@@ -112,7 +105,7 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
               value={
                 <span className="num">{formatMoney(billedTtc, currency)}</span>
               }
-              hint="Factures + avoirs (signés)"
+              hint="Factures émises (hors brouillon / annulée)"
             />
             <StatCard
               label="Factures payées"
@@ -172,23 +165,25 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
         <TabsContent value="pl" className="mt-6 space-y-6">
           <div className="grid gap-3 sm:grid-cols-3">
             <StatCard
-              label="Produits HT"
+              label="CA encaissé (TTC)"
               value={
                 <span className="num text-ledger">
-                  {formatMoney(salesHt, currency)}
+                  {formatMoney(collected, currency)}
                 </span>
               }
+              hint="Base du profit"
             />
             <StatCard
-              label="Charges HT"
+              label="Dépenses (TTC)"
               value={
                 <span className="num text-brick">
-                  {formatMoney(expensesHt, currency)}
+                  {formatMoney(expensesTtc, currency)}
                 </span>
               }
+              hint="Dépenses validées uniquement"
             />
             <StatCard
-              label="Résultat"
+              label="Profit (TTC)"
               value={
                 <span
                   className={`num ${profit >= 0 ? "text-ledger" : "text-brick"}`}
@@ -196,27 +191,28 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
                   {formatMoney(profit, currency)}
                 </span>
               }
+              hint="CA encaissé − dépenses TTC"
             />
           </div>
           <div className="rounded-2xl border border-line bg-card p-5">
             <h2 className="mb-4 font-serif text-base font-semibold text-ink">
-              Compte de résultat simplifié (HT)
+              Compte de résultat (encaissement TTC)
             </h2>
             <ul className="space-y-2 text-sm">
               <li className="flex justify-between border-b border-line pb-2">
-                <span>Chiffre d’affaires HT</span>
+                <span>CA encaissé TTC</span>
                 <span className="num font-medium">
-                  {formatMoney(salesHt, currency)}
+                  {formatMoney(collected, currency)}
                 </span>
               </li>
               <li className="flex justify-between border-b border-line pb-2">
-                <span>Charges d’exploitation HT</span>
+                <span>Dépenses TTC (validées)</span>
                 <span className="num font-medium text-brick">
-                  − {formatMoney(expensesHt, currency)}
+                  − {formatMoney(expensesTtc, currency)}
                 </span>
               </li>
               <li className="flex justify-between pt-2">
-                <span className="font-medium">Résultat net</span>
+                <span className="font-medium">Profit</span>
                 <span
                   className={`num text-lg font-semibold ${profit >= 0 ? "text-ledger" : "text-brick"}`}
                 >
@@ -224,6 +220,10 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
                 </span>
               </li>
             </ul>
+            <p className="mt-4 text-xs text-ink/50">
+              Référence HT : CA facturé {formatMoney(salesHt, currency)} ·
+              charges {formatMoney(expensesHt, currency)}
+            </p>
           </div>
         </TabsContent>
 
@@ -235,14 +235,16 @@ export function ReportsPageClient(props: ReportsPageClientProps) {
                 {formatMoney(expensesTtc, currency)}
               </span>
             }
-            hint={
-              paymentsByCurrency.length > 1
-                ? paymentsByCurrency
-                    .map((r) => formatMoney(r.amount, r.currency))
-                    .join(" · ")
-                : undefined
-            }
+            hint="Dépenses validées uniquement"
           />
+          {paymentsByCurrency.length > 1 ? (
+            <p className="text-xs text-ink/55">
+              Encaissements par devise :{" "}
+              {paymentsByCurrency
+                .map((r) => formatMoney(r.amount, r.currency))
+                .join(" · ")}
+            </p>
+          ) : null}
           <div className="grid gap-4 lg:grid-cols-2">
             <div className="rounded-2xl border border-line bg-card p-4">
               <h2 className="mb-4 font-serif text-base font-semibold text-ink">

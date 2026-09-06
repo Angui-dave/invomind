@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CURRENCY_OPTIONS, type CurrencyCode } from "@/lib/mock-data";
+import { CURRENCY_OPTIONS, type CurrencyCode } from "@/lib/money";
 import {
   buildEmvQrPayload,
   providerLabel,

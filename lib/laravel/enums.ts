@@ -74,6 +74,7 @@ const QUOTE_FROM_API: Record<ApiQuoteStatut, QuoteStatus | "converted"> = {
 const INVOICE_TO_API: Record<string, ApiInvoiceStatut> = {
   draft: "brouillon",
   sent: "envoyee",
+  unpaid: "impayee",
   partially_paid: "partiellement_payee",
   paid: "payee",
   overdue: "en_retard",
@@ -85,7 +86,7 @@ const INVOICE_FROM_API: Record<ApiInvoiceStatut, InvoiceStatus> = {
   envoyee: "sent",
   payee: "paid",
   partiellement_payee: "partially_paid",
-  impayee: "sent",
+  impayee: "unpaid",
   en_retard: "overdue",
   annulee: "cancelled",
 };
@@ -118,7 +119,7 @@ const PAYMENT_FROM_API: Record<ApiModePaiement, PaymentMethod> = {
   moov_money: "moov_money",
   wave: "wave",
   cheque: "check",
-  autre: "cash",
+  autre: "autre",
 };
 
 export function quoteStatusToApi(status: string): ApiQuoteStatut {

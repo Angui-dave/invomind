@@ -28,3 +28,24 @@ export function relativeDateFr(iso: string, now = new Date(TODAY)): string {
   const diffMonths = Math.round(diffDays / 30);
   return rtf.format(diffMonths, "month");
 }
+
+/** Short list timestamp: time today, « Hier », or short date */
+export function conversationStampFr(
+  iso: string,
+  now = new Date(TODAY),
+): string {
+  const target = new Date(iso);
+  const todayStart = new Date(now);
+  todayStart.setHours(0, 0, 0, 0);
+  const targetDay = new Date(target);
+  targetDay.setHours(0, 0, 0, 0);
+  const diffDays = Math.round(
+    (targetDay.getTime() - todayStart.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  if (diffDays === 0) return formatTimeFr(iso);
+  if (diffDays === -1) return "Hier";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "numeric",
+    month: "short",
+  }).format(target);
+}

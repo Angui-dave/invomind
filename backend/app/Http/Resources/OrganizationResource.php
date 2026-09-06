@@ -25,6 +25,18 @@ class OrganizationResource extends JsonResource
             'code_postal' => $this->code_postal,
             'pays' => $this->pays,
             'devise_defaut' => $this->devise_defaut,
+            'parametres' => $this->parametres ?? [],
+            'settings' => $this->parametres ?? [],
+            'branding' => [
+                'display_name' => $this->name_company,
+                'logo_url' => $this->logo_url,
+                'primary_color' => ($this->parametres ?? [])['primary_color'] ?? '#2563eb',
+                'accent_color' => ($this->parametres ?? [])['accent_color'] ?? '#10b981',
+                'font_family' => ($this->parametres ?? [])['font_family'] ?? 'Inter',
+                'document_template' => ($this->parametres ?? [])['document_template'] ?? 'classic',
+                'locale' => ($this->parametres ?? [])['locale'] ?? 'fr-CI',
+                'currency' => $this->devise_defaut ?? 'XOF',
+            ],
             'subscription' => $this->whenLoaded('subscription', function () {
                 return [
                     'id' => $this->subscription->id,

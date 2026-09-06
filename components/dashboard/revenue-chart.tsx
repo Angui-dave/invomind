@@ -10,11 +10,8 @@ import {
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  DEFAULT_CURRENCY,
-  formatMoney,
-  type RevenuePoint,
-} from "@/lib/mock-data";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import type { RevenuePoint } from "@/lib/data/derive";
 
 const chartConfig = {
   revenue: {

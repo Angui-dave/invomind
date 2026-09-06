@@ -1,0 +1,129 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - test
+          - production
+
+concurrency:
+  group: deploy-${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'test') }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy
+    needs: quality
+    if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ github.event_name == 'workflow_dispatch' && inputs.environment || (github.ref == 'refs/heads/main' && 'production' || 'test') }}
+    steps:
+      - name: Resolve configuration
+        id: cfg
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          DEPLOY_FRONT_PATH: ${{ secrets.DEPLOY_FRONT_PATH }}
+          DEPLOY_BACK_PATH: ${{ secrets.DEPLOY_BACK_PATH }}
+        run: |
+          if [ -z "$SSH_HOST" ]; then
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "SSH_HOST is not set for this environment. Skipping deploy (server not configured yet)."
+            exit 0
+          fi
+
+          if [ -z "$SSH_USER" ] || [ -z "$SSH_PRIVATE_KEY" ] || [ -z "$DEPLOY_FRONT_PATH" ] || [ -z "$DEPLOY_BACK_PATH" ]; then
+            echo "SSH_HOST is set but SSH_USER, SSH_PRIVATE_KEY, DEPLOY_FRONT_PATH or DEPLOY_BACK_PATH is missing."
+            exit 1
+          fi
+
+          echo "configured=true" >> "$GITHUB_OUTPUT"
+          echo "ssh_port=${SSH_PORT:-22}" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.cfg.outputs.configured == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup SSH
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_PORT: ${{ steps.cfg.outputs.ssh_port }}
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" | tr -d '\r' > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Sync frontend
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ steps.cfg.outputs.ssh_port }}
+          DEPLOY_FRONT_PATH: ${{ secrets.DEPLOY_FRONT_PATH }}
+        run: |
+          rsync -az --delete --info=stats2 \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT" \
+            --exclude '.git' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'node_modules' \
+            --exclude '.next' \
+            --exclude 'backend' \
+            --exclude '.github' \
+            ./ "${SSH_USER}@${SSH_HOST}:${DEPLOY_FRONT_PATH}/"
+
+      - name: Sync backend
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ steps.cfg.outputs.ssh_port }}
+          DEPLOY_BACK_PATH: ${{ secrets.DEPLOY_BACK_PATH }}
+        run: |
+          rsync -az --delete --info=stats2 \
+            -e "ssh -i ~/.ssh/deploy_key -p $SSH_PORT" \
+            --exclude '.git' \
+            --exclude '.env' \
+            --exclude '.env.*' \
+            --exclude 'vendor' \
+            --exclude 'node_modules' \
+            ./backend/ "${SSH_USER}@${SSH_HOST}:${DEPLOY_BACK_PATH}/"
+
+      - name: Run remote release
+        if: steps.cfg.outputs.configured == 'true'
+        env:
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ steps.cfg.outputs.ssh_port }}
+          DEPLOY_FRONT_PATH: ${{ secrets.DEPLOY_FRONT_PATH }}
+          DEPLOY_BACK_PATH: ${{ secrets.DEPLOY_BACK_PATH }}
+          FRONT_RESTART_CMD: ${{ vars.FRONT_RESTART_CMD }}
+          BACK_RESTART_CMD: ${{ vars.BACK_RESTART_CMD }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -p "$SSH_PORT" "${SSH_USER}@${SSH_HOST}" \
+            env \
+              FRONT_PATH="$DEPLOY_FRONT_PATH" \
+              BACK_PATH="$DEPLOY_BACK_PATH" \
+              FRONT_RESTART_CMD="$FRONT_RESTART_CMD" \
+              BACK_RESTART_CMD="$BACK_RESTART_CMD" \
+              bash -s < scripts/deploy-remote.sh

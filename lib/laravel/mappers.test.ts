@@ -12,15 +12,16 @@ describe("laravel mappers", () => {
   it("maps client snake_case", () => {
     const client = mapClient({
       id: "c1",
-      name: "Aminata",
-      company: "SARL",
+      name_company: "SARL Diallo",
       email: "a@test.com",
-      postal_code: "10000",
-      tax_id: "SN1",
-      payment_term_days: 30,
+      code_postal: "10000",
+      numero_fiscal: "SN1",
+      delai_paiement_jours: 30,
       reminders_enabled: true,
-      portal_token: "tok",
+      uuid: "tok",
     });
+    expect(client.company).toBe("SARL Diallo");
+    expect(client.name).toBe("SARL Diallo");
     expect(client.postalCode).toBe("10000");
     expect(client.taxId).toBe("SN1");
     expect(client.paymentTermDays).toBe(30);

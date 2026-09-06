@@ -9,11 +9,8 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  DEFAULT_CURRENCY,
-  formatMoney,
-  type TopClientRevenue,
-} from "@/lib/mock-data";
+import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import type { TopClientRevenue } from "@/lib/data/derive";
 
 const chartConfig = {
   amount: {

@@ -63,19 +63,17 @@ export async function getMessages(
     if (!conversationId) {
       // Load messages for all conversations (used by initial page hydrate).
       const conversations = await listConversations();
+      if (conversations.length === 0) return [];
       const token = (await readSessionCookie())?.accessToken;
-      const batches = await Promise.all(
-        conversations.map(async (c) => {
-          const rows = unwrapList(
-            await laravelRequest<unknown>(`/conversations/${c.id}/messages`, {
-              token,
-              organizationId: session.organizationId,
-            }),
-          );
-          return rows.map(mapConversationMessage);
-        }),
+      const ids = conversations.map((c) => c.id).join(",");
+      const payload = await laravelRequest<{ data?: unknown[] }>(
+        `/conversations/messages-batch?ids=${encodeURIComponent(ids)}`,
+        {
+          token,
+          organizationId: session.organizationId,
+        },
       );
-      return batches.flat();
+      return unwrapList(payload).map(mapConversationMessage);
     }
     const token = (await readSessionCookie())?.accessToken;
     const rows = unwrapList(

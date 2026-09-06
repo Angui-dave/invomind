@@ -10,7 +10,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
-import type { CurrentUser, EnabledModules } from "@/lib/mock-data";
+import type { CurrentUser, EnabledModules } from "@/lib/data/settings";
 import type { AppRole } from "@/lib/rbac/types";
 
 type MobileNavProps = {

@@ -27,12 +27,8 @@ import {
   createProspect,
   updateProspectStage,
 } from "@/lib/actions/prospects";
-import {
-  PIPELINE_STAGES,
-  TODAY,
-  type PipelineStage,
-  type Prospect,
-} from "@/lib/mock-data";
+import { PIPELINE_STAGES, type PipelineStage, type Prospect } from "@/lib/data/settings";
+import { TODAY } from "@/lib/date";
 import { toast } from "sonner";
 
 type ActiveStage = Exclude<PipelineStage, "inactif">;

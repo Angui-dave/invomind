@@ -20,6 +20,7 @@ class InvoiceLine extends Model
         'taux_tva',
         'remise_pourcentage',
         'montant_ht',
+        'montant_tva',
         'ordre',
     ];
 
@@ -31,6 +32,7 @@ class InvoiceLine extends Model
             'taux_tva' => 'decimal:2',
             'remise_pourcentage' => 'decimal:2',
             'montant_ht' => 'decimal:2',
+            'montant_tva' => 'decimal:2',
             'ordre' => 'integer',
         ];
     }

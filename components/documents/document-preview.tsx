@@ -11,7 +11,7 @@ import {
   type DocumentKind,
   type DocumentLine,
 } from "@/lib/documents";
-import { formatDateFr } from "@/lib/mock-data";
+import { formatDateFr } from "@/lib/formatters";
 import { formatMoney, type CurrencyCode } from "@/lib/money";
 import { lineNet, type DocumentTotals, type TaxMode } from "@/lib/tax";
 import { cn } from "@/lib/utils";

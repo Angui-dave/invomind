@@ -1,4 +1,4 @@
-import { formatMoney } from "@/lib/mock-data";
+import { formatMoney } from "@/lib/money";
 
 const EXPENSES = [
   { label: "Hébergement & domaine", category: "Logiciels", amount: 45_000, deductible: true },

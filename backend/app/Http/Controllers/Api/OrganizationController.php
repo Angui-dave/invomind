@@ -39,10 +39,31 @@ class OrganizationController extends Controller
             'code_postal' => ['nullable', 'string', 'max:20'],
             'pays' => ['nullable', 'string', 'max:100'],
             'devise_defaut' => ['nullable', 'string', 'size:3'],
+            'parametres' => ['sometimes', 'array'],
+            'parametres.default_tax_rate' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'parametres.default_tax_mode' => ['nullable', 'in:exclusive,inclusive'],
+            'parametres.tax_id' => ['nullable', 'string', 'max:64'],
+            'parametres.bank_name' => ['nullable', 'string', 'max:255'],
+            'parametres.iban' => ['nullable', 'string', 'max:64'],
+            'parametres.bic' => ['nullable', 'string', 'max:32'],
+            'parametres.qr_iban' => ['nullable', 'string', 'max:64'],
+            'parametres.mobile_money_provider' => ['nullable', 'string', 'max:64'],
+            'parametres.mobile_money_number' => ['nullable', 'string', 'max:32'],
+            'parametres.legal_mentions' => ['nullable', 'string'],
+            'parametres.primary_color' => ['nullable', 'string', 'max:16'],
+            'parametres.accent_color' => ['nullable', 'string', 'max:16'],
+            'parametres.font_family' => ['nullable', 'string', 'max:64'],
+            'parametres.document_template' => ['nullable', 'string', 'max:32'],
+            'parametres.locale' => ['nullable', 'string', 'max:16'],
+            'parametres.reminders_enabled' => ['nullable', 'boolean'],
+            'parametres.reminder_cadence' => ['nullable', 'array'],
+            'parametres.accepted_payment_methods' => ['nullable', 'array'],
         ]);
 
-        $org->update($data);
+        $parametres = array_merge($org->parametres ?? [], $data['parametres'] ?? []);
+        unset($data['parametres']);
+        $org->update([...$data, 'parametres' => $parametres]);
 
-        return new OrganizationResource($org->fresh(['subscription.plan']));
+        return new OrganizationResource($org->fresh(['subscription.plan', 'subscription.payments']));
     }
 }

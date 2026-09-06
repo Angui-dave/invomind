@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { Link2, Plus } from "lucide-react";
+import { Link2, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ClientDialog, type ClientFormValues } from "@/components/clients/client-dialog";
 import { PipelineBoard } from "@/components/clients/pipeline-board";
+import { PageEmptyState } from "@/components/dashboard/page-empty-state";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,12 +19,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { createClient, updateClient } from "@/lib/actions/clients";
-import {
-  clientInitials,
-  portalUrl,
-  type Client,
-  type Prospect,
-} from "@/lib/mock-data";
+import { clientDisplayName, clientInitials, portalUrl, type Client } from "@/lib/data/clients";
+import type { Prospect } from "@/lib/data/settings";
 
 type ClientsPageClientProps = {
   initialClients: Client[];
@@ -81,17 +78,6 @@ export function ClientsPageClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="font-serif text-2xl font-semibold text-ink">
-            Clients
-          </h1>
-          <p className="mt-1 text-sm text-ink/60">
-            Base clients et pipeline prospects
-          </p>
-        </div>
-      </div>
-
       <Tabs defaultValue="clients">
         <TabsList variant="line">
           <TabsTrigger value="clients">Clients</TabsTrigger>
@@ -115,6 +101,26 @@ export function ClientsPageClient({
             </Button>
           </div>
 
+          {clients.length === 0 ? (
+            <PageEmptyState
+              icon={Users}
+              title="Aucun client"
+              description="Ajoutez votre premier client pour facturer et suivre les échanges."
+              action={
+                <Button
+                  type="button"
+                  className="rounded-full bg-ledger text-paper hover:bg-ledger/90"
+                  onClick={() => {
+                    setEditing(null);
+                    setDialogOpen(true);
+                  }}
+                >
+                  <Plus className="size-4" aria-hidden />
+                  Ajouter un client
+                </Button>
+              }
+            />
+          ) : (
           <div className="overflow-hidden rounded-2xl border border-line bg-card">
             <Table>
               <TableHeader>
@@ -140,16 +146,19 @@ export function ClientsPageClient({
                       >
                         <Avatar size="sm">
                           <AvatarFallback className="bg-muted text-ink">
-                            {clientInitials(client.name)}
+                            {clientInitials(clientDisplayName(client))}
                           </AvatarFallback>
                         </Avatar>
                         <span>
                           <span className="block font-medium text-ink">
-                            {client.name}
+                            {clientDisplayName(client)}
                           </span>
-                          <span className="block text-xs text-ink/55">
-                            {client.company}
-                          </span>
+                          {client.name &&
+                          client.name !== client.company ? (
+                            <span className="block text-xs text-ink/55">
+                              {client.name}
+                            </span>
+                          ) : null}
                         </span>
                       </button>
                     </TableCell>
@@ -186,6 +195,7 @@ export function ClientsPageClient({
               </TableBody>
             </Table>
           </div>
+          )}
         </TabsContent>
 
         {pipelineAllowed ? (

@@ -9,7 +9,7 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart";
 import { Skeleton } from "@/components/ui/skeleton";
-import { STATUS_LABELS } from "@/lib/mock-data";
+import { STATUS_LABELS } from "@/lib/documents";
 
 const chartConfig = {
   paid: { label: STATUS_LABELS.paid, color: "var(--color-brass)" },
@@ -18,11 +18,12 @@ const chartConfig = {
     color: "var(--color-amber)",
   },
   sent: { label: STATUS_LABELS.sent, color: "var(--color-ledger)" },
+  unpaid: { label: STATUS_LABELS.unpaid, color: "var(--color-amber)" },
   draft: { label: STATUS_LABELS.draft, color: "var(--chart-3)" },
   overdue: { label: STATUS_LABELS.overdue, color: "var(--color-brick)" },
 } satisfies ChartConfig;
 
-const ORDER = ["paid", "partially_paid", "sent", "draft", "overdue"] as const;
+const ORDER = ["paid", "partially_paid", "sent", "unpaid", "draft", "overdue"] as const;
 
 type StatusDonutChartProps = {
   counts: Record<string, number>;
@@ -52,22 +53,22 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
   );
 
   return (
-    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
-      <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
+    <div className="flex h-full min-w-0 flex-col overflow-hidden rounded-2xl border border-line bg-card p-4 shadow-sm sm:p-5">
+      <h2 className="mb-4 shrink-0 font-serif text-base font-semibold text-ink sm:text-lg">
         Factures par statut
       </h2>
 
       {!loaded ? (
         <div className="flex flex-col items-center gap-4">
-          <Skeleton className="size-[160px] rounded-full bg-line/50" />
+          <Skeleton className="size-[140px] rounded-full bg-line/50" />
           <Skeleton className="h-16 w-full rounded-sm bg-line/40" />
         </div>
       ) : (
-        <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-start">
-          <div className="relative mx-auto">
+        <div className="flex min-w-0 flex-1 flex-col items-center gap-4 xl:flex-row xl:items-center">
+          <div className="relative mx-auto shrink-0">
             <ChartContainer
               config={chartConfig}
-              className="aspect-square h-[160px] w-[160px]"
+              className="aspect-square !h-[140px] !w-[140px] overflow-hidden"
             >
               <PieChart>
                 <ChartTooltip
@@ -83,8 +84,8 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
                   data={data}
                   dataKey="value"
                   nameKey="status"
-                  innerRadius={48}
-                  outerRadius={72}
+                  innerRadius={42}
+                  outerRadius={62}
                   strokeWidth={2}
                   stroke="var(--color-paper)"
                 >
@@ -95,30 +96,30 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
               </PieChart>
             </ChartContainer>
             <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
-              <span className="num text-xl font-semibold text-ink">{total}</span>
+              <span className="num text-lg font-semibold text-ink">{total}</span>
               <span className="text-[10px] font-medium uppercase tracking-wide text-ink/45">
                 factures
               </span>
             </div>
           </div>
 
-          <ul className="w-full space-y-2 text-sm">
+          <ul className="w-full min-w-0 flex-1 space-y-1.5 text-sm">
             {ORDER.map((status) => (
               <li
                 key={status}
-                className="flex items-center justify-between gap-3"
+                className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2"
               >
-                <span className="flex items-center gap-2 text-ink/75">
-                  <span
-                    className="size-2.5 shrink-0 rounded-full"
-                    style={{
-                      backgroundColor: chartConfig[status].color,
-                    }}
-                    aria-hidden
-                  />
+                <span
+                  className="size-2.5 shrink-0 rounded-full"
+                  style={{
+                    backgroundColor: chartConfig[status].color,
+                  }}
+                  aria-hidden
+                />
+                <span className="truncate text-ink/75" title={STATUS_LABELS[status]}>
                   {STATUS_LABELS[status]}
                 </span>
-                <span className="num font-medium text-ink">
+                <span className="num shrink-0 tabular-nums font-medium text-ink">
                   {counts[status] ?? 0}
                 </span>
               </li>

@@ -28,6 +28,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { verifySession } from "@/lib/dal/session";
+import { dalErrorMessage } from "@/lib/dal/load-error";
 import {
   getInvoices,
   overdueInvoiceCount,
@@ -35,68 +36,71 @@ import {
 } from "@/lib/dal/documents";
 import { activeProspectsValue } from "@/lib/dal/prospects";
 import {
+  invoiceStatusCounts,
+  monthBilledTtc,
   monthRevenue,
   revenueByMonth,
   topClients,
 } from "@/lib/dal/reports";
-import { TODAY, currentMonthKey, monthKey } from "@/lib/date";
+import { TODAY } from "@/lib/date";
 import { formatDateFr } from "@/lib/formatters";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
+import { DalErrorBanner } from "@/components/dal-error-banner";
 import { cn } from "@/lib/utils";
 
 const SHOW_EMPTY_STATE = false;
-const BILLABLE_STATUSES = new Set([
-  "sent",
-  "partially_paid",
-  "paid",
-  "overdue",
-]);
 
 export default async function DashboardPage() {
   await assertAdminTenant();
   const session = await verifySession();
-  const [
-    pipeline,
-    overdue,
-    pending,
-    invoices,
-    revenue,
-    series3,
-    series6,
-    series12,
-    top,
-  ] = await Promise.all([
-    activeProspectsValue().catch(() => ({ total: 0, count: 0 })),
-    overdueInvoiceCount().catch(() => 0),
-    pendingInvoiceCount().catch(() => 0),
-    getInvoices().catch(() => [] as Awaited<ReturnType<typeof getInvoices>>),
-    monthRevenue().catch(() => 0),
-    revenueByMonth(3).catch(() => []),
-    revenueByMonth(6).catch(() => []),
-    revenueByMonth(12).catch(() => []),
-    topClients(5).catch(() => []),
-  ]);
+
+  let loadError: string | null = null;
+  let pipeline = { total: 0, count: 0 };
+  let overdue = 0;
+  let pending = 0;
+  let invoices: Awaited<ReturnType<typeof getInvoices>> = [];
+  let revenue = 0;
+  let series3: Awaited<ReturnType<typeof revenueByMonth>> = [];
+  let series6: Awaited<ReturnType<typeof revenueByMonth>> = [];
+  let series12: Awaited<ReturnType<typeof revenueByMonth>> = [];
+  let top: Awaited<ReturnType<typeof topClients>> = [];
+  let statusCounts: Record<string, number> = {};
+  let billedThisMonth = 0;
+
+  try {
+    [
+      pipeline,
+      overdue,
+      pending,
+      invoices,
+      revenue,
+      series3,
+      series6,
+      series12,
+      top,
+      statusCounts,
+      billedThisMonth,
+    ] = await Promise.all([
+      activeProspectsValue(),
+      overdueInvoiceCount(),
+      pendingInvoiceCount(),
+      getInvoices(),
+      monthRevenue(),
+      revenueByMonth(3),
+      revenueByMonth(6),
+      revenueByMonth(12),
+      topClients(5),
+      invoiceStatusCounts(),
+      monthBilledTtc(),
+    ]);
+  } catch (error) {
+    loadError = dalErrorMessage(error);
+  }
 
   const recent = [...invoices]
     .sort((a, b) => b.issueDate.localeCompare(a.issueDate))
     .slice(0, 5);
 
-  const statusCounts = invoices.reduce(
-    (acc, inv) => {
-      acc[inv.status] = (acc[inv.status] ?? 0) + 1;
-      return acc;
-    },
-    {} as Record<string, number>,
-  );
-
-  const monthKeyVal = currentMonthKey();
-  const billedThisMonth = invoices
-    .filter(
-      (inv) =>
-        monthKey(inv.issueDate) === monthKeyVal &&
-        BILLABLE_STATUSES.has(inv.status),
-    )
-    .reduce((sum, inv) => sum + inv.total, 0);
   const collectionRate =
     billedThisMonth > 0
       ? Math.min(100, Math.round((revenue / billedThisMonth) * 100))
@@ -113,6 +117,7 @@ export default async function DashboardPage() {
 
   return (
     <div className="space-y-8 pb-8">
+      {loadError ? <DalErrorBanner message={loadError} /> : null}
       <header className="dashboard-hero-bg relative overflow-hidden rounded-2xl border border-line/80 bg-card/85 p-5 shadow-sm backdrop-blur-md sm:p-6">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
@@ -191,26 +196,29 @@ export default async function DashboardPage() {
 
       <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
+          variant="analytics"
           label="Revenu du mois"
           tone="brass"
-          icon={<TrendingUp size={20} />}
+          icon={<TrendingUp size={14} />}
           value={
             <span className="num text-brass">
               {formatMoney(revenue, DEFAULT_CURRENCY)}
             </span>
           }
-          trend="+12% vs mois dernier"
+          hint="CA encaissé (paiements du mois)"
         />
         <StatCard
+          variant="analytics"
           label="Factures en attente"
           tone="amber"
-          icon={<Clock size={20} />}
+          icon={<Clock size={14} />}
           value={<span className="num">{pending}</span>}
         />
         <StatCard
+          variant="analytics"
           label="Factures en retard"
           tone={overdue > 0 ? "brick" : "default"}
-          icon={<AlertCircle size={20} />}
+          icon={<AlertCircle size={14} />}
           value={
             <span className={cn("num", overdue > 0 && "text-brick")}>
               {overdue}
@@ -218,16 +226,16 @@ export default async function DashboardPage() {
           }
         />
         <StatCard
+          variant="analytics"
           label="Pipeline prospects"
           tone="ledger"
-          icon={<Users size={20} />}
+          icon={<Users size={14} />}
           value={
-            <span className="num text-brass">
+            <span className="num text-ledger">
               {formatMoney(pipeline.total, DEFAULT_CURRENCY)}
             </span>
           }
-          hint={`${pipeline.count} prospects actifs`}
-          trend="+8% vs mois dernier"
+          hint={`${pipeline.count} prospects actifs · devis et factures ouvertes`}
         />
       </section>
 
@@ -236,7 +244,7 @@ export default async function DashboardPage() {
       ) : (
         <>
           <section className="grid gap-6 lg:grid-cols-3">
-            <div className="lg:col-span-2">
+            <div className="min-w-0 lg:col-span-2">
               <RevenueChart
                 seriesByPeriod={{
                   "3": series3,
@@ -245,7 +253,9 @@ export default async function DashboardPage() {
                 }}
               />
             </div>
-            <StatusDonutChart counts={statusCounts} />
+            <div className="min-w-0">
+              <StatusDonutChart counts={statusCounts} />
+            </div>
           </section>
 
           <TopClientsChart clients={top} />

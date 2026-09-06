@@ -120,6 +120,10 @@ export async function updateCompanySettings(
           city: parsed.data.city,
           postalCode: parsed.data.postalCode,
           country: parsed.data.country,
+          parametres: {
+            tax_id: parsed.data.taxId,
+            legal_mentions: parsed.data.legalMentions,
+          },
         }),
       });
       revalidatePath("/settings");
@@ -160,7 +164,13 @@ export async function updateTaxSettings(
         method: "PUT",
         token,
         organizationId,
-        body: { devise_defaut: parsed.data.defaultCurrency },
+        body: {
+          devise_defaut: parsed.data.defaultCurrency,
+          parametres: {
+            default_tax_mode: parsed.data.defaultTaxMode,
+            default_tax_rate: parsed.data.defaultTaxRate,
+          },
+        },
       });
       revalidatePath("/settings");
       return { ok: true };
@@ -191,7 +201,30 @@ export async function updateBankingSettings(
 ): Promise<ActionResult> {
   await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
-    return { ok: false, error: UNAVAILABLE };
+    const parsed = BankingSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Coordonnées bancaires invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          parametres: {
+            bank_name: parsed.data.bankName,
+            iban: parsed.data.iban,
+            bic: parsed.data.bic,
+            qr_iban: parsed.data.qrIban ?? null,
+            mobile_money_provider: parsed.data.mobileMoneyProvider ?? null,
+            mobile_money_number: parsed.data.mobileMoneyNumber ?? null,
+          },
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, UNAVAILABLE) };
+    }
   }
   const parsed = BankingSchema.safeParse(input);
   if (!parsed.success) {
@@ -218,7 +251,26 @@ export async function updateRemindersSettings(
 ): Promise<ActionResult> {
   await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
-    return { ok: false, error: UNAVAILABLE };
+    const parsed = RemindersSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Paramètres de relance invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          parametres: {
+            reminders_enabled: parsed.data.remindersEnabled,
+            reminder_cadence: parsed.data.reminderCadence,
+          },
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, UNAVAILABLE) };
+    }
   }
   const parsed = RemindersSchema.safeParse(input);
   if (!parsed.success) {
@@ -239,7 +291,26 @@ export async function updatePaymentSettings(
 ): Promise<ActionResult> {
   await assertSettingsAdmin();
   if (isLaravelApiEnabled()) {
-    return { ok: false, error: UNAVAILABLE };
+    const parsed = PaymentSettingsSchema.safeParse(input);
+    if (!parsed.success) return { ok: false, error: "Paramètres de paiement invalides" };
+    try {
+      const { token, organizationId } = await getApiContext();
+      await laravelRequest("/organization", {
+        method: "PUT",
+        token,
+        organizationId,
+        body: {
+          parametres: {
+            payment_connected: parsed.data.paymentConnected,
+            accepted_payment_methods: parsed.data.acceptedPaymentMethods,
+          },
+        },
+      });
+      revalidatePath("/settings");
+      return { ok: true };
+    } catch (error) {
+      return { ok: false, error: actionErrorMessage(error, UNAVAILABLE) };
+    }
   }
   const parsed = PaymentSettingsSchema.safeParse(input);
   if (!parsed.success) {
@@ -274,6 +345,13 @@ export async function updateBranding(
           ...(parsed.data.displayName
             ? { name_company: parsed.data.displayName }
             : {}),
+          parametres: {
+            primary_color: parsed.data.primaryColor,
+            accent_color: parsed.data.accentColor,
+            font_family: parsed.data.fontFamily,
+            document_template: parsed.data.documentTemplate,
+            locale: parsed.data.locale,
+          },
         },
       });
       revalidatePath("/settings");

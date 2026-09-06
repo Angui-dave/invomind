@@ -1,10 +1,8 @@
 "use client";
 
 import { AlertCircle, Check, CheckCheck, FileIcon, Loader2 } from "lucide-react";
-import {
-  formatTimeFr,
-  type ConversationMessage,
-} from "@/lib/mock-data";
+import { formatTimeFr } from "@/lib/formatters";
+import type { ConversationMessage } from "@/lib/data/conversations";
 import { cn } from "@/lib/utils";
 
 type MessageBubbleProps = {

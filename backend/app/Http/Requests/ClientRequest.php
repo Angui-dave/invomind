@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Enums\ClientCategorie;
+use App\Support\OrgRules;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -11,6 +12,15 @@ class ClientRequest extends FormRequest
     public function authorize(): bool
     {
         return true;
+    }
+
+    protected function prepareForValidation(): void
+    {
+        if ($this->has('reminders_enabled') && ! $this->has('relances_actives')) {
+            $this->merge([
+                'relances_actives' => $this->boolean('reminders_enabled'),
+            ]);
+        }
     }
 
     public function rules(): array
@@ -28,7 +38,8 @@ class ClientRequest extends FormRequest
             'numero_fiscal' => ['nullable', 'string', 'max:64'],
             'categorie_client' => ['sometimes', Rule::enum(ClientCategorie::class)],
             'notes' => ['nullable', 'string'],
-            'user_id' => ['nullable', 'integer', 'exists:users,id'],
+            'relances_actives' => ['sometimes', 'boolean'],
+            'user_id' => ['nullable', 'integer', OrgRules::exists('users')],
         ];
     }
 }

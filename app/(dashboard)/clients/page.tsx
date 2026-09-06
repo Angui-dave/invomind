@@ -7,6 +7,7 @@ import { getCurrentOrganization } from "@/lib/dal/session";
 import { dalErrorMessage } from "@/lib/dal/load-error";
 import { getEntitlements } from "@/lib/billing/entitlements";
 import { DalErrorBanner } from "@/components/dal-error-banner";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { LimitBanner } from "@/components/feature-gate";
 import { ClientsPageClient } from "./clients-client";
 import type { Client } from "@/lib/data/clients";
@@ -54,7 +55,11 @@ export default async function ClientsPage() {
   }
 
   return (
-    <>
+    <div className="space-y-6">
+      <PageHeader
+        title="Clients"
+        description="Base clients et pipeline prospects"
+      />
       {loadError ? <DalErrorBanner message={loadError} /> : null}
       {!entitlements.canCreateClient && entitlements.maxClients != null ? (
         <LimitBanner
@@ -68,6 +73,6 @@ export default async function ClientsPage() {
         portalTokens={portalTokens}
         pipelineAllowed={true}
       />
-    </>
+    </div>
   );
 }

@@ -16,7 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CHANNEL_LABELS, formatDateFr, formatTimeFr } from "@/lib/mock-data";
+import { formatDateFr, formatTimeFr } from "@/lib/formatters";
+import { CHANNEL_LABELS } from "@/lib/data/conversations";
 import type {
   DeliveryAttempt,
   MaskedWebhookConfig,

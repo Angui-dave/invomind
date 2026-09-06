@@ -12,7 +12,10 @@ export interface Expense {
   id: string;
   date: string;
   description: string;
-  amount: number;
+  /** Hors taxes */
+  amountHt: number;
+  /** TTC */
+  amountTtc: number;
   currency: CurrencyCode;
   categoryId: string;
   supplierId?: string;
@@ -21,6 +24,7 @@ export interface Expense {
   taxDeductible: boolean;
   taxAmount: number;
   notes?: string;
+  /** Laravel depense_statut: en_attente | validee | rejetee */
   statut?: string;
   paymentMethod?: string;
 }
@@ -41,7 +45,8 @@ export const EXPENSES: Expense[] = [
     id: "exp_1",
     date: "2026-08-01",
     description: "Loyer bureau — août",
-    amount: 350_000,
+    amountHt: 296_610,
+    amountTtc: 350_000,
     currency: "XOF",
     categoryId: "cat_1",
     supplierId: "sup_1",
@@ -49,23 +54,27 @@ export const EXPENSES: Expense[] = [
     taxRate: 18,
     taxDeductible: true,
     taxAmount: 53_390,
+    statut: "validee",
   },
   {
     id: "exp_2",
     date: "2026-08-05",
     description: "Abonnement Figma Pro",
-    amount: 45_000,
+    amountHt: 45_000,
+    amountTtc: 45_000,
     currency: "XOF",
     categoryId: "cat_2",
     taxRate: 0,
     taxDeductible: false,
     taxAmount: 0,
+    statut: "validee",
   },
   {
     id: "exp_3",
     date: "2026-08-08",
     description: "Déplacement client Abidjan",
-    amount: 180_000,
+    amountHt: 152_542,
+    amountTtc: 180_000,
     currency: "XOF",
     categoryId: "cat_3",
     supplierId: "sup_2",
@@ -73,23 +82,27 @@ export const EXPENSES: Expense[] = [
     taxRate: 18,
     taxDeductible: true,
     taxAmount: 27_458,
+    statut: "validee",
   },
   {
     id: "exp_4",
     date: "2026-07-15",
     description: "Campagne Facebook Ads",
-    amount: 120_000,
+    amountHt: 120_000,
+    amountTtc: 120_000,
     currency: "XOF",
     categoryId: "cat_5",
     taxRate: 0,
     taxDeductible: false,
     taxAmount: 0,
+    statut: "validee",
   },
   {
     id: "exp_5",
     date: "2026-07-01",
     description: "Fibre optique — trimestre",
-    amount: 90_000,
+    amountHt: 76_271,
+    amountTtc: 90_000,
     currency: "XOF",
     categoryId: "cat_7",
     supplierId: "sup_3",
@@ -97,12 +110,14 @@ export const EXPENSES: Expense[] = [
     taxRate: 18,
     taxDeductible: true,
     taxAmount: 13_729,
+    statut: "validee",
   },
   {
     id: "exp_6",
     date: "2026-06-20",
     description: "Conseil juridique — contrat",
-    amount: 250_000,
+    amountHt: 211_864,
+    amountTtc: 250_000,
     currency: "XOF",
     categoryId: "cat_6",
     supplierId: "sup_4",
@@ -110,5 +125,6 @@ export const EXPENSES: Expense[] = [
     taxRate: 18,
     taxDeductible: true,
     taxAmount: 38_136,
+    statut: "validee",
   },
 ];

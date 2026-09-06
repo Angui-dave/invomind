@@ -115,6 +115,7 @@ Route::middleware(['auth:sanctum'])->group(function () {
 
         Route::get('/conversations', [ConversationController::class, 'index']);
         Route::get('/conversations/unread-total', [ConversationController::class, 'unreadTotal']);
+        Route::get('/conversations/messages-batch', [ConversationController::class, 'messagesBatch']);
         Route::get('/conversations/{id}', [ConversationController::class, 'show']);
         Route::get('/conversations/{id}/messages', [ConversationController::class, 'messages']);
         Route::post('/conversations/{id}/messages', [ConversationController::class, 'sendMessage']);

@@ -2,10 +2,7 @@
 
 import { MessageCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
-import {
-  CHANNEL_LABELS,
-  type ConversationChannel,
-} from "@/lib/mock-data";
+import { CHANNEL_LABELS, type ConversationChannel } from "@/lib/data/conversations";
 import { cn } from "@/lib/utils";
 
 const channelStyles: Record<ConversationChannel, string> = {

@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use App\Support\OrgRules;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ConversationAssignRequest extends FormRequest
@@ -14,7 +15,7 @@ class ConversationAssignRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'agent_id' => ['nullable', 'integer', 'exists:users,id'],
+            'agent_id' => ['nullable', 'integer', OrgRules::exists('users')],
         ];
     }
 }

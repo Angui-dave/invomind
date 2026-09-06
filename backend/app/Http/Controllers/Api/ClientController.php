@@ -43,6 +43,7 @@ class ClientController extends Controller
                 ?? $request->user()->organization?->devise_defaut
                 ?? 'XOF',
             'delai_paiement_jours' => $data['delai_paiement_jours'] ?? 30,
+            'relances_actives' => $data['relances_actives'] ?? true,
         ]);
 
         return (new ClientResource($client))

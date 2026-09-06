@@ -64,6 +64,72 @@ export async function createInbox(
   }
 }
 
+export async function updateInbox(
+  id: string,
+  input: z.infer<typeof InboxSchema>,
+): Promise<ActionResult> {
+  if (!isLaravelApiEnabled()) {
+    return { ok: false, error: "API Laravel requise" };
+  }
+  const parsed = InboxSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: "Boîte invalide" };
+
+  try {
+    const { token, organizationId } = await getApiContext();
+    await laravelRequest(`/inboxes/${id}`, {
+      method: "PUT",
+      token,
+      organizationId,
+      body: {
+        canal: parsed.data.canal,
+        nom: parsed.data.nom,
+        mode: parsed.data.mode,
+        identifiants: parsed.data.identifiants ?? {},
+      },
+    });
+    revalidatePath("/conversations");
+    revalidatePath("/settings");
+    return { ok: true, id };
+  } catch (e) {
+    return { ok: false, error: actionErrorMessage(e, "Erreur mise à jour") };
+  }
+}
+
+export async function testInboxConnection(
+  id: string,
+): Promise<ActionResult & { message?: string }> {
+  if (!isLaravelApiEnabled()) {
+    return { ok: false, error: "API Laravel requise" };
+  }
+  try {
+    const { token, organizationId } = await getApiContext();
+    const result = await laravelRequest<{
+      ok?: boolean;
+      message?: string;
+    }>(`/inboxes/${id}/test`, {
+      method: "POST",
+      token,
+      organizationId,
+      body: {},
+    });
+    revalidatePath("/settings");
+    revalidatePath("/conversations");
+    if (result.ok === false) {
+      return {
+        ok: false,
+        error: result.message ?? "Échec du test de connexion",
+      };
+    }
+    return {
+      ok: true,
+      id,
+      message: result.message ?? "Boîte connectée",
+    };
+  } catch (e) {
+    return { ok: false, error: actionErrorMessage(e, "Échec du test de connexion") };
+  }
+}
+
 export async function deleteInbox(id: string): Promise<ActionResult> {
   if (!isLaravelApiEnabled()) {
     return { ok: false, error: "API Laravel requise" };

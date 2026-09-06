@@ -13,6 +13,10 @@ import {
 import { PAYMENTS } from "@/lib/data/payments";
 import { CLIENTS } from "@/lib/data/clients";
 import type { Expense } from "@/lib/data/expenses";
+import {
+  BILLABLE_INVOICE_STATUSES,
+  documentBalanceDue,
+} from "@/lib/domain/invoices";
 
 export interface RevenuePoint {
   month: string;
@@ -46,13 +50,9 @@ const MONTH_LABELS_FR: Record<string, string> = {
   "12": "Déc",
 };
 
-export const BILLABLE_INVOICE_STATUSES: InvoiceStatus[] = [
-  "sent",
-  "partially_paid",
-  "paid",
-  "overdue",
-];
+export { BILLABLE_INVOICE_STATUSES } from "@/lib/domain/invoices";
 
+/** Mock-only: sums seed payments. Prefer document.amountPaid in Laravel mode. */
 export function amountPaid(documentId: string): number {
   return PAYMENTS.filter((p) => p.documentId === documentId).reduce(
     (s, p) => s + p.amount,
@@ -67,10 +67,7 @@ export function creditedAmount(documentId: string): number {
 }
 
 export function balanceDue(doc: BusinessDocument): number {
-  if (doc.kind !== "invoice") return 0;
-  if (doc.status === "draft" || doc.status === "cancelled") return 0;
-  const remaining = doc.total - amountPaid(doc.id) - creditedAmount(doc.id);
-  return Math.max(0, Math.round(remaining * 100) / 100);
+  return documentBalanceDue(doc);
 }
 
 export function signedTotal(doc: BusinessDocument): number {
@@ -114,7 +111,7 @@ export function clientRevenue(clientId: string): number {
 export function topClients(n = 5): TopClientRevenue[] {
   return CLIENTS.map((c) => ({
     clientId: c.id,
-    clientName: c.name,
+    clientName: c.company || c.name,
     amount: clientRevenue(c.id),
   }))
     .filter((c) => c.amount > 0)
@@ -207,12 +204,37 @@ export function billedRevenueTtc(): number {
   ).reduce((s, d) => s + signedTotal(d), 0);
 }
 
+/** Dépenses retenues dans les agrégats (validées uniquement). */
+export function isValidatedExpense(expense: Expense): boolean {
+  return !expense.statut || expense.statut === "validee";
+}
+
 export function expenseHt(expense: Expense): number {
-  return expense.amount - expense.taxAmount;
+  return expense.amountHt;
+}
+
+export function expenseTtc(expense: Expense): number {
+  return expense.amountTtc;
 }
 
 export function expensesTotalHt(expenses: Expense[]): number {
-  return expenses.reduce((s, e) => s + expenseHt(e), 0);
+  return expenses
+    .filter(isValidatedExpense)
+    .reduce((s, e) => s + expenseHt(e), 0);
+}
+
+export function expensesTotalTtc(expenses: Expense[]): number {
+  return expenses
+    .filter(isValidatedExpense)
+    .reduce((s, e) => s + expenseTtc(e), 0);
+}
+
+/** Profit canonique = CA encaissé TTC − dépenses TTC validées. */
+export function profitTtc(
+  collectedTtc: number,
+  expenses: Expense[],
+): number {
+  return Math.round((collectedTtc - expensesTotalTtc(expenses)) * 100) / 100;
 }
 
 export function vatCollected(): number {
@@ -261,6 +283,7 @@ export function latestOpenInvoiceToken(
       const status = applyDerivedStatus(d, documents).status;
       return (
         status === "sent" ||
+        status === "unpaid" ||
         status === "partially_paid" ||
         status === "overdue"
       );

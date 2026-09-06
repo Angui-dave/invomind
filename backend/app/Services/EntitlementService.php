@@ -52,7 +52,7 @@ class EntitlementService
                 || $userCount < $plan->limite_utilisateurs,
             'auto_reminders' => (bool) ($fonctionnalites['auto_reminders'] ?? $plan->code !== 'gratuit'),
             'online_payments' => (bool) ($fonctionnalites['online_payments'] ?? $plan->code !== 'gratuit'),
-            'pipeline' => false,
+            'pipeline' => (bool) ($fonctionnalites['pipeline'] ?? true),
             // Conversations available on all plans (including free) once the module is shipped.
             'conversations' => (bool) ($fonctionnalites['conversations'] ?? true),
             'reports' => true,
