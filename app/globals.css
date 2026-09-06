@@ -275,6 +275,20 @@
     animation: float-y-delayed 6.5s ease-in-out infinite;
   }
 
+  @media (prefers-reduced-motion: reduce) {
+    .float-y,
+    .float-y-delayed,
+    .pulse-dot {
+      animation: none;
+    }
+
+    .glow-cta:hover {
+      box-shadow:
+        0 10px 24px -10px rgb(37 99 235 / 0.55),
+        0 0 0 1px rgb(37 99 235 / 0.12);
+    }
+  }
+
   .glow-cta {
     box-shadow:
       0 10px 24px -10px rgb(37 99 235 / 0.55),
@@ -322,6 +336,59 @@
 
   .progress-brand {
     background-image: linear-gradient(90deg, #10b981 0%, #2563eb 100%);
+  }
+
+  /* Marketing: folio mark (eyebrow / field labels) */
+  .folio-mark {
+    font-family: var(--font-mono);
+    font-size: 0.6875rem;
+    font-weight: 500;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, var(--color-ink) 55%, transparent);
+  }
+
+  .folio-mark-accent {
+    color: var(--color-ledger);
+  }
+
+  /* Marketing: perforated stub strip (navy bands) */
+  .stub-strip {
+    position: relative;
+  }
+
+  .stub-strip::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 10px;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle 4px at 8px 0,
+      transparent 4px,
+      color-mix(in srgb, var(--color-paper) 12%, transparent) 4.5px
+    );
+    background-size: 16px 10px;
+    background-repeat: repeat-x;
+    opacity: 0.9;
+  }
+
+  .stub-strip-bottom::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    height: 10px;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle 4px at 8px 10px,
+      transparent 4px,
+      color-mix(in srgb, var(--color-paper) 12%, transparent) 4.5px
+    );
+    background-size: 16px 10px;
+    background-repeat: repeat-x;
+    opacity: 0.9;
   }
 }
 

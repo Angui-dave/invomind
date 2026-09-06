@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { InvoiceForm } from "@/components/invoices/invoice-form";
 import { listCatalogItems } from "@/lib/dal/catalog";
 import {
@@ -79,17 +80,24 @@ export default async function NewInvoicePage({
   }
 
   return (
-    <InvoiceForm
-      mode="new"
-      kind={kind}
-      document={document}
-      prefilledFromConversion={Boolean(document)}
-      clients={clients}
-      catalogItems={catalogItems}
-      orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
-      existingNumbers={existing.filter((d) => d.kind === kind)}
-      creditNotesUnavailable={laravel}
-      pdfUnavailable={laravel}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title={kind === "credit_note" ? "Nouvel avoir" : "Nouvelle facture"}
+        backHref="/invoices"
+        backLabel="Factures"
+      />
+      <InvoiceForm
+        mode="new"
+        kind={kind}
+        document={document}
+        prefilledFromConversion={Boolean(document)}
+        clients={clients}
+        catalogItems={catalogItems}
+        orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
+        existingNumbers={existing.filter((d) => d.kind === kind)}
+        creditNotesUnavailable={laravel}
+        pdfUnavailable={laravel}
+      />
+    </div>
   );
 }

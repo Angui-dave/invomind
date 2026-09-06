@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { Ban, Check } from "lucide-react";
+import { Check } from "lucide-react";
 import { SectionShell } from "@/components/marketing/section-shell";
 import { buttonVariants } from "@/components/ui/button";
 import { PRICING_PLANS } from "@/lib/data/settings";
+import { FREE_LIMIT_LABEL } from "@/lib/marketing/copy";
 import { cn } from "@/lib/utils";
 
 const CTA_LABEL: Record<string, string> = {
@@ -15,32 +16,29 @@ export function PricingSection() {
   return (
     <SectionShell
       id="tarifs"
-      alt
-      eyebrow="Formules & tarifs"
-      title="Trouve le plan parfait pour ton registre"
-      description="Commence gratuitement. Passe en Pro quand le volume l’exige — relances, Mobile Money et inbox inclus."
+      eyebrow="Formules et tarifs"
+      title="Commencez gratuitement, passez en Pro quand le volume l’exige"
+      description={`${FREE_LIMIT_LABEL}. Relances automatiques et Mobile Money dès le plan Pro.`}
     >
       <div className="grid gap-5 pt-2 md:grid-cols-3">
         {PRICING_PLANS.map((plan) => (
           <article
             key={plan.id}
             className={cn(
-              "relative flex flex-col rounded-3xl border bg-paper p-6 shadow-sm transition-all duration-300 hover:-translate-y-1",
+              "relative flex flex-col border bg-paper p-6",
               plan.highlighted
-                ? "border-ledger/30 shadow-xl shadow-ledger/10 ring-1 ring-ledger/25"
-                : "border-line/80 hover:shadow-xl hover:shadow-ink/5",
+                ? "border-ledger/40 ring-1 ring-ledger/20"
+                : "border-line/80",
             )}
           >
             {plan.highlighted && (
-              <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-gradient-to-r from-ledger to-brass px-3 py-1 text-[11px] font-semibold tracking-wide text-paper shadow-md">
-                Populaire
+              <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-ledger px-3 py-1 text-[11px] font-semibold tracking-wide text-paper">
+                Paiement Mobile Money inclus
               </span>
             )}
-            <div className="flex items-baseline justify-between gap-3">
-              <h3 className="font-serif text-xl font-semibold text-ink">
-                {plan.name}
-              </h3>
-            </div>
+            <h3 className="font-serif text-xl font-semibold text-ink">
+              {plan.name}
+            </h3>
             <p className="mt-1 text-sm text-ink/60">{plan.description}</p>
 
             <p className="mt-5 flex items-baseline gap-1">
@@ -53,12 +51,9 @@ export function PricingSection() {
             </p>
 
             {plan.limitLabel && (
-              <p className="mt-3 inline-flex items-center gap-1.5 text-sm text-ink/70">
-                <Ban className="size-3.5 shrink-0 text-brick" aria-hidden />
-                <span>
-                  Limite :{" "}
-                  <span className="num font-medium">{plan.limitLabel}</span>
-                </span>
+              <p className="mt-3 text-sm text-ink/70">
+                Inclus :{" "}
+                <span className="num font-medium">{plan.limitLabel}</span>
               </p>
             )}
 

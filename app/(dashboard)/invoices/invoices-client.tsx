@@ -27,11 +27,18 @@ import {
   collectedFromInvoices,
   outstandingTtc,
 } from "@/lib/domain/invoices";
-import { INVOICE_STATUS_LABELS, type BusinessDocument, type InvoiceStatus } from "@/lib/documents";
+import { type BusinessDocument } from "@/lib/documents";
+import {
+  invoiceFilterChips,
+  invoiceMatchesStatusFilter,
+  invoiceStatusFilterLabel,
+  type InvoiceStatusFilter,
+} from "@/lib/dashboard/status-filters";
+import { FilterChips, statusFilterHref } from "@/components/dashboard/filter-chips";
 import { cn } from "@/lib/utils";
 
 type KindTab = "invoices" | "credit_notes";
-type StatusFilter = "all" | InvoiceStatus;
+type StatusFilter = InvoiceStatusFilter;
 type SortKey = "client" | "amount" | "dueDate";
 type SortDirection = "asc" | "desc";
 
@@ -68,7 +75,9 @@ export function InvoicesPageClient({
   const filtered = useMemo(() => {
     let list: BusinessDocument[] = [...source];
     if (kindTab === "invoices" && status !== "all") {
-      list = list.filter((inv) => inv.status === status);
+      list = list.filter((inv) =>
+        invoiceMatchesStatusFilter(status, inv.status),
+      );
     }
     const q = query.trim().toLowerCase();
     if (q) {
@@ -114,7 +123,7 @@ export function InvoicesPageClient({
       <p className="text-sm text-ink/60">
         {filtered.length} document{filtered.length > 1 ? "s" : ""}
         {kindTab === "invoices" && status !== "all"
-          ? ` · ${INVOICE_STATUS_LABELS[status]}`
+          ? ` · ${invoiceStatusFilterLabel(status)}`
           : ""}
       </p>
 
@@ -156,7 +165,14 @@ export function InvoicesPageClient({
       </Tabs>
       )}
 
-      <div className="flex justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        {kindTab === "invoices" ? (
+          <FilterChips
+            options={invoiceFilterChips}
+            value={status}
+            hrefFor={(value) => statusFilterHref("/invoices", value)}
+          />
+        ) : null}
         <Input
           value={query}
           onChange={(e) => {

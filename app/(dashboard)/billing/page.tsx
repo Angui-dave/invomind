@@ -1,5 +1,6 @@
 import { assertAdminTenant } from "@/lib/rbac/guards";
 import { BillingPlans } from "@/components/billing/billing-plans";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { DalErrorBanner } from "@/components/dal-error-banner";
 import { getCurrentOrganization } from "@/lib/dal/session";
 import { getBillingHistory } from "@/lib/dal/settings";
@@ -43,6 +44,10 @@ export default async function BillingPage({ searchParams }: BillingPageProps) {
 
   return (
     <div className="space-y-6">
+      <PageHeader
+        title="Abonnement"
+        description="Choisissez le plan adapté à votre volume de factures."
+      />
       {params.paid === "1" ? (
         <p className="rounded-xl border border-brass/35 bg-brass/10 px-3 py-2 text-sm text-brass">
           Paiement reçu. Votre plan sera mis à jour dès confirmation CinetPay

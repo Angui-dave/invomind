@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { listCatalogItems } from "@/lib/dal/catalog";
 import {
   getDocumentById,
@@ -28,12 +29,20 @@ export default async function QuoteDetailPage({
   if (!document || document.kind !== "quote") notFound();
 
   return (
-    <QuoteDetailClient
-      document={document}
-      clients={clients}
-      catalogItems={catalogItems}
-      orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
-      existingNumbers={quotes}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title={document.number}
+        description={document.clientName}
+        backHref="/quotes"
+        backLabel="Devis"
+      />
+      <QuoteDetailClient
+        document={document}
+        clients={clients}
+        catalogItems={catalogItems}
+        orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
+        existingNumbers={quotes}
+      />
+    </div>
   );
 }

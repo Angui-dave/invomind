@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/dashboard/page-header";
 import { InvoiceForm } from "@/components/invoices/invoice-form";
 import { listCatalogItems } from "@/lib/dal/catalog";
 import {
@@ -44,15 +45,23 @@ export default async function EditInvoicePage({
     document.kind === "invoice" ? invoices : creditNotes;
 
   return (
-    <InvoiceForm
-      mode="edit"
-      document={document}
-      clients={clients}
-      catalogItems={catalogItems}
-      orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
-      existingNumbers={existingNumbers}
-      creditNotesUnavailable={laravel}
-      pdfUnavailable={laravel}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title={document.number}
+        description={document.clientName}
+        backHref="/invoices"
+        backLabel="Factures"
+      />
+      <InvoiceForm
+        mode="edit"
+        document={document}
+        clients={clients}
+        catalogItems={catalogItems}
+        orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
+        existingNumbers={existingNumbers}
+        creditNotesUnavailable={laravel}
+        pdfUnavailable={laravel}
+      />
+    </div>
   );
 }

@@ -9,31 +9,14 @@ import { DalErrorBanner } from "@/components/dal-error-banner";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { LimitBanner } from "@/components/feature-gate";
 import { buttonVariants } from "@/components/ui/button";
-import type { InvoiceStatus } from "@/lib/documents";
 import type { BusinessDocument } from "@/lib/documents";
+import { parseInvoiceStatusFilter } from "@/lib/dashboard/status-filters";
 import { cn } from "@/lib/utils";
 import { InvoicesPageClient } from "./invoices-client";
 
 type SearchParams = Promise<{
   status?: string;
 }>;
-
-const INVOICE_STATUSES: InvoiceStatus[] = [
-  "draft",
-  "sent",
-  "unpaid",
-  "partially_paid",
-  "paid",
-  "overdue",
-  "cancelled",
-];
-
-function parseInvoiceStatusFilter(value?: string): "all" | InvoiceStatus {
-  if (value && INVOICE_STATUSES.includes(value as InvoiceStatus)) {
-    return value as InvoiceStatus;
-  }
-  return "all";
-}
 
 export default async function InvoicesPage({
   searchParams,

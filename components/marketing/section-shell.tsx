@@ -8,6 +8,7 @@ type SectionShellProps = {
   description?: string;
   children: ReactNode;
   alt?: boolean;
+  wide?: boolean;
   className?: string;
   contentClassName?: string;
 };
@@ -19,6 +20,7 @@ export function SectionShell({
   description,
   children,
   alt = false,
+  wide = false,
   className,
   contentClassName,
 }: SectionShellProps) {
@@ -28,31 +30,34 @@ export function SectionShell({
     <section
       id={id}
       className={cn(
-        "scroll-mt-24 border-b border-line/70",
-        alt && "bg-gradient-to-b from-slate-50 to-paper",
+        "scroll-mt-20 border-b border-line/70",
+        alt && "bg-muted/40",
         className,
       )}
     >
       <div className="mx-auto max-w-6xl px-4 py-16 sm:px-6 sm:py-20">
         {hasHeader && (
-          <header className="max-w-2xl">
+          <header className={cn(!wide && "max-w-2xl")}>
             {eyebrow && (
-              <p className="inline-flex items-center rounded-full border border-ledger/15 bg-ledger/8 px-3 py-1 text-xs font-medium uppercase tracking-wider text-ledger">
-                {eyebrow}
-              </p>
+              <p className="folio-mark folio-mark-accent">{eyebrow}</p>
             )}
             {title && (
               <h2
                 className={cn(
                   "font-serif text-2xl font-semibold tracking-tight text-ink sm:text-3xl",
-                  eyebrow && "mt-3",
+                  eyebrow && "mt-2",
                 )}
               >
                 {title}
               </h2>
             )}
             {description && (
-              <p className="mt-3 max-w-xl text-base leading-relaxed text-ink/65">
+              <p
+                className={cn(
+                  "mt-3 text-base leading-relaxed text-ink/70",
+                  !wide && "max-w-xl",
+                )}
+              >
                 {description}
               </p>
             )}

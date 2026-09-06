@@ -19,10 +19,15 @@ import {
 } from "@/components/ui/table";
 import { formatDateFr } from "@/lib/formatters";
 import { formatMoney } from "@/lib/money";
-import { QUOTE_STATUS_LABELS, type BusinessDocument, type QuoteStatus } from "@/lib/documents";
+import { QUOTE_STATUS_LABELS, type BusinessDocument } from "@/lib/documents";
+import {
+  quoteFilterChips,
+  type QuoteStatusFilter,
+} from "@/lib/dashboard/status-filters";
+import { FilterChips, statusFilterHref } from "@/components/dashboard/filter-chips";
 import { cn } from "@/lib/utils";
 
-type StatusFilter = "all" | QuoteStatus;
+type StatusFilter = QuoteStatusFilter;
 
 type QuotesPageClientProps = {
   quotes: BusinessDocument[];
@@ -58,12 +63,18 @@ export function QuotesPageClient({ quotes, status }: QuotesPageClientProps) {
         {status !== "all" ? ` · ${QUOTE_STATUS_LABELS[status]}` : ""}
       </p>
 
-      <div className="flex justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <FilterChips
+          options={quoteFilterChips}
+          value={status}
+          hrefFor={(value) => statusFilterHref("/quotes", value)}
+        />
         <Input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Rechercher…"
           className="sm:max-w-xs"
+          aria-label="Rechercher un devis"
         />
       </div>
 

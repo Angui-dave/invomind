@@ -13,8 +13,18 @@ import { ClientsPageClient } from "./clients-client";
 import type { Client } from "@/lib/data/clients";
 import type { Prospect } from "@/lib/data/settings";
 import type { BusinessDocument } from "@/lib/documents";
+import { parseClientsTab } from "@/lib/dashboard/status-filters";
 
-export default async function ClientsPage() {
+type SearchParams = Promise<{
+  tab?: string;
+}>;
+
+export default async function ClientsPage({
+  searchParams,
+}: {
+  searchParams: SearchParams;
+}) {
+  const params = await searchParams;
   const { session } = await getCurrentOrganization();
   const entitlements = await getEntitlements(
     session.organizationId,
@@ -72,6 +82,7 @@ export default async function ClientsPage() {
         invoiceCounts={invoiceCounts}
         portalTokens={portalTokens}
         pipelineAllowed={true}
+        tab={parseClientsTab(params.tab)}
       />
     </div>
   );

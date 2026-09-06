@@ -22,7 +22,6 @@ import {
 } from "lucide-react";
 import { logout } from "@/lib/actions/auth";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { INVOICE_STATUS_LABELS, QUOTE_STATUS_LABELS } from "@/lib/documents";
 import type { CurrentUser, EnabledModules } from "@/lib/data/settings";
 import { cn } from "@/lib/utils";
 import type { AppRole } from "@/lib/rbac/types";
@@ -42,30 +41,6 @@ type NavItem = {
   badgeCount?: number;
   children?: NavChild[];
 };
-
-const QUOTE_STATUS_LINKS: NavChild[] = (
-  ["draft", "sent", "accepted", "refused", "expired", "converted"] as const
-).map((status) => ({
-  href: `/quotes?status=${status}`,
-  label: QUOTE_STATUS_LABELS[status],
-  status,
-}));
-
-const INVOICE_STATUS_LINKS: NavChild[] = (
-  [
-    "draft",
-    "sent",
-    "unpaid",
-    "partially_paid",
-    "paid",
-    "overdue",
-    "cancelled",
-  ] as const
-).map((status) => ({
-  href: `/invoices?status=${status}`,
-  label: INVOICE_STATUS_LABELS[status],
-  status,
-}));
 
 const CONVERSATION_CHANNEL_LINKS: NavChild[] = [
   { href: "/conversations", label: "Tous les canaux", status: "all" },
@@ -197,18 +172,8 @@ export function SidebarNav({
     {
       label: "Ventes",
       items: [
-        {
-          href: "/quotes",
-          label: "Devis",
-          icon: FileText,
-          children: QUOTE_STATUS_LINKS,
-        },
-        {
-          href: "/invoices",
-          label: "Factures",
-          icon: Receipt,
-          children: INVOICE_STATUS_LINKS,
-        },
+        { href: "/quotes", label: "Devis", icon: FileText },
+        { href: "/invoices", label: "Factures", icon: Receipt },
         {
           href: "/clients",
           label: "Clients",

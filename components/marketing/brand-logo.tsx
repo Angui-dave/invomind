@@ -30,12 +30,7 @@ export function BrandLogo({
       >
         <BookOpen className="size-4" strokeWidth={2.2} />
       </span>
-      <span className="flex items-center gap-2">
-        InvoMind
-        <span className="hidden rounded-full border border-ledger/15 bg-ledger/8 px-1.5 py-0.5 text-[10px] font-medium tracking-wide text-ledger sm:inline">
-          FinTech
-        </span>
-      </span>
+      <span>InvoMind</span>
     </Link>
   );
 }

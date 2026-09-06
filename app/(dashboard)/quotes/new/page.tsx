@@ -1,3 +1,4 @@
+import { PageHeader } from "@/components/dashboard/page-header";
 import { QuoteForm } from "@/components/quotes/quote-form";
 import { listCatalogItems } from "@/lib/dal/catalog";
 import { getQuotes, listClients } from "@/lib/dal/documents";
@@ -13,12 +14,19 @@ export default async function NewQuotePage() {
   ]);
 
   return (
-    <QuoteForm
-      mode="new"
-      clients={clients}
-      catalogItems={catalogItems}
-      orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
-      existingNumbers={quotes}
-    />
+    <div className="space-y-6">
+      <PageHeader
+        title="Nouveau devis"
+        backHref="/quotes"
+        backLabel="Devis"
+      />
+      <QuoteForm
+        mode="new"
+        clients={clients}
+        catalogItems={catalogItems}
+        orgSettings={settings ?? DEFAULT_ORG_SETTINGS}
+        existingNumbers={quotes}
+      />
+    </div>
   );
 }

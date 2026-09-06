@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis } from "recharts";
 import {
   ChartContainer,
@@ -8,7 +7,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Skeleton } from "@/components/ui/skeleton";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import type { TopClientRevenue } from "@/lib/data/derive";
 
@@ -24,13 +22,6 @@ type TopClientsChartProps = {
 };
 
 export function TopClientsChart({ clients }: TopClientsChartProps) {
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoaded(true), 600);
-    return () => clearTimeout(timer);
-  }, []);
-
   const data = clients.map((client) => ({
     name: client.clientName.split(" ")[0],
     fullName: client.clientName,
@@ -38,15 +29,12 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
   }));
 
   return (
-    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
-      <h2 className="mb-6 font-serif text-lg font-semibold text-ink">
+    <div className="rounded-2xl border border-line bg-card p-4 shadow-sm sm:p-5">
+      <h2 className="mb-4 font-serif text-lg font-semibold text-ink">
         Top 5 clients par revenu
       </h2>
 
-      {!loaded ? (
-        <Skeleton className="h-[220px] w-full rounded-sm bg-line/50" />
-      ) : (
-        <ChartContainer
+      <ChartContainer
           config={chartConfig}
           className="aspect-auto h-[220px] w-full"
         >
@@ -96,7 +84,6 @@ export function TopClientsChart({ clients }: TopClientsChartProps) {
             />
           </BarChart>
         </ChartContainer>
-      )}
     </div>
   );
 }

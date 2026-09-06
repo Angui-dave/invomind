@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { Link2, Plus, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ClientDialog, type ClientFormValues } from "@/components/clients/client-dialog";
@@ -21,6 +22,10 @@ import {
 import { createClient, updateClient } from "@/lib/actions/clients";
 import { clientDisplayName, clientInitials, portalUrl, type Client } from "@/lib/data/clients";
 import type { Prospect } from "@/lib/data/settings";
+import {
+  parseClientsTab,
+  type ClientsTab,
+} from "@/lib/dashboard/status-filters";
 
 type ClientsPageClientProps = {
   initialClients: Client[];
@@ -28,6 +33,7 @@ type ClientsPageClientProps = {
   invoiceCounts: Record<string, number>;
   portalTokens: Record<string, string | null>;
   pipelineAllowed?: boolean;
+  tab?: ClientsTab;
 };
 
 export function ClientsPageClient({
@@ -36,7 +42,9 @@ export function ClientsPageClient({
   invoiceCounts,
   portalTokens,
   pipelineAllowed = true,
+  tab = "clients",
 }: ClientsPageClientProps) {
+  const router = useRouter();
   const [clients, setClients] = useState<Client[]>(initialClients);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Client | null>(null);
@@ -78,7 +86,16 @@ export function ClientsPageClient({
 
   return (
     <div className="space-y-6">
-      <Tabs defaultValue="clients">
+      <Tabs
+        value={pipelineAllowed ? tab : "clients"}
+        onValueChange={(value) => {
+          const next = parseClientsTab(value);
+          router.replace(
+            next === "prospects" ? "/clients?tab=prospects" : "/clients",
+            { scroll: false },
+          );
+        }}
+      >
         <TabsList variant="line">
           <TabsTrigger value="clients">Clients</TabsTrigger>
           {pipelineAllowed ? (

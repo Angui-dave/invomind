@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts";
 import {
   ChartContainer,
@@ -8,7 +8,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DEFAULT_CURRENCY, formatMoney } from "@/lib/money";
 import type { RevenuePoint } from "@/lib/data/derive";
@@ -28,12 +27,6 @@ type RevenueChartProps = {
 
 export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
   const [period, setPeriod] = useState<Period>("6");
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoaded(true), 600);
-    return () => clearTimeout(timer);
-  }, []);
 
   const data = useMemo(
     () =>
@@ -50,7 +43,7 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
   );
 
   return (
-    <div className="rounded-2xl border border-line bg-card p-5 shadow-sm sm:p-6">
+    <div className="rounded-2xl border border-line bg-card p-4 shadow-sm sm:p-5">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-serif text-lg font-semibold text-ink">
@@ -81,10 +74,7 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
         </Tabs>
       </div>
 
-      {!loaded ? (
-        <Skeleton className="h-[220px] w-full rounded-sm bg-line/50" />
-      ) : (
-        <ChartContainer
+      <ChartContainer
           config={chartConfig}
           className="aspect-auto h-[220px] w-full"
         >
@@ -139,7 +129,6 @@ export function RevenueChart({ seriesByPeriod }: RevenueChartProps) {
             />
           </AreaChart>
         </ChartContainer>
-      )}
     </div>
   );
 }

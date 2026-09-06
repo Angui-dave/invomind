@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { Cell, Pie, PieChart } from "recharts";
 import {
   ChartContainer,
@@ -8,7 +8,6 @@ import {
   ChartTooltipContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Skeleton } from "@/components/ui/skeleton";
 import { STATUS_LABELS } from "@/lib/documents";
 
 const chartConfig = {
@@ -30,13 +29,6 @@ type StatusDonutChartProps = {
 };
 
 export function StatusDonutChart({ counts }: StatusDonutChartProps) {
-  const [loaded, setLoaded] = useState(false);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setLoaded(true), 600);
-    return () => clearTimeout(timer);
-  }, []);
-
   const data = useMemo(
     () =>
       ORDER.map((status) => ({
@@ -58,13 +50,7 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
         Factures par statut
       </h2>
 
-      {!loaded ? (
-        <div className="flex flex-col items-center gap-4">
-          <Skeleton className="size-[140px] rounded-full bg-line/50" />
-          <Skeleton className="h-16 w-full rounded-sm bg-line/40" />
-        </div>
-      ) : (
-        <div className="flex min-w-0 flex-1 flex-col items-center gap-4 xl:flex-row xl:items-center">
+      <div className="flex min-w-0 flex-1 flex-col items-center gap-4 xl:flex-row xl:items-center">
           <div className="relative mx-auto shrink-0">
             <ChartContainer
               config={chartConfig}
@@ -126,7 +112,6 @@ export function StatusDonutChart({ counts }: StatusDonutChartProps) {
             ))}
           </ul>
         </div>
-      )}
     </div>
   );
 }
